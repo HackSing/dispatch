@@ -10,7 +10,11 @@ import React, { StrictMode, useCallback, useEffect, useRef, useState } from 'rea
 import { createRoot } from 'react-dom/client'
 import { App } from '../../../src/renderer/src/App'
 import { CaptureApp } from '../../../src/renderer/src/CaptureApp'
+// 渲染层样式按界面层拆分(主窗 styles+drawers,捕获窗 styles+capture);
+// 面板同时承载两者,三份全量注入 shadow
 import stylesCss from '../../../src/renderer/src/styles.css'
+import drawersCss from '../../../src/renderer/src/drawers.css'
+import captureCss from '../../../src/renderer/src/capture.css'
 import { createApiBridge } from './api-bridge'
 
 /** 与 styles.css 的 body 规则同值(shadow 内 body 规则不命中,需在壳上补齐) */
@@ -54,7 +58,7 @@ export function openPanel(options: { autoCapture?: boolean } = {}): void {
   const shadow = host.attachShadow({ mode: 'open' })
 
   const style = document.createElement('style')
-  style.textContent = stylesCss + SHELL_CSS
+  style.textContent = stylesCss + drawersCss + captureCss + SHELL_CSS
   shadow.appendChild(style)
   const mount = document.createElement('div')
   shadow.appendChild(mount)

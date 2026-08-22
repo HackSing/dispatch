@@ -93,6 +93,22 @@ test('降级与未知通道:错误码协议', async () => {
   for (const d of fake.runDisposers()) await d?.();
 });
 
+test('project:remove:default 拒删,普通项目可删', async () => {
+  const fake = mountedPlugin();
+  const handler = fake.registrations[0].handler;
+
+  const refuse = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:remove', body: { id: 'default' } }), fakeRes());
+  assert.equal(refuse.body().ok, false);
+  assert.match(refuse.body().error.message, /默认项目不可移除/);
+
+  const created = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:create', body: { path: '/tmp/dsh-dispatch-proj-x' } }), fakeRes());
+  const pid = created.body().value.id;
+  const removed = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:remove', body: { id: pid } }), fakeRes());
+  assert.equal(removed.body().ok, true);
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
 test('非 loopback 来源被 403 拒绝', async () => {
   const fake = mountedPlugin();
   const denied = await drive(fake.registrations[0].handler, fakeReq({ url: '/api/dispatch/invoke/task:list', remoteAddress: '10.0.0.5' }), fakeRes());

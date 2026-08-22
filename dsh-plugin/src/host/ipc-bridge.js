@@ -140,6 +140,12 @@ async function handle(rt, broadcast, channel, p) {
       if (existing) return existing;
       return ctx.projects.create({ name: p.name?.trim() || basename(path), path });
     }
+    case 'project:remove': {
+      // default 项目是捕获窗兜底目标且由启动种子维护(core/bootstrap),移除后会话期内悬空
+      if (p.id === core.DEFAULT_PROJECT_ID) throw new Error('默认项目不可移除');
+      ctx.projects.delete(p.id);
+      return undefined;
+    }
     case 'agent:detections':
       return ctx.detections.list();
     case 'agent:refresh':
