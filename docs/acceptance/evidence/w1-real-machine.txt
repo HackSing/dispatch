@@ -1,0 +1,14 @@
+工作流 L3 实机验收记录(2026-08-22)
+
+① 直通链路
+命令: RUN_REAL_WORKFLOW=1 npm test -- real-workflow -t 直通
+结果: ✓ 通过,292.7s
+断言: status=done;plan.md 存在;review-r1.json verdict=pass;GREETING.md 合并进主工作区
+角色: claude-code(主,方案+审查)+ qwen(子,实现),均真实 CLI
+
+② 返工链路
+命令: RUN_REAL_WORKFLOW=1 npm test -- real-workflow -t 返工
+结果: ✓ 通过,347.0s
+断言: review-r1 verdict=reject(真实 claude 审查者抓住违背方案的 VERSION=1);
+      返工后 review-r2 verdict=pass;status=done;result-r1.json 留痕;NOTES.md=VERSION=2
+角色: claude-code(主,真实)+ 破坏性 mock 子(tests/fixtures/real-wf-sub.cjs)

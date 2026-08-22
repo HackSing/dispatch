@@ -1,0 +1,8 @@
+
+ Test Files  20 passed | 3 skipped (23)
+      Tests  153 passed | 8 skipped (161)
+   Start at  10:48:05
+   Duration  11.97s (transform 604ms, setup 0ms, collect 1.64s, tests 29.31s, environment 2ms, prepare 1.35s)
+
+命令: npm test(全量,含单点回归与 mock 三角色工作流 15 例)
+时间: 2026-08-22 ~10:47

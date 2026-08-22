@@ -16,8 +16,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L2",
       "evidence_layer": "focused_test",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T024828-2c9c5e91d7",
+          "objective_fingerprint": "sha256:b9bf46acd75380ab46d76da686659efade8e8049b71121eb4c3dfd01a7b5562a",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "npm test 全量(基线 138 例 + 新增,153 passed)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/w1-full-suite.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T02:48:28+00:00"
+        }
+      ]
     },
     {
       "id": "c2",
@@ -25,8 +43,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L2",
       "evidence_layer": "focused_test",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T024828-70404e2342",
+          "objective_fingerprint": "sha256:b9bf46acd75380ab46d76da686659efade8e8049b71121eb4c3dfd01a7b5562a",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "npm test 中 tests/workflow-executor.test.ts 15 例:pass 直通/返工/reject×3/review_modified/阶段超时与缺产物 fail_reason/phase 轨迹/单点回归守卫",
+          "evidence_refs": [
+            "docs/acceptance/evidence/w1-full-suite.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T02:48:28+00:00"
+        }
+      ]
     },
     {
       "id": "c3",
@@ -34,8 +70,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T024828-aaeaf5daaf",
+          "objective_fingerprint": "sha256:b9bf46acd75380ab46d76da686659efade8e8049b71121eb4c3dfd01a7b5562a",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "RUN_REAL_WORKFLOW=1 门控测试两条:直通(claude+qwen,292.7s)与返工(真实审查者 reject 破坏性实现后返工通过,347.0s)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/w1-real-machine.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T02:48:28+00:00"
+        }
+      ]
     },
     {
       "id": "c4",
@@ -48,10 +102,26 @@
     }
   ],
   "status": "pending",
-  "revision": 1,
-  "revision_history": [],
+  "revision": 4,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:4cfa4e58b4c8ec3184870f8415617298a90012e570998c02e6d23b54e9d1a699",
+      "updated_at": "2026-08-22T02:10:59+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:f0c9182f7f55a28fdf33a31df8ae3464ba08ac28c588a0222173feea5439fdc7",
+      "updated_at": "2026-08-22T02:48:28+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:26272fd8dc3562c487d32dd72d1a4ec2b9160d450a5b7d53aefaeb685b011f7c",
+      "updated_at": "2026-08-22T02:48:28+00:00"
+    }
+  ],
   "created_at": "2026-08-22T02:10:59+00:00",
-  "updated_at": "2026-08-22T02:10:59+00:00",
+  "updated_at": "2026-08-22T02:48:28+00:00",
   "settled_at": null,
-  "asset_fingerprint": "sha256:4cfa4e58b4c8ec3184870f8415617298a90012e570998c02e6d23b54e9d1a699"
+  "asset_fingerprint": "sha256:ec3f95fe2c5ffb188b37e327f10ff7cca47edfa39385b3bf11a4da46fe3d0510"
 }
