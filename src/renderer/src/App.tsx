@@ -3,6 +3,7 @@ import type { Task } from '@shared/types'
 import type { TaskStatus } from '@shared/state-machine'
 import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
+import { TaskDetail } from './components/TaskDetail'
 import { pickAndCreateProject } from './lib/projects'
 import { formatTime } from './lib/time'
 
@@ -23,8 +24,8 @@ function triggerLabel(task: Task): string {
   return ''
 }
 
-function TaskRow(props: { task: Task; onEdit: () => void }): React.JSX.Element {
-  const { task, onEdit } = props
+function TaskRow(props: { task: Task; onEdit: () => void; onOpen: () => void }): React.JSX.Element {
+  const { task, onEdit, onOpen } = props
   const [actionError, setActionError] = useState<string | null>(null)
   const editable = task.status === 'todo' || task.status === 'scheduled'
 
@@ -41,7 +42,7 @@ function TaskRow(props: { task: Task; onEdit: () => void }): React.JSX.Element {
         title={task.status === 'todo' ? '勾选完成' : ''}
         onChange={() => run(() => window.dispatchApi.invoke('task:toggle-todo', { id: task.id }))}
       />
-      <div className="task-body">
+      <div className="task-body" onClick={onOpen} title="查看详情">
         <div className={`task-text${task.status === 'done' ? ' done' : ''}`}>{task.text}</div>
         <div className="task-meta">
           <span className={`badge ${task.status}`}>{STATUS_LABELS[task.status]}</span>
@@ -59,13 +60,22 @@ function TaskRow(props: { task: Task; onEdit: () => void }): React.JSX.Element {
           </button>
         )}
         {task.status === 'scheduled' && (
-          <button
-            className="btn"
-            title="取消执行,退回普通待办"
-            onClick={() => run(() => window.dispatchApi.invoke('task:cancel', { id: task.id }))}
-          >
-            取消
-          </button>
+          <>
+            <button
+              className="btn"
+              title="跳过等待,立即执行"
+              onClick={() => run(() => window.dispatchApi.invoke('task:run-now', { id: task.id }))}
+            >
+              立即执行
+            </button>
+            <button
+              className="btn"
+              title="取消执行,退回普通待办"
+              onClick={() => run(() => window.dispatchApi.invoke('task:cancel', { id: task.id }))}
+            >
+              取消
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -75,6 +85,8 @@ function TaskRow(props: { task: Task; onEdit: () => void }): React.JSX.Element {
 export function App(): React.JSX.Element {
   const store = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const detailTask = detailId ? (store.tasks.find((t) => t.id === detailId) ?? null) : null
 
   useEffect(() => {
     void store.loadAll()
@@ -136,7 +148,12 @@ export function App(): React.JSX.Element {
                       onClose={() => setEditingId(null)}
                     />
                   ) : (
-                    <TaskRow key={task.id} task={task} onEdit={() => setEditingId(task.id)} />
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onEdit={() => setEditingId(task.id)}
+                      onOpen={() => setDetailId(task.id)}
+                    />
                   )
                 )}
               </div>
@@ -144,6 +161,7 @@ export function App(): React.JSX.Element {
           )
         })}
       </main>
+      {detailTask && <TaskDetail task={detailTask} onClose={() => setDetailId(null)} />}
     </div>
   )
 }

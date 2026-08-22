@@ -7,8 +7,10 @@ import { runDetections } from '@core/agents/detection'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
 import { cancelScheduled, completeTodo, editTask } from '@core/task-edit'
+import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
+import type { ExecutionService } from './execution'
 
 /** 类型化 handle 注册:channel 与载荷形状由 @shared/ipc 契约约束 */
 function handle<C extends InvokeChannel>(
@@ -39,7 +41,7 @@ export function refreshAgentDetections(ctx: AppContext): Promise<AgentDetection[
   return detectionInFlight
 }
 
-export function registerIpcHandlers(ctx: AppContext): void {
+export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService): void {
   handle('app:status', (): AppStatus => {
     return {
       version: app.getVersion(),
@@ -53,13 +55,15 @@ export function registerIpcHandlers(ctx: AppContext): void {
 
   handle('task:create', (payload) => {
     if (!payload.text.trim()) throw new Error('任务文本不能为空')
-    return ctx.tasks.create({
+    const task = ctx.tasks.create({
       text: payload.text,
       projectId: payload.projectId,
       agent: payload.agent,
       triggerType: payload.triggerType,
       triggerAt: payload.triggerAt
     })
+    execution.maybeRunImmediate(task)
+    return task
   })
 
   handle('task:list', () => ctx.tasks.list())
@@ -69,6 +73,21 @@ export function registerIpcHandlers(ctx: AppContext): void {
   handle('task:toggle-todo', ({ id }) => completeTodo(ctx.tasks, id))
 
   handle('task:cancel', ({ id }) => cancelScheduled(ctx.tasks, id))
+
+  handle('task:run-now', ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    if (task.status !== 'scheduled') throw new Error(`任务状态 ${task.status} 不可立即执行`)
+    if (!task.agent) throw new Error('任务未指定 agent,请先编辑补充')
+    execution.enqueue(task.id)
+    return task
+  })
+
+  handle('task:archive', ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    return readTaskArchive(task.archiveDir)
+  })
 
   handle('project:list', () => ctx.projects.list())
 

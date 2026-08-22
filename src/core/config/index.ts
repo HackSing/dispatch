@@ -24,7 +24,12 @@ export type AgentConfig = z.infer<typeof AgentConfigSchema>
 const AgentsRecordSchema = z.record(z.string(), AgentConfigSchema)
 
 const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
-  'claude-code': { bin: 'claude', headless_args: ['-p'] },
+  'claude-code': {
+    bin: 'claude',
+    headless_args: ['-p'],
+    auto_approve_args: ['--dangerously-skip-permissions'],
+    calibrated: { date: '2026-08-22', cli_version: '2.1.229' }
+  },
   codex: { bin: 'codex', headless_args: ['exec'] },
   dsh: { bin: 'dsh' },
   kimi: { bin: 'kimi' },

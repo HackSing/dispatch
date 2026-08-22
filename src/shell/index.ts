@@ -8,6 +8,7 @@ import { seedDefaultProject } from '@core/bootstrap'
 import { createTray } from './tray'
 import { createCaptureWindow, createMainWindow, showMainWindow, toggleCaptureWindow } from './windows'
 import { broadcast, refreshAgentDetections, registerIpcHandlers } from './ipc-handlers'
+import { ExecutionService } from './execution'
 import type { AppContext } from './context'
 
 let ctx: AppContext | null = null
@@ -40,7 +41,7 @@ if (!gotLock) {
       hotkey: { accelerator: config.hotkey, registered: false }
     }
 
-    registerIpcHandlers(ctx)
+    registerIpcHandlers(ctx, new ExecutionService(ctx))
     createMainWindow()
     createCaptureWindow()
     createTray()

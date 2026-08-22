@@ -45,6 +45,15 @@ export interface UiState {
   lastProjectId: string | null
 }
 
+/** 详情页展示的归档内容,均可能尚未产生(null) */
+export interface TaskArchive {
+  taskMd: string | null
+  planMd: string | null
+  resultRaw: string | null
+  logTail: string | null
+  conflictReport: string | null
+}
+
 /** invoke 型通道:渲染层请求 → 主进程响应 */
 export interface InvokeMap {
   'app:status': { req: void; res: AppStatus }
@@ -54,6 +63,8 @@ export interface InvokeMap {
   'task:update': { req: UpdateTaskPayload; res: Task }
   'task:toggle-todo': { req: { id: string }; res: Task }
   'task:cancel': { req: { id: string }; res: Task }
+  'task:run-now': { req: { id: string }; res: Task }
+  'task:archive': { req: { id: string }; res: TaskArchive }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
   'project:pick-directory': { req: void; res: string | null }
@@ -81,6 +92,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:update',
   'task:toggle-todo',
   'task:cancel',
+  'task:run-now',
+  'task:archive',
   'project:list',
   'project:create',
   'project:pick-directory',
