@@ -72,6 +72,18 @@ export async function isDirty(dir: string): Promise<boolean> {
   return (await statusPorcelain(dir)).trim().length > 0
 }
 
+/**
+ * 工作区未提交改动整体入一笔提交,干净时 no-op 返回 false。
+ * 会话面板收尾专用:交互轮次不承诺提交纪律,而合并只认提交——
+ * 由 worktree 所有者(会话引擎)在 finish 前恢复该不变量,否则改动随 worktree 删除丢失。
+ */
+export async function commitAllIfDirty(cwd: string, message: string): Promise<boolean> {
+  if (!(await isDirty(cwd))) return false
+  await git(['add', '-A'], cwd)
+  await git(['commit', '-m', message], cwd)
+  return true
+}
+
 export interface CreateWorktreeOptions {
   projectPath: string
   worktreesDir: string

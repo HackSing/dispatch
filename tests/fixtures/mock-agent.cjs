@@ -17,8 +17,9 @@
 //   stream       会话面板常驻模式:stdin 每行一个 user NDJSON,逐轮回 assistant+result
 //                事件(线格式对齐 claude stream-json 实测样本),收到的文本全文追加写
 //                cwd/stream-turns.log;文本含 mock-commit 时在 cwd 提交一次文件改动,
-//                含 mock-error 时 result 事件 is_error=true,含 mock-silent 时该轮不回
-//                (轮超时路径),含 mock-die 时以退出码 7 立即退出(进程意外退出路径)
+//                含 mock-touch 时只写文件不提交(收尾自动提交路径),含 mock-error 时
+//                result 事件 is_error=true,含 mock-silent 时该轮不回(轮超时路径),
+//                含 mock-die 时以退出码 7 立即退出(进程意外退出路径)
 // 审查角色模式(W1b 工作流「主智能体」用):提示词不含 review-r<N>.json 锚点时视为 plan
 // 阶段,一律写 plan.md 后退出;含锚点时视为审查阶段,按模式行事:
 //   review_pass         写 review-r<N>.{md,json},verdict=pass
@@ -169,6 +170,10 @@ function streamServe() {
     if (text.includes('mock-die') && !text.includes('mock-die-after')) process.exit(7)
     if (text.includes('mock-silent')) return
     if (text.includes('mock-commit')) commitChange(process.cwd(), 'mock-followup.txt', text.slice(0, 60))
+    // 写文件但不提交:覆盖「交互轮次无提交纪律,收尾自动入一笔」路径
+    if (text.includes('mock-touch')) {
+      fs.writeFileSync(path.join(process.cwd(), 'mock-uncommitted.txt'), text.slice(0, 60) + '\n')
+    }
     console.log(
       JSON.stringify({
         type: 'assistant',

@@ -1,0 +1,8 @@
+# 交互批 V0.2r2 · c3 终端逃生舱证据(2026-08-22)
+操作层实测:darwinOps.openTerminal(cwd, 'claude --resume 03a02743-…')(npx tsx 直调
+src/core/platform/darwin.ts)→ osascript 拉起 Terminal.app 并进入交互式 resume 会话,
+返回 openTerminal ok,无授权错误。
+应用层接线:task:open-session-terminal handler 渲染 interactive_resume_cmd 模板 +
+cwd 选择(活跃会话 worktree > 遗留 worktree > 项目目录),详情页按钮经 capability 门控;
+按钮端到端体验归 c4 用户确认。
+进程残留:面板门控后 pgrep 无 dispatch 派生的 stream 进程残留(见 c2 证据)。

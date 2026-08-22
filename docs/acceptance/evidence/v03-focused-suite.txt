@@ -1,0 +1,10 @@
+# 交互批 V0.2r2 · c1 聚焦测试证据(2026-08-22)
+命令:npm test(ELECTRON_RUN_AS_NODE electron vitest,全仓;实机门控默认跳过)
+覆盖:tests/follow-up.test.ts(引擎守卫/stream 两轮/未提交改动收尾/放弃清理/轮超时/
+轮内退出/空闲退出/round 降级传输)、tests/session.test.ts(占位渲染/argv/能力判定)、
+tests/config.test.ts(会话三件套默认与向后兼容)、tests/db.test.ts(migration v3/
+setSessionId last-wins/接力字段成对)、tests/state-machine.test.ts(done→todo)及全仓回归。
+结果:
+      Tests  182 passed | 9 skipped (191)
+   Start at  17:04:54
+   Duration  11.97s (transform 721ms, setup 0ms, collect 1.98s, tests 34.02s, environment 2ms, prepare 1.46s)

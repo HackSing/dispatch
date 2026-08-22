@@ -1,0 +1,14 @@
+# 交互批 V0.2r2 · c2 实机门控证据(2026-08-22)
+命令:RUN_REAL_AGENTS=claude-code npm test -- real-follow-up
+链路:真实 claude(2.1.237 本机)执行 seed 任务 → done 且 sessionId 预生成落库(uuid)
+→ FollowUpSession 面板两轮:
+  轮1 问暗号并要求写入 code.txt → worktree/code.txt 含 papaya77
+  (暗号仅存在于原任务会话,写对即证明 resume 同一 session)
+  轮2 追加 round2-ok → 文件两行
+→ finish:未提交改动自动入一笔(commitAllIfDirty)→ mergeFlow 合并 →
+  主检出 code.txt 含 papaya77 + round2-ok;归档 rounds.jsonl 恰 2 条;closed=['finished']
+结果:1 passed,165.6s。
+附:首次门控运行(修复前)在合并断言失败,暴露「交互轮次未提交改动随 worktree 删除丢失」
+缺陷,修复(引擎收尾自动提交)后重跑通过——该失败记录即本门控的价值证据。
+进程残留检查:pgrep -fl "input-format stream-json" 仅见本机 Claude 桌面端自身进程,
+门控传输进程无残留。

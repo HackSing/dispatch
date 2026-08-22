@@ -145,6 +145,24 @@ qwen --approval-mode yolo   # prompt 经 stdin 写入
 
 ---
 
+## 会话续接三件套(交互批 V0.2r2,2026-08-22 实测 claude 2.1.229)
+
+会话面板与终端逃生舱依赖的配置字段(`session_args` / `resume_headless_args` /
+`resume_stream_args` / `interactive_resume_cmd`),当前仅 claude-code 校准:
+
+| 能力 | 参数 | 实测结论 |
+|---|---|---|
+| 预生成会话 id | `--session-id <uuid>` | 可用;dispatch 造 UUID 落库,无需解析输出 |
+| headless 续会话 | `-p --resume <sid>` | **跨目录可用**(worktree 删除不阻塞);多轮后 sid 稳定、历史累积 |
+| 常驻多轮(面板) | `-p --input-format stream-json --output-format stream-json --resume <sid>` | 进程常驻,stdin 逐轮写 user NDJSON,每轮吐 `result` 事件定轮次边界 |
+| 终端交互续接 | `claude --resume <sid>` | 配合 darwin osascript 拉起 Terminal 验证通过 |
+
+- 实测门控:`RUN_REAL_AGENTS=claude-code npm test -- real-follow-up`(暗号法两轮 + 完成合并,166s 通过)。
+- 关键事实:交互轮次**不承诺提交纪律**——门控首跑抓到未提交改动随 worktree 删除丢失,
+  已由会话引擎在 finish 前 `commitAllIfDirty` 收尾(gitops),提示词同步声明"无需你提交"。
+- codex 有对称的 `codex exec resume <sid> <prompt>`,但不支持预指定 id(需解析输出),
+  三件套留空即面板/终端入口自动隐藏;kimi/qwen 未见续会话能力,未校准。
+
 ## 未解决问题
 
 1. dsh 未安装,整体未校准(见上)。

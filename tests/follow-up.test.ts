@@ -213,6 +213,17 @@ describe('stream 传输全链路', () => {
     expect(r.closed).toEqual(['finished'])
   })
 
+  it('轮次只改文件未提交 → finish 自动入一笔并合并(不丢改动)', async () => {
+    const project = createProject()
+    const parent = makeDoneParent(project.id)
+    const r = recorder()
+    const session = await FollowUpSession.start(deps, parent.id, r.events)
+    await session.sendTurn('只写文件不提交 mock-touch')
+    const done = await session.finish()
+    expect(done.status).toBe('done')
+    expect(existsSync(join(repo, 'mock-uncommitted.txt'))).toBe(true)
+  })
+
   it('放弃:failed(session_abandoned) 且 worktree 与分支清理', async () => {
     const project = createProject()
     const parent = makeDoneParent(project.id)

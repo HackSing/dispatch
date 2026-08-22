@@ -16,8 +16,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L2",
       "evidence_layer": "focused_test",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T090529-9c1823cc30",
+          "objective_fingerprint": "sha256:3da9a3a651c41bf8753f9f6561a5d3f25b412f2d9c9f5324c8aeaf6dc4a7edbd",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "全仓 vitest(182 passed / 9 skipped):follow-up 引擎 8 例、session/config/db/state-machine 契约用例及全仓回归",
+          "evidence_refs": [
+            "docs/acceptance/evidence/v03-focused-suite.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T09:05:29+00:00"
+        }
+      ]
     },
     {
       "id": "c2",
@@ -25,8 +43,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T090539-d9ceaa12c5",
+          "objective_fingerprint": "sha256:3da9a3a651c41bf8753f9f6561a5d3f25b412f2d9c9f5324c8aeaf6dc4a7edbd",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "RUN_REAL_AGENTS=claude-code npm test -- real-follow-up:真实 claude 暗号法两轮同 session + 未提交改动收尾合并,165.6s 通过(首跑暴露改动丢失缺陷,修复后复跑)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/v03-real-follow-up.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T09:05:39+00:00"
+        }
+      ]
     },
     {
       "id": "c3",
@@ -34,8 +70,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T090539-5a1b3253fd",
+          "objective_fingerprint": "sha256:3da9a3a651c41bf8753f9f6561a5d3f25b412f2d9c9f5324c8aeaf6dc4a7edbd",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "darwinOps.openTerminal 实调拉起 Terminal 进入交互式 resume(openTerminal ok);进程残留检查无 dispatch 派生 stream 进程;详情页按钮端到端归 c4",
+          "evidence_refs": [
+            "docs/acceptance/evidence/v03-terminal.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T09:05:39+00:00"
+        }
+      ]
     },
     {
       "id": "c4",
@@ -48,10 +102,26 @@
     }
   ],
   "status": "pending",
-  "revision": 1,
-  "revision_history": [],
+  "revision": 4,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:9594f4f0fb7aba180606c1e0ddcca83255c5bba3ba6ec334646895b52f91e469",
+      "updated_at": "2026-08-22T08:18:26+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:345ec7d575585eb246fbb8cc327fa33a75674f9004123803b6733300d37efc5c",
+      "updated_at": "2026-08-22T09:05:29+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:8054eb051501f722ef33f693f810923e961788854268cf4fcae385b951951603",
+      "updated_at": "2026-08-22T09:05:39+00:00"
+    }
+  ],
   "created_at": "2026-08-22T08:18:26+00:00",
-  "updated_at": "2026-08-22T08:18:26+00:00",
+  "updated_at": "2026-08-22T09:05:39+00:00",
   "settled_at": null,
-  "asset_fingerprint": "sha256:9594f4f0fb7aba180606c1e0ddcca83255c5bba3ba6ec334646895b52f91e469"
+  "asset_fingerprint": "sha256:f22f71b0c5fdc8a14a30a9bc2aeffbfd3ff5a0fd24aced9828a7033c84047337"
 }

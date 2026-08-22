@@ -22,7 +22,7 @@ import {
 } from '@core/agents/session-transport'
 import { getPlatformOps } from '@core/platform'
 import { loadPromptTemplate, renderPrompt } from '@core/prompt'
-import { createTaskWorktree } from '@core/gitops'
+import { commitAllIfDirty, createTaskWorktree } from '@core/gitops'
 import { runShell } from '@core/proc/shell'
 import { shortId } from '@core/naming'
 import { cleanupTaskWorkspace } from './cleanup'
@@ -253,6 +253,10 @@ export class FollowUpSession {
     await this.transport.close()
     let task: Task
     try {
+      // 交互轮次不承诺提交纪律;合并只认提交,收尾前把脏工作区整体入一笔,否则改动随 worktree 删除丢失
+      if (this.ctx.git && (await commitAllIfDirty(this.cwd, 'dispatch: 会话面板改动收尾'))) {
+        this.ctx.log.append('[dispatch] 会话收尾:未提交改动已自动入一笔提交\n')
+      }
       task = this.ctx.git ? await mergeAndFinish(this.ctx) : finishNoVcs(this.ctx)
     } catch (e) {
       // 与批量链路 failCurrent 同语义:非预期合并异常不留悬挂状态
