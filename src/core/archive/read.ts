@@ -1,6 +1,6 @@
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { TaskArchive } from '@shared/ipc'
+import type { ArchiveFileInfo, TaskArchive } from '@shared/ipc'
 
 /** 日志只取尾部,防止详情页拉全量大文件 */
 const LOG_TAIL_BYTES = 16 * 1024
@@ -26,15 +26,30 @@ function readTail(dir: string, name: string): string | null {
   return start > 0 ? `…(仅显示日志尾部 ${LOG_TAIL_BYTES / 1024}KB)\n${text}` : text
 }
 
+function listFiles(archiveDir: string): ArchiveFileInfo[] {
+  return readdirSync(archiveDir, { withFileTypes: true })
+    .filter((e) => e.isFile())
+    .map((e) => ({ name: e.name, size: statSync(join(archiveDir, e.name)).size }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export function readTaskArchive(archiveDir: string | null): TaskArchive {
   if (!archiveDir || !existsSync(archiveDir)) {
-    return { taskMd: null, planMd: null, resultRaw: null, logTail: null, conflictReport: null }
+    return {
+      taskMd: null,
+      planMd: null,
+      resultRaw: null,
+      logTail: null,
+      conflictReport: null,
+      files: []
+    }
   }
   return {
     taskMd: readIfExists(archiveDir, 'task.md'),
     planMd: readIfExists(archiveDir, 'plan.md'),
     resultRaw: readIfExists(archiveDir, 'result.json'),
     logTail: readTail(archiveDir, 'output.log'),
-    conflictReport: readIfExists(archiveDir, 'conflict-report.md')
+    conflictReport: readIfExists(archiveDir, 'conflict-report.md'),
+    files: listFiles(archiveDir)
   }
 }

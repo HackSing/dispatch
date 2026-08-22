@@ -13,6 +13,8 @@ export const AgentConfigSchema = z.object({
   version_args: z.array(z.string()).default(['--version']),
   ready_check_cmd: z.string().nullable().default(null),
   start_cmd: z.string().nullable().default(null),
+  /** 输出日志过滤器名,见 core/agents/log-filters.ts;null = 原样落盘 */
+  log_filter: z.enum(['claude_stream_json']).nullable().default(null),
   calibrated: z
     .object({ date: z.string(), cli_version: z.string() })
     .nullable()
@@ -26,8 +28,9 @@ const AgentsRecordSchema = z.record(z.string(), AgentConfigSchema)
 const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
   'claude-code': {
     bin: 'claude',
-    headless_args: ['-p'],
+    headless_args: ['-p', '--output-format', 'stream-json', '--verbose'],
     auto_approve_args: ['--dangerously-skip-permissions'],
+    log_filter: 'claude_stream_json',
     calibrated: { date: '2026-08-22', cli_version: '2.1.229' }
   },
   codex: { bin: 'codex', headless_args: ['exec'] },

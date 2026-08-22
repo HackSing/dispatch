@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { basename } from 'node:path'
 import type { AgentDetection } from '@shared/types'
 import type { AppStatus, EventChannel, EventMap, InvokeChannel, InvokeMap } from '@shared/ipc'
@@ -87,6 +87,14 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
     const task = ctx.tasks.get(id)
     if (!task) throw new Error(`任务不存在: ${id}`)
     return readTaskArchive(task.archiveDir)
+  })
+
+  handle('task:open-archive', async ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    if (!task.archiveDir) throw new Error('该任务尚无归档目录')
+    const err = await shell.openPath(task.archiveDir)
+    if (err) throw new Error(`打开归档目录失败: ${err}`)
   })
 
   handle('project:list', () => ctx.projects.list())

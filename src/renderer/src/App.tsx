@@ -5,7 +5,7 @@ import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
 import { pickAndCreateProject } from './lib/projects'
-import { formatTime } from './lib/time'
+import { formatElapsed, formatTime } from './lib/time'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: '待办',
@@ -28,6 +28,15 @@ function TaskRow(props: { task: Task; onEdit: () => void; onOpen: () => void }):
   const { task, onEdit, onOpen } = props
   const [actionError, setActionError] = useState<string | null>(null)
   const editable = task.status === 'todo' || task.status === 'scheduled'
+  const active = task.status === 'running' || task.status === 'merging'
+
+  // 执行中耗时每秒刷新
+  const [nowMs, setNowMs] = useState(Date.now())
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
 
   const run = (fn: () => Promise<unknown>): void => {
     void fn().catch((e: Error) => setActionError(e.message))
@@ -46,6 +55,7 @@ function TaskRow(props: { task: Task; onEdit: () => void; onOpen: () => void }):
         <div className={`task-text${task.status === 'done' ? ' done' : ''}`}>{task.text}</div>
         <div className="task-meta">
           <span className={`badge ${task.status}`}>{STATUS_LABELS[task.status]}</span>
+          {active && task.startedAt && <span>已执行 {formatElapsed(task.startedAt, nowMs)}</span>}
           {triggerLabel(task) && <span>{triggerLabel(task)}</span>}
           {task.agent && <span>{task.agent}</span>}
           <span>创建:{formatTime(task.createdAt)}</span>

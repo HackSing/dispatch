@@ -45,6 +45,11 @@ export interface UiState {
   lastProjectId: string | null
 }
 
+export interface ArchiveFileInfo {
+  name: string
+  size: number
+}
+
 /** 详情页展示的归档内容,均可能尚未产生(null) */
 export interface TaskArchive {
   taskMd: string | null
@@ -52,6 +57,8 @@ export interface TaskArchive {
   resultRaw: string | null
   logTail: string | null
   conflictReport: string | null
+  /** 归档目录全部文件(agent 可能产出协议之外的交付物,如生成的文档) */
+  files: ArchiveFileInfo[]
 }
 
 /** invoke 型通道:渲染层请求 → 主进程响应 */
@@ -65,6 +72,7 @@ export interface InvokeMap {
   'task:cancel': { req: { id: string }; res: Task }
   'task:run-now': { req: { id: string }; res: Task }
   'task:archive': { req: { id: string }; res: TaskArchive }
+  'task:open-archive': { req: { id: string }; res: void }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
   'project:pick-directory': { req: void; res: string | null }
@@ -94,6 +102,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:cancel',
   'task:run-now',
   'task:archive',
+  'task:open-archive',
   'project:list',
   'project:create',
   'project:pick-directory',

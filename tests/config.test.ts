@@ -22,7 +22,13 @@ describe('config', () => {
     expect(config.missed_task_policy).toBe('run')
     expect(config.daily_report_notify).toBe(true)
     expect(config.agents['claude-code'].bin).toBe('claude')
-    expect(config.agents['claude-code'].headless_args).toEqual(['-p'])
+    expect(config.agents['claude-code'].headless_args).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose'
+    ])
+    expect(config.agents['claude-code'].log_filter).toBe('claude_stream_json')
     // 落盘的文件可直接二次加载
     expect(loadConfig(file)).toEqual(config)
   })

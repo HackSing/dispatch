@@ -3,7 +3,19 @@ import ReactMarkdown from 'react-markdown'
 import type { Task } from '@shared/types'
 import type { TaskArchive } from '@shared/ipc'
 import type { TaskResult } from '@core/agents/types'
-import { formatTime } from '../lib/time'
+import { formatElapsed, formatTime } from '../lib/time'
+
+const ACTIVE_POLL_MS = 3000
+
+function isActive(task: Task): boolean {
+  return task.status === 'running' || task.status === 'merging'
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
 
 function parseResult(raw: string | null): TaskResult | null {
   if (!raw) return null
@@ -28,12 +40,26 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
   const [archive, setArchive] = useState<TaskArchive | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // 任务状态每变一次重拉归档:plan/result/日志随执行推进落盘
+  // 状态变化即重拉;执行/合并中每 3s 轮询,日志与产物随进度出现
   useEffect(() => {
-    window.dispatchApi
-      .invoke('task:archive', { id: task.id })
-      .then(setArchive)
-      .catch((e: Error) => setError(e.message))
+    const fetchArchive = (): void => {
+      window.dispatchApi
+        .invoke('task:archive', { id: task.id })
+        .then(setArchive)
+        .catch((e: Error) => setError(e.message))
+    }
+    fetchArchive()
+    if (!isActive(task)) return
+    const timer = setInterval(fetchArchive, ACTIVE_POLL_MS)
+    return () => clearInterval(timer)
+  }, [task.id, task.status])
+
+  // 执行中的耗时每秒跳动
+  const [nowMs, setNowMs] = useState(Date.now())
+  useEffect(() => {
+    if (!isActive(task)) return
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
   }, [task.id, task.status])
 
   useEffect(() => {
@@ -53,6 +79,15 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
           <span className={`badge ${task.status}`}>{task.status}</span>
           <span className="detail-title">{task.text.split('\n')[0]}</span>
           <span className="spacer" />
+          {task.archiveDir && (
+            <button
+              className="btn"
+              title="在 Finder 中打开归档目录"
+              onClick={() => void window.dispatchApi.invoke('task:open-archive', { id: task.id })}
+            >
+              打开归档
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             关闭 Esc
           </button>
@@ -68,6 +103,9 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
               {task.agent && <span>智能体:{task.agent}</span>}
               <span>创建:{formatTime(task.createdAt)}</span>
               {task.startedAt && <span>开始:{formatTime(task.startedAt)}</span>}
+              {isActive(task) && task.startedAt && (
+                <span>已执行:{formatElapsed(task.startedAt, nowMs)}</span>
+              )}
               {task.finishedAt && <span>结束:{formatTime(task.finishedAt)}</span>}
               {task.baseBranch && <span>基线:{task.baseBranch}</span>}
               {task.branch && <span>分支:{task.branch}</span>}
@@ -115,8 +153,20 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
           )}
 
           {archive?.logTail && (
-            <Section title="执行日志(尾部)">
+            <Section title={isActive(task) ? '执行日志(实时)' : '执行日志(尾部)'}>
               <pre className="detail-pre log-box">{archive.logTail}</pre>
+            </Section>
+          )}
+
+          {archive && archive.files.length > 0 && (
+            <Section title="归档文件">
+              <ul className="detail-files">
+                {archive.files.map((f) => (
+                  <li key={f.name}>
+                    {f.name} <span className="detail-notes">({formatSize(f.size)})</span>
+                  </li>
+                ))}
+              </ul>
             </Section>
           )}
         </div>

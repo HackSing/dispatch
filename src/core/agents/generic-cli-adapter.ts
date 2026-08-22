@@ -3,6 +3,7 @@ import type { AgentId } from '@shared/types'
 import type { AgentConfig } from '@core/config'
 import type { PlatformOps } from '@core/platform'
 import { runShell, spawnShellDetached } from '@core/proc/shell'
+import { createLogFilter } from './log-filters'
 import type { AgentAdapter, AgentRunOptions, DetectResult } from './types'
 
 const READY_TIMEOUT_MS = 30_000
@@ -70,8 +71,14 @@ export class GenericCliAdapter implements AgentAdapter {
       detached: true,
       stdio: ['pipe', 'pipe', 'pipe']
     })
-    child.stdout.on('data', (c: Buffer) => opts.onLog(c.toString()))
+    // stdout 经配置指定的过滤器转人可读;stderr 原样保留
+    const filter = createLogFilter(this.config.log_filter)
+    const emit = (text: string): void => {
+      if (text) opts.onLog(text)
+    }
+    child.stdout.on('data', (c: Buffer) => emit(filter.transform(c.toString())))
     child.stderr.on('data', (c: Buffer) => opts.onLog(c.toString()))
+    child.stdout.once('close', () => emit(filter.flush()))
     this.feedStdin(child, opts)
     return this.waitExit(child, opts)
   }
