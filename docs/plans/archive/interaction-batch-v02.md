@@ -1,4 +1,4 @@
-> 状态：有效（实施中）
+> 状态：已废弃-被 docs/plans/interaction-batch-v03.json 取代（2026-08-22 核对）
 <!-- docs-harness:plan-document/v1 -->
 
 # 交互批 V0.2:多项目清单、手动状态与会话接力(follow-up)

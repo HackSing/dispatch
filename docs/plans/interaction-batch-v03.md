@@ -1,0 +1,93 @@
+> 状态：有效（实施中）
+<!-- docs-harness:plan-document/v1 -->
+
+# 交互批 V0.2r2:追问改为常驻会话面板(单 worktree 多轮对话,结束一次合并)
+
+- 冻结合同：`sha256:68d151f99ee5fa37c88a017b91b8bf98e8e4aba7785046792df1164d5416d636`
+- 关键符号：`FollowUpSession`、`resume_stream_args`、`task:follow-up-send`、`rounds.jsonl`
+
+## 背景
+
+取代 interaction-batch-v02:其 R1(多项目清单)与 R2(done→todo 双向勾选)已按原设计实施并合入 main(提交 9aa192c 及 B-a 契约层),本方案原样承接不重做;R3(追问)原设计为「一轮追问=一条 headless 接力任务+新 worktree+新合并」,经用户评审判定不适配高频在场多轮打磨的核心场景(5 轮对话=5 次合并),废弃重冻。新地基实测(claude 2.1.229):`-p --resume <sid> --input-format stream-json --output-format stream-json` 单进程常驻,stdin NDJSON 连发多轮,每轮吐结构化 result 事件,跨轮上下文连续,session id 稳定,零原生依赖。内嵌 pty 终端方案经对比否决:pty 输出为不可解析文本流,dispatch 对轮次/工具调用/结果全程失明,归档与自动化上限被封死;原生依赖仅是次要成本。机制核对:调度器 isDue 对 scheduled+immediate 恒真(面板任务不得取该形态);recovery 将 running 残留落 failed(interrupted) 且保留 worktree(对崩溃的面板会话恰为正确语义,直接复用)。
+
+## 目标
+
+done/failed 任务详情页可开「继续对话」面板:创建一条接力任务(单 worktree),常驻同 session 多轮对话,轮次时间线实时渲染,每轮落归档;用户点「完成,合并」走既有合并链路收尾,点「放弃」落 failed 并清理;「在终端打开会话」逃生舱保留。仅配置了会话能力的 agent 显示入口(当前 claude-code)。
+
+## 非目标
+
+内嵌 pty 终端(后续独立评估,不进本版);轮内中断(stream-json control_request interrupt 协议未校准,v1 只提供终止会话);codex/kimi/qwen 会话能力校准(per-round 降级传输实现但无已校准消费者);R1/R2 重做;W1 工作流语义变更;子智能体会话;聊天 UI 深度打磨(diff 卡片/产物卡片等留后续版本);Windows。
+
+## 成功标准
+
+受影响模块测试全绿(会话引擎两种传输/任务模型/config/归档轮次);实机门控:真实小仓库任务 done → 面板连发两轮(第二轮引用第一轮内容,暗号法),轮次时间线正确渲染,点完成后合并 done,归档含 rounds.jsonl 与全轮文本;终止会话后可从同任务再开面板续同一 session;终端逃生舱拉起可交互 resume;用户真实使用确认。
+
+## 执行范围
+
+src/core/executor/follow-up.ts(新);src/core/agents/{session,types}.ts;src/core/config/index.ts;src/core/db/task-store.ts(如需);src/shell/{execution或新 session-service,ipc-handlers,notifications}.ts;src/shared/{ipc,types}.ts;src/preload;src/renderer/src/components/{TaskDetail,SessionPanel(新)}.tsx 与 stores;resources/prompts/follow-up.md(新);tests/fixtures/mock-agent.cjs(增 stream 模式)与对应 tests/;docs/agent-calibration.md。
+
+## 执行内容
+
+B-b1 会话引擎(core 层):config 增 resume_stream_args(string[] 模板,{SESSION_ID} 占位;claude-code 校准值 ['-p','--input-format','stream-json','--output-format','stream-json','--verbose','--resume','{SESSION_ID}'];空=无常驻能力)。SessionTransport 接口(open/sendTurn/close + 轮次事件回调),两实现均零 agent 分支:StreamTransport(常驻进程,stdin 写 user NDJSON,stdout 经 claude_stream_json 过滤器出人读文本,result 事件定轮次边界)与 RoundSpawnTransport(每轮以 resume_headless_args spawn 一次,同 worktree;为未来 codex 类 agent 预留,mock 可测)。传输选择:resume_stream_args 非空→常驻,否则 resume_headless_args 非空→每轮,都无→不可开面板(能力判定并入 session.ts)。FollowUpSession 引擎:startFollowUpSession(deps, parentId) 校验(parent ∈ done/failed ∧ sessionId 非空 ∧ agent 会话能力)→ create 接力任务(text='[会话] 接力自 <parent 短id>',triggerType='none',继承 projectId/agent/sessionId,subAgent=null,parentTaskId)→ 同步块内 todo→scheduled→running(同步事务无调度器竞态)→ Phase0 复用:createArchive+createTaskWorktree+prepareCmd → 开传输。sendTurn(text):首轮经 resources/prompts/follow-up.md 模板渲染(注入「此前改动已合并进 {BASE_BRANCH},你在全新 worktree,旧路径已失效;若上一会话有只评不改约束,本轮解除;直接对话回答,无需 plan.md/result.json」),后续轮原文直发;每轮超时 task_timeout_min(超时=终止会话落 failed(timeout_round));轮结束把过滤文本追加 output.log、结构化元数据(round/duration_ms/cost/is_error)追加 rounds.jsonl,并发轮次事件。finish():关传输→复用 mergeAndFinish(merging→done/conflict/awaiting_merge 全语义继承,conflict 后的重试/放弃走既有 TaskOps)。abandon():杀进程→running→failed(session_abandoned)→复用 cleanupTaskWorkspace。进程意外退出→failed(session_exit_<code>)。会话不占执行信号量(在场工作不排队;合并仍持项目合并锁);崩溃恢复零新增(既有 failInterrupted 即正确语义,failed 任务保留 sessionId 可再开面板续同 session)。B-b2 壳层接线:SessionService 持活跃会话表(taskId→FollowUpSession,单任务同时最多一个面板会话),app 退出统一 close;IPC:task:follow-up-start{parentId}→Task、task:follow-up-send{id,text}→void、task:follow-up-finish{id}→Task(异步合并,进展走 task:changed)、task:follow-up-abandon{id}→Task、agent:capabilities→Record<AgentId,{followUp,terminal}>、task:open-session-terminal{id}→void(darwin osascript,cwd=worktree 存活则 worktree 否则项目目录,命令由 interactive_resume_cmd 渲染);事件通道 task:session-event{taskId,kind:'round-start'|'chunk'|'round-result'|'closed',payload}。B-c′ 面板 UI:TaskDetail 对 done/failed ∧ sessionId ∧ capability 显示「继续对话」→ follow-up-start 后打开 SessionPanel:轮次时间线(v1=每轮过滤文本块+耗时/成本元数据行)、输入框(发送中禁用)、完成合并/放弃按钮、会话状态行;任务行「接力」badge 与详情 parent/child 链(store 内存过滤);终端按钮同前置条件。B-d 收尾:实机门控、agent-calibration.md 补 stream/resume 校准事实、acceptance(沿用 docs/acceptance/interaction-batch-v02.json)结项、plan settle。
+
+## 验收方案
+
+L1/L2 聚焦测试(ELECTRON_RUN_AS_NODE vitest):传输选择与能力判定;StreamTransport 多轮(mock-agent 增 stream 模式:读 stdin NDJSON 逐轮回 assistant+result)与 RoundSpawnTransport 每轮 spawn;startFollowUpSession 守卫(非 done/failed 拒、无 sessionId 拒、无能力拒、同任务重复开拒);同步块状态驱动;首轮模板注入与后续轮原文;轮超时落 failed(timeout_round);finish→merge 链路与 abandon→清理;rounds.jsonl 形状;config 新字段默认与兼容。L3 实机门控(RUN_REAL_AGENTS=claude-code):暗号法两轮 + 完成合并 + 归档检查 + 终止后重开续 session + 终端拉起。L5 用户确认:面板一轮真实打磨体验。沿用验收资产 interaction-batch-v02(c1-c4 结果层判据不变)。
+
+## 是否需要 Acceptance 资产闭环
+
+```json
+true
+```
+
+## Knowledge 影响
+
+unchanged
+
+## 约束
+
+遵守 spec §5.2 零 agent 分支(传输实现只读配置模板);状态写入全走 TaskStore.transition(),todo→scheduled→running 必须同一同步块杜绝调度器竞态;不引入任何新依赖(node-pty 明确否决);已发布 migration 不改;mock-agent 既有模式与提示词锚点格式不动,stream 模式只增不改;提示词与代码流程同步(follow-up.md 明示无产物契约、新 worktree 事实);每轮事件与归档共用 claude_stream_json 过滤器,不平行再写解析器。
+
+## 风险与回滚
+
+风险:①常驻进程随窗口/应用生命周期管理(SessionService 统一收口,退出必杀,泄漏进程=失败判据);②会话记忆含旧 worktree 路径(首轮模板锚点缓解,实机门控专验);③工作流任务接力落 review session,其「只评不改」纪律由模板显式解除(校准风险标注);④stream-json 事件形状随 CLI 版本漂移(已有 log-filter 实测样本纪律,calibrated 字段追踪版本);⑤长会话内存/日志体量(rounds.jsonl 追加式,面板只保留渲染窗口)。回滚:全部为新增模块与新增 IPC 通道,逐层可摘除;B-a 契约层(migration/config 字段)与 R1/R2 不受影响。
+
+## 用户与场景
+
+用户是本机单人使用者,agent 任务跑完后高频进行在场多轮打磨:读产物→追问→看改动→再追问,数轮后满意才合并;此环节为产品核心使用面,偶发需要接管到真终端。
+
+## 入口与用户流程
+
+①任务 done/failed → 详情页「继续对话」→ 面板打开(接力任务创建,worktree 就绪);②输入追问发送 → 时间线实时滚动本轮输出 → 轮结束显示耗时/成本;③继续多轮;④满意 → 「完成,合并」→ 面板关闭,任务走合并链路,冲突则回到既有 conflict 操作流;⑤不要了 → 「放弃」→ failed+清理;⑥想人肉接管 → 「在终端打开会话」。
+
+## 完整状态矩阵
+
+「继续对话」入口:status∈{done,failed} ∧ sessionId≠null ∧ capability.followUp,同一任务已有活跃面板时禁用;面板输入框:会话 open ∧ 本轮非进行中 → 可发送,轮进行中禁用;完成合并/放弃:轮进行中禁用(先等轮结束或终止);接力任务状态:todo→scheduled→running(创建即同步走完)—running 贯穿整个面板会话—finish→merging→done/conflict/awaiting_merge(既有语义),abandon/超时/进程死→failed;终端按钮:capability.terminal ∧ sessionId≠null。
+
+## 组件与交互
+
+SessionPanel(新组件)经 dispatchApi invoke 发指令、订阅 task:session-event 收轮次流与 task:changed 收状态,主进程唯一事实源纪律不变;TaskDetail 挂入口与接力链;TaskOps 不动(conflict/awaiting_merge 收尾复用);SessionService(shell)持会话表并广播事件;FollowUpSession(core)只依赖注入的 store/paths/config/adapter 工厂,不触 Electron。
+
+## 视觉与响应式
+
+面板复用 detail-overlay/detail-panel 抽屉样式体系;时间线为纵向块列表,轮次元数据行用既有 task-meta 风格;输入区 textarea+按钮沿用 TaskEditForm 控件样式;窄窗单栏自适应,无新断点。
+
+## 可访问性
+
+轮次时间线 role=log 且 aria-live=polite;输入 textarea 关联 label;发送/完成/放弃均为 button 带 disabled 语义与 title;错误沿用 .form-error 文本(非仅颜色);终止确认走 window.confirm 与既有一致。
+
+## 设计系统复用
+
+无外部组件库;复用 detail-panel/task-card/badge/btn/form-error 与新 chip 类;新样式仅追加 SessionPanel 所需少量类;流式文本渲染复用 log 文本样式。
+
+## 真实页面或桌面运行态验收
+
+npm test 受影响模块全绿;RUN_REAL_AGENTS=claude-code 实机:done 任务面板两轮暗号法(第二轮答案依赖第一轮),完成合并后 git log 见合并提交、归档含 rounds.jsonl(2 条)与 output.log 全轮文本;终止会话→同任务重开→暗号仍在(session 连续);「在终端打开会话」进入交互式同会话;泄漏检查:面板关闭与应用退出后无残留 claude 进程。
+
+<!-- docs-harness:plan-governance:start -->
+## 资产治理
+
+- 关联验收：`docs/acceptance/interaction-batch-v03.json`
+- 需要 Acceptance：true
+- Knowledge 影响：unchanged
+<!-- docs-harness:plan-governance:end -->

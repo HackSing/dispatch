@@ -1,12 +1,13 @@
-> 状态：有效（待验收）
+> 状态：已废弃-被替代
 <!-- docs-harness:acceptance-document/v1 -->
 
 # 交互批 V0.2 验收:多项目清单、手动状态与会话接力
 
-- 修订：1
+- 修订：2
 - 关键符号：`sessionId`、`parentTaskId`、`task:follow-up`
-- 资产指纹：`sha256:d276a10ac395e1f5ebf9713362191346e29b168425b7c25ab0ce658726ea2fda`
+- 资产指纹：`sha256:b9c801c0ef6f4aa56c6895777019de5ff127cb9aa2220ab44ed183613b9eec03`
 - 关联方案：`docs/plans/interaction-batch-v02.json`
+- 替代资产：`docs/acceptance/interaction-batch-v03.json`
 
 ## 验收目标
 

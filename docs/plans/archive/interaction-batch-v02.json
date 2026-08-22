@@ -39,9 +39,7 @@
     "design_system_reuse": "无外部设计系统,复用项目自有类:badge/btn/task-card/form-error/project-group;不新增依赖,不引组件库;新样式仅在现有 CSS 文件追加少量类。",
     "runtime_acceptance": "npm test 受影响模块全绿;RUN_REAL_AGENTS=claude-code 实机门控:真实小仓库任务 done 后追问「在 result.json 的 notes 里写出首轮暗号」,接力任务 done 且归档 notes 含暗号(session 连续铁证);终端按钮拉起 Terminal 且 claude 进入该会话;主窗手工核查:空项目可见、过滤计数正确、done 勾回 todo 后可再编辑。"
   },
-  "acceptance_refs": [
-    "docs/acceptance/interaction-batch-v02.json"
-  ],
+  "acceptance_refs": [],
   "governance": {
     "acceptance_required": true,
     "knowledge_impact": "unchanged",
@@ -50,5 +48,5 @@
     "governance_settled_at": null
   },
   "frozen_at": "2026-08-22T07:52:07+00:00",
-  "plan_fingerprint": "sha256:b2271ca2faf5c433b947cd480adf2dbb1c2b3964f6798d6115c0148eb17c60a9"
+  "plan_fingerprint": "sha256:4199e940860be2df1d38504a0bc5915a1128e6e75db3be56e3aef9e72690d23e"
 }

@@ -47,11 +47,18 @@
       "records": []
     }
   ],
-  "status": "pending",
-  "revision": 1,
-  "revision_history": [],
+  "status": "superseded",
+  "revision": 2,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:d276a10ac395e1f5ebf9713362191346e29b168425b7c25ab0ce658726ea2fda",
+      "updated_at": "2026-08-22T07:52:54+00:00"
+    }
+  ],
   "created_at": "2026-08-22T07:52:54+00:00",
-  "updated_at": "2026-08-22T07:52:54+00:00",
-  "settled_at": null,
-  "asset_fingerprint": "sha256:d276a10ac395e1f5ebf9713362191346e29b168425b7c25ab0ce658726ea2fda"
+  "updated_at": "2026-08-22T08:19:11+00:00",
+  "settled_at": "2026-08-22T08:19:11+00:00",
+  "asset_fingerprint": "sha256:b9c801c0ef6f4aa56c6895777019de5ff127cb9aa2220ab44ed183613b9eec03",
+  "replacement": "docs/acceptance/interaction-batch-v03.json"
 }
