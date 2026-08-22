@@ -1,0 +1,146 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "dispatch 双半插件（@aiwaretop/dsh-dispatch）验收",
+  "key_symbols": [
+    "DispatchApi",
+    "ipc-bridge",
+    "api-bridge",
+    "event-bridge"
+  ],
+  "objective": "验证 dispatch 以 dsh 双半插件形态在 dsh-buddy 内完整可用：host 半在真实 dsh 服务进程内提供 HTTP+SSE 全链能力并共享 ~/.dispatch 数据；client 半在 dsh-buddy 界面内完成任务面板全流程；系统快捷键捕获弹窗可用；禁用/卸载后无遗留。",
+  "plan_ref": "docs/plans/dispatch-dsh-plugin.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "批次 0 spike 结论：better-sqlite3 ABI 选型与 core bundle 冒烟",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T114606-a3ce87c09c",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "批次 0 spike 实测：Electron-ABI(139) better-sqlite3 在 Electron-as-Node 38.8.6 下加载成功；Node-ABI(137) prebuilt 同环境失败（错误信息已存证）；node:sqlite 备选可用。core esbuild bundle（--external:better-sqlite3）在目标运行时全链冒烟通过（建库→建任务→runTask→归档→状态机事件）。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch1.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T11:46:06+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "桥接层单测：28 个 invoke 通道映射与事件桥正确性",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T114606-e273f5e4a1",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "dsh-plugin tests/host.test.js 6/6（Electron-as-Node 经 scripts/run-tests.mjs）：路由注册、invoke 全链（create/list/status）、降级与未知通道错误协议、loopback 403、SSE 具名事件帧、dispose 幂等。主仓 vitest 回归 189 passed/9 skipped（现有文件零改动）。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch1.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T11:46:06+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "host 半实机全链：curl 建任务→执行→SSE task:changed→归档落盘，共享 ~/.dispatch 与独立 app 数据互通",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T114606-65bb559357",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "隔离环境实机：tarball 经 dsh plugin add 装入测试 profile，Electron-as-Node 起 dsh web（与 dsh-buddy 同运行时），curl 全链（app:status/task:create/task:list/降级通道）+ SSE 实时事件；停止后无遗留进程。共享 ~/.dispatch 互通项留批次 2（避免污染真实任务库），已在证据文件未覆盖节声明。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch1.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T11:46:06+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "client 半实机 UI 全流程：dsh-buddy 内建任务→进度→会话追问（流式）→归档查看",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c5",
+      "title": "系统快捷键捕获弹窗：任意应用聚焦时按键→dsh-buddy 前置+弹窗→入库",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L5",
+      "evidence_layer": "real_device",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c6",
+      "title": "禁用/卸载插件后 dsh 正常启动且无遗留调度子进程",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "pending",
+      "records": []
+    }
+  ],
+  "status": "pending",
+  "revision": 4,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:38a8596e2aa0f75494bc8b83a7ef71477d0c8be9d8a08bf35296d0b2f592c709",
+      "updated_at": "2026-08-22T11:30:02+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:4422283cb5609fac74b9ce3a563099208663c92484264cebd956059f9c460b41",
+      "updated_at": "2026-08-22T11:46:06+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:d121324a019fc96cf08cb7f1c5159eefdf74935446b42ccc7d6b7709dffe330a",
+      "updated_at": "2026-08-22T11:46:06+00:00"
+    }
+  ],
+  "created_at": "2026-08-22T11:30:02+00:00",
+  "updated_at": "2026-08-22T11:46:06+00:00",
+  "settled_at": null,
+  "asset_fingerprint": "sha256:ff201f1173992cc8a4b6cd34c93acd5f71e343f6b00783c0ad1407e11b6d9dce"
+}

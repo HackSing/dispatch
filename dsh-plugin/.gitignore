@@ -1,0 +1,5 @@
+# seed-vendor 是 vendor/ 的唯一写入者,产物不入库(含 Electron ABI 二进制,随 npm tarball 分发)
+vendor/
+lib/
+node_modules/
+*.tgz

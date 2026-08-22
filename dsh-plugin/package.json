@@ -1,0 +1,35 @@
+{
+  "name": "@aiwaretop/dsh-dispatch",
+  "version": "0.1.0",
+  "description": "Dispatch — the task inbox & agent scheduler — as a dsh plugin: full host runtime (scheduler, worktree execution, follow-up sessions, archives) over HTTP+SSE.",
+  "type": "module",
+  "private": false,
+  "main": "src/host/index.js",
+  "exports": {
+    ".": "./src/host/index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  },
+  "files": [
+    "src",
+    "vendor",
+    "cordis.patch.yml",
+    "!vendor/**/README.md",
+    "!vendor/**/*.md"
+  ],
+  "scripts": {
+    "seed-vendor": "node scripts/seed-vendor.mjs",
+    "verify": "node scripts/verify-package.mjs",
+    "pretest": "npm run seed-vendor",
+    "test": "node scripts/run-tests.mjs",
+    "prepack": "npm run seed-vendor && npm run verify"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}
