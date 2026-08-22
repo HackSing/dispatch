@@ -577,9 +577,8 @@ input[type='datetime-local']:focus {
   padding: 3px 8px;
 }
 .menu-pop {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
+  /* fixed + 行内坐标:脱离 task-card overflow:hidden 的裁切;详情抽屉(z-20)之上 */
+  position: fixed;
   min-width: 150px;
   background: #fff;
   border: 1px solid #d2d2d7;

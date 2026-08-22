@@ -55,9 +55,12 @@ export function TaskMenu(props: {
   const tasks = useAppStore((s) => s.tasks)
   const capabilities = useAppStore((s) => s.capabilities)
   const [open, setOpen] = useState(false)
+  /** fixed 定位坐标:脱离 task-card 等祖先的 overflow 裁切;贴近视口底部时向上翻 */
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 0 })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  const btnRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -70,12 +73,18 @@ export function TaskMenu(props: {
         setOpen(false)
       }
     }
+    const close = (): void => setOpen(false)
     document.addEventListener('mousedown', onDown)
     // capture 阶段拦截 Esc:菜单开着时只收起菜单,不联动关闭详情抽屉
     document.addEventListener('keydown', onKey, true)
+    // fixed 定位不随内容滚动:滚动/缩放即收起,避免菜单脱离按钮悬浮
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
     }
   }, [open])
 
@@ -196,6 +205,26 @@ export function TaskMenu(props: {
 
   if (items.length === 0) return null
 
+  const ITEM_HEIGHT = 34
+
+  const toggleOpen = (): void => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const estimatedHeight = items.length * ITEM_HEIGHT + 10
+    const openUpward = rect.bottom + estimatedHeight > window.innerHeight - 8
+    setPos({
+      right: window.innerWidth - rect.right,
+      ...(openUpward
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 })
+    })
+    setOpen(true)
+  }
+
   const select = (item: MenuItem): void => {
     setOpen(false)
     if (item.confirm && !window.confirm(item.confirm)) return
@@ -211,17 +240,18 @@ export function TaskMenu(props: {
     <div className="menu-wrap" ref={wrapRef}>
       {error && <span className="form-error">{error}</span>}
       <button
+        ref={btnRef}
         className="btn menu-btn"
         disabled={busy}
         title="任务操作"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
       >
         ⋯
       </button>
       {open && (
-        <div className="menu-pop" role="menu">
+        <div className="menu-pop" role="menu" style={pos}>
           {items.map((item) => (
             <button
               key={item.key}
