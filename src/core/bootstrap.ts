@@ -4,8 +4,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { ProjectStore } from './db/project-store'
 import type { Project } from '@shared/types'
+import { DEFAULT_PROJECT_ID } from '@shared/types'
 
-export const DEFAULT_PROJECT_ID = 'default'
+export { DEFAULT_PROJECT_ID }
 
 /** 不放 ~/Documents / ~/Desktop:iCloud 同步与 git 仓库有已知冲突(dev-plan §0) */
 export function defaultProjectDir(): string {

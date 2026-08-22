@@ -11,6 +11,7 @@ import type {
   InvokeMap
 } from '@shared/ipc'
 import { AGENT_IDS } from '@shared/types'
+import { DEFAULT_PROJECT_ID } from '@core/bootstrap'
 import { SCHEMA_VERSION } from '@core/db'
 import { runDetections } from '@core/agents/detection'
 import { followUpTransport, renderSessionArgs, supportsTerminalResume } from '@core/agents/session'
@@ -210,6 +211,12 @@ export function registerIpcHandlers(
     const existing = ctx.projects.list().find((p) => p.path === path)
     if (existing) return existing
     return ctx.projects.create({ name: payload.name?.trim() || basename(path), path })
+  })
+
+  handle('project:remove', ({ id }) => {
+    // default 项目是捕获窗兜底目标且由启动种子维护(core/bootstrap),移除后会话期内悬空
+    if (id === DEFAULT_PROJECT_ID) throw new Error('默认项目不可移除')
+    ctx.projects.delete(id)
   })
 
   handle('project:pick-directory', () => {

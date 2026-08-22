@@ -66,7 +66,8 @@ function SessionChain(props: {
   if (!parent && children.length === 0) return null
   return (
     <Section title="会话链">
-      <ul className="detail-files">
+      <div className="scard">
+        <ul className="detail-files">
         {parent && (
           <li>
             接力自:
@@ -84,7 +85,8 @@ function SessionChain(props: {
             <span className={`badge ${c.status}`}>{statusBadgeLabel(c)}</span>
           </li>
         ))}
-      </ul>
+        </ul>
+      </div>
     </Section>
   )
 }
@@ -131,25 +133,18 @@ export function TaskDetail(props: {
 
   const result = parseResult(archive?.resultRaw ?? null)
   const reviewRounds = countReviewRounds(archive?.files ?? [])
-  const openArchive = (): void => {
-    void window.dispatchApi.invoke('task:open-archive', { id: task.id })
-  }
 
   return (
     <div className="detail-overlay" onClick={onClose}>
       <div className="detail-panel" onClick={(e) => e.stopPropagation()}>
         <header className="detail-header">
           <span className={`badge ${task.status}`}>{statusBadgeLabel(task)}</span>
+          {task.parentTaskId && <span className="badge relay">接力</span>}
           <span className="detail-title">{task.text.split('\n')[0]}</span>
           <span className="spacer" />
-          {task.archiveDir && (
-            <button className="btn" title="在 Finder 中打开归档目录" onClick={openArchive}>
-              打开归档
-            </button>
-          )}
           <TaskMenu task={task} onOpenTask={onOpenTask} onOpenSession={props.onOpenSession} />
           <button className="btn" onClick={onClose}>
-            关闭 Esc
+            收起 <span className="key">esc</span>
           </button>
         </header>
 
@@ -166,27 +161,73 @@ export function TaskDetail(props: {
           </Section>
 
           <Section title="元数据">
-            <div className="detail-meta">
-              {task.agent && <span>智能体:{agentChainLabel(task)}</span>}
-              {phaseDetailLabel(task) && <span>当前阶段:{phaseDetailLabel(task)}</span>}
-              <span>创建:{formatTime(task.createdAt)}</span>
-              {task.startedAt && <span>开始:{formatTime(task.startedAt)}</span>}
+            <div className="scard kv-card">
+              {task.agent && (
+                <div className="kv">
+                  <span className="k">智能体</span>
+                  <span className="v mono">{agentChainLabel(task)}</span>
+                </div>
+              )}
+              {phaseDetailLabel(task) && (
+                <div className="kv">
+                  <span className="k">当前阶段</span>
+                  <span className="v">{phaseDetailLabel(task)}</span>
+                </div>
+              )}
+              <div className="kv">
+                <span className="k">创建</span>
+                <span className="v">{formatTime(task.createdAt)}</span>
+              </div>
+              {task.startedAt && (
+                <div className="kv">
+                  <span className="k">开始</span>
+                  <span className="v">{formatTime(task.startedAt)}</span>
+                </div>
+              )}
               {isActive(task) && task.startedAt && (
-                <span>已执行:{formatElapsed(task.startedAt, nowMs)}</span>
+                <div className="kv">
+                  <span className="k">已执行</span>
+                  <span className="v">{formatElapsed(task.startedAt, nowMs)}</span>
+                </div>
               )}
-              {task.finishedAt && <span>结束:{formatTime(task.finishedAt)}</span>}
-              {task.baseBranch && <span>基线:{task.baseBranch}</span>}
+              {task.finishedAt && (
+                <div className="kv">
+                  <span className="k">结束</span>
+                  <span className="v">{formatTime(task.finishedAt)}</span>
+                </div>
+              )}
+              {task.baseBranch && (
+                <div className="kv">
+                  <span className="k">基线</span>
+                  <span className="v mono">{task.baseBranch}</span>
+                </div>
+              )}
               {task.branch && (
-                <span>
-                  分支:{task.branch}
-                  {/* 分支名是历史记录;终态且 worktree 已清即分支已删 */}
-                  {!task.worktreePath && (task.status === 'done' || task.status === 'failed')
-                    ? '(已删除)'
-                    : ''}
-                </span>
+                <div className="kv">
+                  <span className="k">分支</span>
+                  <span className="v mono" title={task.branch}>
+                    {task.branch}
+                    {/* 分支名是历史记录;终态且 worktree 已清即分支已删 */}
+                    {!task.worktreePath && (task.status === 'done' || task.status === 'failed')
+                      ? '(已删除)'
+                      : ''}
+                  </span>
+                </div>
               )}
-              {task.worktreePath && <span>worktree:{task.worktreePath}</span>}
-              {task.failReason && <span className="form-error">失败原因:{task.failReason}</span>}
+              {task.worktreePath && (
+                <div className="kv">
+                  <span className="k">worktree</span>
+                  <span className="v mono" title={task.worktreePath}>
+                    {task.worktreePath}
+                  </span>
+                </div>
+              )}
+              {task.failReason && (
+                <div className="kv">
+                  <span className="k">失败原因</span>
+                  <span className="v form-error">{task.failReason}</span>
+                </div>
+              )}
             </div>
           </Section>
 
@@ -196,29 +237,26 @@ export function TaskDetail(props: {
 
           {reviewRounds > 0 && (
             <Section title="审查结论" className="review-summary">
-              <p className="detail-summary">
-                本任务经 {reviewRounds} 轮审查,审查报告(review-r*.md)见归档目录。
-              </p>
-              {task.archiveDir && (
-                <button className="btn" title="在 Finder 中打开归档目录" onClick={openArchive}>
-                  打开归档
-                </button>
-              )}
+              <div className="scard">
+                本任务经 {reviewRounds} 轮审查,审查报告(review-r*.md)见归档目录(⋯ 菜单可打开)。
+              </div>
             </Section>
           )}
 
           {result && (
             <Section title={`结果 · ${result.status}`}>
-              <p className="detail-summary">{result.summary}</p>
-              {result.files_changed && result.files_changed.length > 0 && (
-                <ul className="detail-files">
-                  {result.files_changed.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              )}
-              {result.notes && <p className="detail-notes">备注:{result.notes}</p>}
-              {result.follow_up && <p className="detail-notes">后续建议:{result.follow_up}</p>}
+              <div className="scard">
+                <p className="detail-summary">{result.summary}</p>
+                {result.files_changed && result.files_changed.length > 0 && (
+                  <ul className="detail-files mono">
+                    {result.files_changed.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                )}
+                {result.notes && <p className="detail-notes">备注:{result.notes}</p>}
+                {result.follow_up && <p className="detail-notes">后续建议:{result.follow_up}</p>}
+              </div>
             </Section>
           )}
           {!result && archive?.resultRaw && (
@@ -232,7 +270,7 @@ export function TaskDetail(props: {
               title="冲突报告"
               className={task.status === 'conflict' ? 'conflict-highlight' : undefined}
             >
-              <div className="markdown">
+              <div className="scard markdown">
                 <ReactMarkdown>{archive.conflictReport}</ReactMarkdown>
               </div>
             </Section>
@@ -240,7 +278,7 @@ export function TaskDetail(props: {
 
           {archive?.planMd && (
             <Section title="方案 plan.md">
-              <div className="markdown">
+              <div className="scard markdown">
                 <ReactMarkdown>{archive.planMd}</ReactMarkdown>
               </div>
             </Section>
@@ -257,13 +295,18 @@ export function TaskDetail(props: {
 
           {archive && archive.files.length > 0 && (
             <Section title="归档文件">
-              <ul className="detail-files">
+              <div className="scard kv-card">
                 {archive.files.map((f) => (
-                  <li key={f.name}>
-                    {f.name} <span className="detail-notes">({formatSize(f.size)})</span>
-                  </li>
+                  <div className="kv" key={f.name}>
+                    <span className="k mono" style={{ color: '#1d1d1f' }}>
+                      {f.name}
+                    </span>
+                    <span className="v" style={{ color: '#8e8e93' }}>
+                      {formatSize(f.size)}
+                    </span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </Section>
           )}
         </div>
