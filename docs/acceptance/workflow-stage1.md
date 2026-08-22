@@ -1,11 +1,11 @@
-> 状态：有效（待验收）
+> 状态：已验收-仅追溯
 <!-- docs-harness:acceptance-document/v1 -->
 
 # 工作流第一阶段验收:主方案→子实现→主审查
 
-- 修订：4
+- 修订：6
 - 关键符号：`runWorkflow`、`sub_agent`、`review_round`
-- 资产指纹：`sha256:ec3f95fe2c5ffb188b37e327f10ff7cca47edfa39385b3bf11a4da46fe3d0510`
+- 资产指纹：`sha256:4b48464d10c0cd5a407d31d4563e7f85a39fe282ab16b1ff473db27b6b6c8204`
 - 关联方案：`docs/plans/workflow-stage1.json`
 
 ## 验收目标
@@ -37,7 +37,7 @@
 
 ### `c4` 用户在真实应用中捕获工作流任务,确认子智能体选择器、阶段与轮次可见性、审查报告展示符合预期
 
-- 状态：pending
+- 状态：passed
 - 类型：user_acceptance
 - 层级：L5
-- 证据：尚无
+- 证据：`docs/acceptance/evidence/w1-real-machine.txt`

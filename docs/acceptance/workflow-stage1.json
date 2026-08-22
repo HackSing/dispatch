@@ -97,12 +97,34 @@
       "acceptance_type": "user_acceptance",
       "layer": "L5",
       "evidence_layer": null,
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T032754-d1f34f1ecc",
+          "objective_fingerprint": "sha256:b9bf46acd75380ab46d76da686659efade8e8049b71121eb4c3dfd01a7b5562a",
+          "acceptance_type": "user_acceptance",
+          "status": "passed",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": "用户在真实应用中经捕获窗创建工作流任务(claude-code 主 → qwen 子),任务 133963ae 一轮审查 pass 后 done;用户确认原话:「任务完成了,现在可以阶段性收尾和整理文档了」(2026-08-22)。",
+          "evidence_refs": [
+            "docs/acceptance/evidence/w1-real-machine.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T03:27:54+00:00",
+          "user_confirmation": {
+            "confirmed_by": "user",
+            "confirmation": "任务完成了,现在可以阶段性收尾和整理文档了"
+          }
+        }
+      ]
     }
   ],
-  "status": "pending",
-  "revision": 4,
+  "status": "passed",
+  "revision": 6,
   "revision_history": [
     {
       "revision": 1,
@@ -118,10 +140,21 @@
       "revision": 3,
       "asset_fingerprint": "sha256:26272fd8dc3562c487d32dd72d1a4ec2b9160d450a5b7d53aefaeb685b011f7c",
       "updated_at": "2026-08-22T02:48:28+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:ec3f95fe2c5ffb188b37e327f10ff7cca47edfa39385b3bf11a4da46fe3d0510",
+      "updated_at": "2026-08-22T02:48:28+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:ce1f3dc82a3f3d70a9ddc40e54e9b06a1023a94c4acfb6d7a1f8fa98222d86c7",
+      "updated_at": "2026-08-22T03:27:54+00:00"
     }
   ],
   "created_at": "2026-08-22T02:10:59+00:00",
-  "updated_at": "2026-08-22T02:48:28+00:00",
-  "settled_at": null,
-  "asset_fingerprint": "sha256:ec3f95fe2c5ffb188b37e327f10ff7cca47edfa39385b3bf11a4da46fe3d0510"
+  "updated_at": "2026-08-22T03:27:54+00:00",
+  "settled_at": "2026-08-22T03:27:54+00:00",
+  "asset_fingerprint": "sha256:4b48464d10c0cd5a407d31d4563e7f85a39fe282ab16b1ff473db27b6b6c8204",
+  "replacement": null
 }

@@ -44,9 +44,9 @@
     "acceptance_required": true,
     "knowledge_impact": "unchanged",
     "updated_knowledge_refs": [],
-    "unchanged_reason": null,
-    "governance_settled_at": null
+    "unchanged_reason": "本阶段新增执行编排能力,未改变既有项目事实;可复用事实(reviewRound 语义、模板与代码同步点)已记入 docs/flows.md 与跨会话项目记忆,项目内暂无 Knowledge 资产消费方。",
+    "governance_settled_at": "2026-08-22T03:27:59+00:00"
   },
   "frozen_at": "2026-08-22T02:10:35+00:00",
-  "plan_fingerprint": "sha256:85d32e10b293381f6a2785daa8f00e2df17d48949cdaff2c12c2b63d2e7e00cf"
+  "plan_fingerprint": "sha256:d09d73a29b93df2228e094680c3835da22cab1315319dd54c0eec92f03d9eb6b"
 }

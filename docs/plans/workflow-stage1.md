@@ -1,9 +1,9 @@
-> 状态：有效（实施中）
+> 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）
 <!-- docs-harness:plan-document/v1 -->
 
 # 工作流第一阶段:主智能体方案 → 子智能体实现 → 主智能体审查
 
-- 冻结合同：`sha256:85d32e10b293381f6a2785daa8f00e2df17d48949cdaff2c12c2b63d2e7e00cf`
+- 冻结合同：`sha256:d09d73a29b93df2228e094680c3835da22cab1315319dd54c0eec92f03d9eb6b`
 - 关键符号：`sub_agent`、`runWorkflow`、`review_round`、`wf-implement`
 
 ## 背景

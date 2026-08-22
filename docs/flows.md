@@ -1,7 +1,7 @@
 # Dispatch 业务流程图
 
-> 状态:有效(现行事实,与 main 分支实现一致,2026-08-22 核对)
-> 依据实现:`src/shared/state-machine.ts`、`src/core/executor/`、`src/core/gitops/`、`src/core/scheduler/`、`src/shell/`。改流程必须同步改本文档。
+> 状态:有效(现行事实,与 main 分支实现一致,2026-08-22 第二次核对:含工作流模式与清理闭环)
+> 依据实现:`src/shared/state-machine.ts`、`src/core/executor/`(含 `workflow.ts`)、`src/core/gitops/`、`src/core/scheduler/`、`src/shell/`。改流程必须同步改本文档。
 
 ## 1. 端到端全景:一条任务的一生
 
@@ -49,6 +49,8 @@ sequenceDiagram
 
 与 `src/shared/state-machine.ts` 的 TRANSITIONS 逐边一致;所有状态写入经 `TaskStore.transition()` 校验,非法迁移直接抛错。
 
+工作流模式**不增加状态**:三段接力全程处于 `running`,进度经展示性 `phase` 字段(plan/implement/review,仅 `TaskStore.setPhase` 可写)表达;失败时 phase 冻结在末阶段供追溯,仅审查通过离开 running 前清空。
+
 ```mermaid
 stateDiagram-v2
     [*] --> todo: 创建(trigger=none)
@@ -73,6 +75,8 @@ stateDiagram-v2
 ```
 
 ## 3. 单任务执行流程(runTask)
+
+`runTask` 按 `sub_agent` 是否为空分流:空 = 下图单点路径;非空 = §7 工作流编排(Phase0/完成判定/合并链路与单点共用同一批函数)。
 
 ```mermaid
 flowchart TD
@@ -142,13 +146,50 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    F[failed] -- 重跑 --> F1["复制 text/项目/智能体<br/>为新任务 immediate 入队<br/>(原任务保留追溯)"]
+    F[failed] -- 重跑 --> F1["复制 text/项目/主子智能体<br/>为新任务 immediate 入队<br/>(原任务保留追溯)"]
+    F -- "清理 worktree(确认后)" --> F2["删除遗留 worktree 与任务分支<br/>归档保留,可重入"]
     C[conflict] -- "在 worktree 手动解决<br/>并提交后点「重试合并」" --> M[merging]
-    C -- 放弃 --> AB["failed(abandoned)<br/>worktree 保留待清理策略回收"]
+    C -- "放弃(确认后)" --> AB["failed(abandoned)<br/>并同步删除 worktree 与分支"]
     W[awaiting_merge] -- "清理主工作区后<br/>自动/手动重试" --> M
-    W -- 放弃 --> AB
+    W -- "放弃(确认后)" --> AB
     M -- 见 §4 --> D[done / conflict / awaiting_merge]
 ```
+
+worktree 清理策略:done 在合并链路内即时清理;放弃即清理;failed 保留供排查、经「清理 worktree」手动回收(超期批量提示为 B4 待办);conflict/awaiting_merge 拒绝清理——worktree 是重试合并的前提。
+
+## 7. 工作流模式(主智能体方案 → 子智能体实现 → 主智能体审查)
+
+捕获时选了子智能体即进入本编排(`src/core/executor/workflow.ts`);未选 = §3 单点路径零变化。三段提示词模板 `wf-plan / wf-implement / wf-review` 与编排代码逐段同步。
+
+```mermaid
+sequenceDiagram
+    participant E as Executor
+    participant M as 主智能体
+    participant S as 子智能体
+
+    Note over E: Phase0 复用单点:归档/worktree/prepare
+    E->>M: phase=plan · wf-plan 模板(独立超时)
+    M-->>E: plan.md(只方案,禁止动代码)
+    Note over E: 缺 plan.md → failed: no_plan
+    loop 返工上限 2 轮(第 3 次 reject 落败)
+        E->>S: phase=implement · wf-implement<br/>注入 REVIEW_FEEDBACK(首轮「无」)
+        S-->>E: 实现 + git 提交 + result.json
+        Note over E: 缺/坏/failed → no_result/bad_result/result_failed
+        E->>E: 审查前快照 worktree(HEAD + status)
+        E->>M: phase=review(第 N 轮)· wf-review<br/>注入 REVIEW_ROUND
+        M-->>E: review-rN.md + review-rN.json(verdict)
+        Note over E: 快照变化 → failed: review_modified<br/>缺/坏判定 → no_review/bad_review
+        alt verdict=pass
+            E->>E: 清 phase → 复用 §4 合并链路 → done
+        else verdict=reject 且未达上限
+            E->>E: result.json 留痕为 result-rN.json,回 implement
+        else reject 达上限
+            E->>E: failed: review_rejected(phase 冻结在 review)
+        end
+    end
+```
+
+工作流新增 fail_reason:`timeout_plan / timeout_implement / timeout_review / no_plan / no_review / bad_review / review_modified / review_rejected / agent_not_ready`。`reviewRound` 语义:implement 阶段 = 已完成审查数(首轮 0);review 阶段 = 当前审查轮次(从 1 起)。
 
 ## 已知边角(与图的偏差点)
 
