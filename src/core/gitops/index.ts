@@ -57,9 +57,19 @@ export async function currentBranch(dir: string): Promise<string> {
   return (await git(['rev-parse', '--abbrev-ref', 'HEAD'], dir)).trim()
 }
 
+/** W1b 追加:当前 HEAD 提交 sha,工作流审查阶段前后快照对比用 */
+export async function headSha(dir: string): Promise<string> {
+  return (await git(['rev-parse', 'HEAD'], dir)).trim()
+}
+
+/** W1b 追加:status --porcelain 原文(含未跟踪文件),工作流审查阶段前后快照对比用 */
+export async function statusPorcelain(dir: string): Promise<string> {
+  return git(['status', '--porcelain'], dir)
+}
+
 /** porcelain 输出非空即脏(含未跟踪文件,宁可误停不可误合) */
 export async function isDirty(dir: string): Promise<boolean> {
-  return (await git(['status', '--porcelain'], dir)).trim().length > 0
+  return (await statusPorcelain(dir)).trim().length > 0
 }
 
 export interface CreateWorktreeOptions {

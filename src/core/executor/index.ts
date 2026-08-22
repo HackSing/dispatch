@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentId, Project, Task } from '@shared/types'
+import type { AgentId, Project, Task, TaskPhase } from '@shared/types'
 import type { DispatchConfig } from '@core/config'
 import type { DispatchPaths } from '@core/paths'
 import type { ProjectStore, TaskStore } from '@core/db'
@@ -17,6 +17,7 @@ import {
   writeConflictReport
 } from '@core/gitops'
 import type { KeyedLock, Semaphore } from './locks'
+import { runWorkflow, type WorkflowHost } from './workflow'
 
 export interface ExecutorDeps {
   tasks: TaskStore
@@ -28,13 +29,22 @@ export interface ExecutorDeps {
   mergeLocks: KeyedLock
   /** 测试注入假时钟;缺省真实时钟 */
   now?: () => Date
-  /** 应用内置模板路径,shell 层传入;缺省走 prompt 模块兜底 */
+  /** 应用内置模板路径(单文件形态,指向 default.md),shell 层传入;缺省走 prompt 模块兜底 */
   builtinPromptFile?: string
+  /**
+   * W1b 追加:内置模板目录(含 default.md 与三个 wf-*.md),工作流路径按 wf-<phase>.md 从中解析。
+   * 与 builtinPromptFile 的关系:builtinPromptFile 是既有单文件形态,继续被单点路径独占消费
+   * (保持零语义变更);本字段是其目录化扩展,仅工作流路径消费。shell 层两者都传时必须指向
+   * 同一份内置资源,即 builtinPromptFile === join(builtinPromptsDir, 'default.md')。
+   */
+  builtinPromptsDir?: string
   /** 测试用超时覆盖;缺省 config.task_timeout_min */
   taskTimeoutMs?: number
+  /** W1b 追加:测试用工作流阶段超时覆盖(毫秒);缺省 config.workflow_phase_timeout_min[phase] * 60_000 */
+  workflowPhaseTimeoutsMs?: Partial<Record<TaskPhase, number>>
 }
 
-interface ExecContext {
+export interface ExecContext {
   deps: ExecutorDeps
   task: Task
   project: Project
@@ -145,6 +155,8 @@ async function runPhases(ctx: ExecContext): Promise<Task> {
   } catch (e) {
     return failTask(ctx, `agent_not_ready: ${(e as Error).message}`)
   }
+  // W1b 分流:subAgent 非空 → 三段工作流编排;为空 → 既有单点路径(零语义变更)
+  if (ctx.task.subAgent) return runWorkflow(ctx, adapter, cwd, WORKFLOW_HOST)
   const failReason = await runAgent(ctx, adapter, cwd)
   if (failReason) return failTask(ctx, failReason)
   return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
@@ -163,6 +175,20 @@ async function runAgent(
     BASE_BRANCH: ctx.baseBranch ?? ''
   })
   const timeoutMs = ctx.deps.taskTimeoutMs ?? ctx.deps.config.task_timeout_min * 60_000
+  const { timedOut, exitCode } = await runAdapterOnce(ctx, adapter, cwd, prompt, timeoutMs)
+  if (timedOut) return 'timeout'
+  if (exitCode !== 0) return `exit_${exitCode}`
+  return judgeArtifacts(ctx.archiveDir)
+}
+
+/** 单次 adapter 运行:独立 AbortController + 超时,kill 统一由 adapter 经 platform.killTree 落实 */
+async function runAdapterOnce(
+  ctx: ExecContext,
+  adapter: AgentAdapter,
+  cwd: string,
+  prompt: string,
+  timeoutMs: number
+): Promise<{ timedOut: boolean; exitCode: number }> {
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -182,14 +208,19 @@ async function runAgent(
   } finally {
     clearTimeout(timer)
   }
-  if (timedOut) return 'timeout'
-  if (exitCode !== 0) return `exit_${exitCode}`
-  return judgeArtifacts(ctx.archiveDir)
+  return { timedOut, exitCode }
 }
 
-/** spec §6.3 完成判定,fail_reason 精确到缺哪环 */
+/** spec §6.3 完成判定,fail_reason 精确到缺哪环;工作流按阶段分用下方两个判定件 */
 function judgeArtifacts(archiveDir: string): string | null {
-  if (!existsSync(join(archiveDir, 'plan.md'))) return 'no_plan'
+  return judgePlanArtifact(archiveDir) ?? judgeResultArtifact(archiveDir)
+}
+
+function judgePlanArtifact(archiveDir: string): string | null {
+  return existsSync(join(archiveDir, 'plan.md')) ? null : 'no_plan'
+}
+
+function judgeResultArtifact(archiveDir: string): string | null {
   const resultFile = join(archiveDir, 'result.json')
   if (!existsSync(resultFile)) return 'no_result'
   let parsed: unknown
@@ -201,6 +232,16 @@ function judgeArtifacts(archiveDir: string): string | null {
   if (!isTaskResult(parsed)) return 'bad_result'
   if (parsed.status === 'failed') return 'result_failed'
   return null
+}
+
+/** 工作流编排对单点基础设施的复用面:host 注入避免 index ↔ workflow 运行时循环依赖 */
+const WORKFLOW_HOST: WorkflowHost = {
+  runAdapterOnce,
+  judgePlan: judgePlanArtifact,
+  judgeResult: judgeResultArtifact,
+  failTask,
+  mergeAndFinish,
+  finishNoVcs
 }
 
 function isTaskResult(v: unknown): v is TaskResult {
