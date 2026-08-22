@@ -1,6 +1,13 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { basename } from 'node:path'
+import type { AgentDetection } from '@shared/types'
 import type { AppStatus, EventChannel, EventMap, InvokeChannel, InvokeMap } from '@shared/ipc'
 import { SCHEMA_VERSION } from '@core/db'
+import { runDetections } from '@core/agents/detection'
+import { getPlatformOps } from '@core/platform'
+import { loadUiState, saveUiState } from '@core/ui-state'
+import { cancelScheduled, completeTodo, editTask } from '@core/task-edit'
+import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
 
 /** 类型化 handle 注册:channel 与载荷形状由 @shared/ipc 契约约束 */
@@ -17,6 +24,21 @@ export function broadcast<C extends EventChannel>(channel: C, payload: EventMap[
   }
 }
 
+/** 检测有 IO 与子进程开销,并发触发时复用在途 Promise */
+let detectionInFlight: Promise<AgentDetection[]> | null = null
+
+export function refreshAgentDetections(ctx: AppContext): Promise<AgentDetection[]> {
+  detectionInFlight ??= runDetections(ctx.config.agents, getPlatformOps(), ctx.detections)
+    .then((list) => {
+      broadcast('agent:detections-changed', { detections: list })
+      return list
+    })
+    .finally(() => {
+      detectionInFlight = null
+    })
+  return detectionInFlight
+}
+
 export function registerIpcHandlers(ctx: AppContext): void {
   handle('app:status', (): AppStatus => {
     return {
@@ -26,4 +48,59 @@ export function registerIpcHandlers(ctx: AppContext): void {
       platform: process.platform
     }
   })
+
+  handle('app:hotkey-status', () => ctx.hotkey)
+
+  handle('task:create', (payload) => {
+    if (!payload.text.trim()) throw new Error('任务文本不能为空')
+    return ctx.tasks.create({
+      text: payload.text,
+      projectId: payload.projectId,
+      agent: payload.agent,
+      triggerType: payload.triggerType,
+      triggerAt: payload.triggerAt
+    })
+  })
+
+  handle('task:list', () => ctx.tasks.list())
+
+  handle('task:update', ({ id, ...patch }) => editTask(ctx.tasks, id, patch))
+
+  handle('task:toggle-todo', ({ id }) => completeTodo(ctx.tasks, id))
+
+  handle('task:cancel', ({ id }) => cancelScheduled(ctx.tasks, id))
+
+  handle('project:list', () => ctx.projects.list())
+
+  handle('project:create', (payload) => {
+    const path = payload.path.trim()
+    if (!path) throw new Error('项目路径不能为空')
+    const existing = ctx.projects.list().find((p) => p.path === path)
+    if (existing) return existing
+    return ctx.projects.create({ name: payload.name?.trim() || basename(path), path })
+  })
+
+  handle('project:pick-directory', () => {
+    return withCaptureAutoHideSuspended(async () => {
+      const options: Electron.OpenDialogOptions = {
+        title: '选择项目文件夹',
+        properties: ['openDirectory', 'createDirectory']
+      }
+      const parent = getDialogParent()
+      const result = parent
+        ? await dialog.showOpenDialog(parent, options)
+        : await dialog.showOpenDialog(options)
+      return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+    })
+  })
+
+  handle('agent:detections', () => ctx.detections.list())
+
+  handle('agent:refresh', () => refreshAgentDetections(ctx))
+
+  handle('ui-state:get', () => loadUiState(ctx.paths.uiStateFile))
+
+  handle('ui-state:set', (patch) => saveUiState(ctx.paths.uiStateFile, patch))
+
+  handle('capture:hide', () => hideCaptureWindow())
 }
