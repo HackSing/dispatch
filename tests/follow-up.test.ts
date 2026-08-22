@@ -253,6 +253,21 @@ describe('stream 传输全链路', () => {
     await expect(session.sendTurn('再来')).rejects.toThrow(/会话已关闭/)
   })
 
+  it('首轮模板缺失:round_error 落 failed 并广播 closed,不滞留 running', async () => {
+    const project = createProject()
+    const parent = makeDoneParent(project.id)
+    const r = recorder()
+    // 用户目录无 follow-up.md 且内置目录不存在 → renderFirstTurn 同步抛错
+    deps.builtinPromptsDir = join(home, 'no-builtins')
+    const session = await FollowUpSession.start(deps, parent.id, r.events)
+    await expect(session.sendTurn('第一轮')).rejects.toThrow(/提示词模板缺失/)
+    const task = tasks.get(session.taskId) as Task
+    expect(task.status).toBe('failed')
+    expect(task.failReason).toMatch(/^round_error: 提示词模板缺失/)
+    expect(r.closed).toEqual(['failed'])
+    await expect(session.sendTurn('再来')).rejects.toThrow(/会话已关闭/)
+  })
+
   it('轮内进程退出:SessionExitError 且 failed(session_exit_7)', async () => {
     const project = createProject()
     const parent = makeDoneParent(project.id)

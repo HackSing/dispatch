@@ -221,7 +221,6 @@ export class FollowUpSession {
     if (!this.open) throw new Error('会话已关闭')
     if (this.roundInFlight) throw new Error('上一轮未结束,不可发送')
     const round = ++this.round
-    const prompt = round === 1 ? this.renderFirstTurn(text) : text
     this.ctx.log.append(`\n===== round ${round} =====\n[user] ${text}\n`)
     this.events.onRoundStart(this.ctx.task, round)
     this.roundInFlight = true
@@ -229,6 +228,9 @@ export class FollowUpSession {
       this.ctx.deps.taskTimeoutMs ?? this.ctx.deps.config.task_timeout_min * 60_000
     let result: RoundResult
     try {
+      // 首轮模板渲染必须在 try 内:同步抛错(如安装包缺 follow-up.md)须与传输错误
+      // 同路 failClose 落终态,否则任务滞留 running 且无任何广播(壳层只 logger 吞掉)
+      const prompt = round === 1 ? this.renderFirstTurn(text) : text
       result = await this.transport.sendTurn(prompt, timeoutMs)
     } catch (e) {
       this.roundInFlight = false

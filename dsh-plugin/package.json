@@ -22,8 +22,7 @@
     "lib",
     "vendor",
     "cordis.patch.yml",
-    "!vendor/**/README.md",
-    "!vendor/**/*.md"
+    "!vendor/node_modules/**/*.md"
   ],
   "scripts": {
     "seed-vendor": "node scripts/seed-vendor.mjs",

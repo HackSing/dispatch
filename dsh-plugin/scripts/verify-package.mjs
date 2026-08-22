@@ -6,6 +6,7 @@
  *
  * @module dsh-dispatch/scripts/verify-package
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +23,10 @@ const required = [
   'vendor/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
   'vendor/node_modules/bindings/bindings.js',
   ...promptFiles(),
-].filter(Boolean);
+]
+  .filter(Boolean)
+  // package.json 里的入口写作 ./lib/…,pack 清单与 fs 相对路径均不带 ./,统一剥掉
+  .map((rel) => rel.replace(/^\.\//, ''));
 
 function promptFiles() {
   const dir = path.join(ROOT, 'vendor', 'prompts');
@@ -39,4 +43,25 @@ if (promptFiles().length === 0) {
   console.error('[verify-package] vendor/prompts is empty — seed-vendor must run before pack');
   process.exit(1);
 }
-console.log(`[verify-package] ok (${required.length} files, ${promptFiles().length} prompt templates)`);
+
+// 磁盘存在 ≠ 会被打进 tgz:package.json files 的排除项才是分发边界(vendor/prompts/*.md
+// 曾被 !vendor/**/*.md 误杀而磁盘检查全绿)。dry-run 清单是打包器自己的判定,直接对表。
+// --ignore-scripts 防止 prepack 再次触发本脚本造成递归。
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const packReport = JSON.parse(
+  execFileSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+    cwd: ROOT,
+    encoding: 'utf-8'
+  })
+);
+const packed = new Set(packReport[0].files.map((f) => f.path));
+const excluded = required.filter((rel) => !packed.has(rel));
+if (excluded.length > 0) {
+  console.error(
+    `[verify-package] files present on disk but excluded from the pack (check package.json files globs):\n  ${excluded.join('\n  ')}`
+  );
+  process.exit(1);
+}
+console.log(
+  `[verify-package] ok (${required.length} files, ${promptFiles().length} prompt templates, ${packed.size} packed)`
+);

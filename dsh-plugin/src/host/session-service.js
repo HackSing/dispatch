@@ -51,7 +51,7 @@ export function createSessionService(deps, broadcast, logger) {
       if (!text.trim()) throw new Error('追问内容不能为空');
       if (!session.open) throw new Error('会话已关闭');
       if (session.busy) throw new Error('上一轮未结束,不可发送');
-      // 轮次级失败(超时/进程退出)已由引擎落任务终态并广播 closed,此处仅记录编排日志
+      // 轮次级失败(超时/进程退出/首轮模板渲染)已由引擎落任务终态并广播 closed,此处仅记录编排日志
       void session.sendTurn(text).catch((e) => logger.error(`会话 ${taskId} 轮次失败: ${e.message}`));
     },
 
