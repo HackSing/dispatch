@@ -29,8 +29,8 @@ afterEach(() => {
 })
 
 describe('migration v2', () => {
-  it('schema 升到 v2,三列就位且旧行为 NULL/0 语义', () => {
-    expect(SCHEMA_VERSION).toBe(2)
+  it('schema 已含 v2,三列就位且旧行为 NULL/0 语义', () => {
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(2)
     const cols = (db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]).map(
       (c) => c.name
     )

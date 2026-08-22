@@ -33,6 +33,13 @@ export const TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   done: ['todo']
 }
 
+/**
+ * 已结算态:任务生命周期已走完,不再被调度器/执行器推进。
+ * 不能从「无出边」推导——done 保留手动重开边(done→todo)但仍是已结算;
+ * 项目删除等"任务是否了结"的判定一律以此清单为准(单一来源)。
+ */
+export const SETTLED_STATUSES: readonly TaskStatus[] = ['done', 'failed']
+
 export function canTransition(from: TaskStatus, to: TaskStatus): boolean {
   return TRANSITIONS[from].includes(to)
 }

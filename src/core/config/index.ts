@@ -24,6 +24,12 @@ export const AgentConfigSchema = z.object({
    */
   session_args: z.array(z.string()).default([]),
   resume_headless_args: z.array(z.string()).default([]),
+  /**
+   * 会话面板常驻传输 argv 模板(整体替换 headless_args):进程常驻,stdin 逐轮写入
+   * user NDJSON,stdout 为 stream-json 事件流(即 log_filter=claude_stream_json 的线格式)。
+   * 空 = 无常驻能力,面板回退每轮 spawn(resume_headless_args);两者都空则不可开面板。
+   */
+  resume_stream_args: z.array(z.string()).default([]),
   interactive_resume_cmd: z.string().nullable().default(null),
   calibrated: z
     .object({ date: z.string(), cli_version: z.string() })
@@ -44,6 +50,17 @@ const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
     // 实测 2.1.229:--session-id 可预生成;-p --resume 跨目录可用且多轮 id 稳定(docs/agent-calibration.md)
     session_args: ['--session-id', '{SESSION_ID}'],
     resume_headless_args: ['-p', '--output-format', 'stream-json', '--verbose', '--resume', '{SESSION_ID}'],
+    // 实测 2.1.229:-p + --input-format stream-json 进程常驻,stdin 多轮,每轮吐 result 事件
+    resume_stream_args: [
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--resume',
+      '{SESSION_ID}'
+    ],
     interactive_resume_cmd: 'claude --resume {SESSION_ID}',
     calibrated: { date: '2026-08-22', cli_version: '2.1.229' }
   },

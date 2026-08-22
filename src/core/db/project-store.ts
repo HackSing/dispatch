@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from 'better-sqlite3'
 import type { Project } from '@shared/types'
-import { TASK_STATUSES, TRANSITIONS } from '@shared/state-machine'
+import { SETTLED_STATUSES } from '@shared/state-machine'
 
-/** 终态从迁移表推导,不手写清单,状态机扩展时自动跟随 */
-const TERMINAL_STATUSES = TASK_STATUSES.filter((s) => TRANSITIONS[s].length === 0)
+/** 已结算态清单见状态机(done 有手动重开边但已结算,不能按「无出边」推导) */
+const TERMINAL_STATUSES = SETTLED_STATUSES
 
 interface ProjectRow {
   id: string

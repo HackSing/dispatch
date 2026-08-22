@@ -14,6 +14,11 @@
 //   nonzero_exit 直接以退出码 3 退出
 //   hang         写 pid 文件后睡 600s(超时路径用)
 //   noop         正常退出但不写任何产物(no_plan / no_result 路径用)
+//   stream       会话面板常驻模式:stdin 每行一个 user NDJSON,逐轮回 assistant+result
+//                事件(线格式对齐 claude stream-json 实测样本),收到的文本全文追加写
+//                cwd/stream-turns.log;文本含 mock-commit 时在 cwd 提交一次文件改动,
+//                含 mock-error 时 result 事件 is_error=true,含 mock-silent 时该轮不回
+//                (轮超时路径),含 mock-die 时以退出码 7 立即退出(进程意外退出路径)
 // 审查角色模式(W1b 工作流「主智能体」用):提示词不含 review-r<N>.json 锚点时视为 plan
 // 阶段,一律写 plan.md 后退出;含锚点时视为审查阶段,按模式行事:
 //   review_pass         写 review-r<N>.{md,json},verdict=pass
@@ -145,9 +150,48 @@ function reviewMain(mode, prompt, outDir, cwd) {
   fs.writeFileSync(jsonFile, JSON.stringify(body))
 }
 
+// 会话面板 stream 模式:进程常驻直到 stdin 关闭;不解析 OUT_DIR(面板轮次无产物契约)
+function streamServe() {
+  console.log(JSON.stringify({ type: 'system', subtype: 'init', cwd: process.cwd() }))
+  const readline = require('node:readline')
+  const rl = readline.createInterface({ input: process.stdin })
+  rl.on('line', (line) => {
+    if (!line.trim()) return
+    let text = line
+    try {
+      const msg = JSON.parse(line)
+      text = (msg.message && msg.message.content && msg.message.content[0]?.text) || line
+    } catch {
+      // 非 JSON 行按原文处理
+    }
+    fs.appendFileSync(path.join(process.cwd(), 'stream-turns.log'), text + '\n---\n')
+    // mock-die=轮内退出(SessionExitError 路径);mock-die-after=正常回话后空闲期退出
+    if (text.includes('mock-die') && !text.includes('mock-die-after')) process.exit(7)
+    if (text.includes('mock-silent')) return
+    if (text.includes('mock-commit')) commitChange(process.cwd(), 'mock-followup.txt', text.slice(0, 60))
+    console.log(
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: `echo:${text.slice(0, 200)}` }] }
+      })
+    )
+    console.log(
+      JSON.stringify({
+        type: 'result',
+        num_turns: 1,
+        total_cost_usd: 0.01,
+        is_error: text.includes('mock-error')
+      })
+    )
+    if (text.includes('mock-die-after')) process.exit(7)
+  })
+  rl.on('close', () => process.exit(0))
+}
+
 function main() {
   const { mode, argPrompt } = parseArgs()
   if (mode === 'nonzero_exit') process.exit(3)
+  if (mode === 'stream') return streamServe()
 
   const prompt = readPrompt(argPrompt)
   const match = /^OUT_DIR:\s*(.+)\s*$/m.exec(prompt)

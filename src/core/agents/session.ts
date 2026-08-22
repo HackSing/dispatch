@@ -51,3 +51,13 @@ export function supportsResume(config: AgentConfig): boolean {
 export function supportsTerminalResume(config: AgentConfig): boolean {
   return supportsSession(config) && config.interactive_resume_cmd !== null
 }
+
+/** 会话面板传输选择:常驻 stream 优先,退化每轮 spawn,都无则不可开面板 */
+export type FollowUpTransportKind = 'stream' | 'round'
+
+export function followUpTransport(config: AgentConfig): FollowUpTransportKind | null {
+  if (!supportsSession(config)) return null
+  if (config.resume_stream_args.length > 0) return 'stream'
+  if (config.resume_headless_args.length > 0) return 'round'
+  return null
+}

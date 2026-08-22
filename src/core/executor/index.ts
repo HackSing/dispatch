@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { AgentId, Project, Task, TaskPhase } from '@shared/types'
 import type { DispatchConfig } from '@core/config'
@@ -6,6 +7,7 @@ import type { DispatchPaths } from '@core/paths'
 import type { ProjectStore, TaskStore } from '@core/db'
 import type { AgentAdapter, TaskResult } from '@core/agents/types'
 import { createArchive, OutputLog } from '@core/archive'
+import { supportsSession } from '@core/agents/session'
 import { loadPromptTemplate, renderPrompt } from '@core/prompt'
 import { runShell } from '@core/proc/shell'
 import {
@@ -57,14 +59,17 @@ export interface ExecContext {
   now: () => Date
 }
 
-interface GitInfo {
+export interface GitInfo {
   git: boolean
   baseBranch: string | null
   error: string | null
 }
 
-/** 状态检查之外不抛错:错误延迟到 running 后转任务失败(scheduled→failed 非法迁移) */
-async function detectGitInfo(project: Project): Promise<GitInfo> {
+/**
+ * 状态检查之外不抛错:错误延迟到 running 后转任务失败(scheduled→failed 非法迁移)。
+ * 导出供 follow-up 会话引擎复用(与 mergeAndFinish/finishNoVcs/failTask 同属复用面)。
+ */
+export async function detectGitInfo(project: Project): Promise<GitInfo> {
   if (!existsSync(project.path)) {
     return { git: false, baseBranch: null, error: `project_path_missing: ${project.path}` }
   }
@@ -162,6 +167,19 @@ async function runPhases(ctx: ExecContext): Promise<Task> {
   return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
 }
 
+/**
+ * fresh run 前为支持会话的 agent 预生成会话 id 并落库(--session-id 可寻址,追问的前提)。
+ * 会话能力以 deps.config.agents 为唯一判定源(生产环境 adapter 由同一配置构建);
+ * 工作流 plan/review 各自调用,后写覆盖(last-wins),任务留最后一次主 agent 会话。
+ */
+function prepareSessionId(ctx: ExecContext, agentId: AgentId): string | undefined {
+  const agentConfig = ctx.deps.config.agents[agentId]
+  if (!agentConfig || !supportsSession(agentConfig)) return undefined
+  const sessionId = randomUUID()
+  ctx.deps.tasks.setSessionId(ctx.task.id, sessionId)
+  return sessionId
+}
+
 async function runAgent(
   ctx: ExecContext,
   adapter: AgentAdapter,
@@ -175,7 +193,8 @@ async function runAgent(
     BASE_BRANCH: ctx.baseBranch ?? ''
   })
   const timeoutMs = ctx.deps.taskTimeoutMs ?? ctx.deps.config.task_timeout_min * 60_000
-  const { timedOut, exitCode } = await runAdapterOnce(ctx, adapter, cwd, prompt, timeoutMs)
+  const sessionId = prepareSessionId(ctx, ctx.task.agent as AgentId)
+  const { timedOut, exitCode } = await runAdapterOnce(ctx, adapter, cwd, prompt, timeoutMs, sessionId)
   if (timedOut) return 'timeout'
   if (exitCode !== 0) return `exit_${exitCode}`
   return judgeArtifacts(ctx.archiveDir)
@@ -187,7 +206,8 @@ async function runAdapterOnce(
   adapter: AgentAdapter,
   cwd: string,
   prompt: string,
-  timeoutMs: number
+  timeoutMs: number,
+  sessionId?: string
 ): Promise<{ timedOut: boolean; exitCode: number }> {
   const controller = new AbortController()
   let timedOut = false
@@ -203,7 +223,8 @@ async function runAdapterOnce(
       outDir: ctx.archiveDir,
       timeoutMs,
       onLog: (c) => ctx.log.append(c),
-      signal: controller.signal
+      signal: controller.signal,
+      sessionId
     }))
   } finally {
     clearTimeout(timer)
@@ -237,6 +258,7 @@ function judgeResultArtifact(archiveDir: string): string | null {
 /** 工作流编排对单点基础设施的复用面:host 注入避免 index ↔ workflow 运行时循环依赖 */
 const WORKFLOW_HOST: WorkflowHost = {
   runAdapterOnce,
+  prepareSessionId,
   judgePlan: judgePlanArtifact,
   judgeResult: judgeResultArtifact,
   failTask,
@@ -253,7 +275,8 @@ function isTaskResult(v: unknown): v is TaskResult {
   )
 }
 
-async function mergeAndFinish(ctx: ExecContext): Promise<Task> {
+/** 导出供 follow-up 会话引擎复用(follow-up.ts 不被本文件引用,无运行时循环) */
+export async function mergeAndFinish(ctx: ExecContext): Promise<Task> {
   ctx.deps.tasks.transition(ctx.task.id, 'merging', {
     archiveDir: ctx.archiveDir,
     worktreePath: ctx.worktreePath,
@@ -285,7 +308,7 @@ async function mergeAndFinish(ctx: ExecContext): Promise<Task> {
   })
 }
 
-function finishNoVcs(ctx: ExecContext): Task {
+export function finishNoVcs(ctx: ExecContext): Task {
   return ctx.deps.tasks.transition(ctx.task.id, 'done', {
     archiveDir: ctx.archiveDir,
     finishedAt: ctx.now().toISOString()
@@ -350,7 +373,7 @@ export async function retryMerge(deps: ExecutorDeps, taskId: string): Promise<Ta
   }
 }
 
-function failTask(ctx: ExecContext, failReason: string): Task {
+export function failTask(ctx: ExecContext, failReason: string): Task {
   ctx.log.append(`[dispatch] 任务失败: ${failReason}\n`)
   return ctx.deps.tasks.transition(ctx.task.id, 'failed', {
     failReason,

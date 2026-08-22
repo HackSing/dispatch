@@ -326,6 +326,8 @@ export class TaskStore {
   /**
    * 会话 id 落库,仅 running 状态允许(executor 在 fresh run 前预生成写入)。
    * 工作流模式 plan/review 各写一次,后写覆盖(last-wins),任务留最后一次主 agent 会话。
+   * 不触发 onChange:属运行中记账,UI 只在 done/failed 才消费 sessionId(追问入口),
+   * 该值随后续状态迁移的整任务广播到达渲染层。
    */
   setSessionId(id: string, sessionId: string): Task {
     const current = this.get(id)
@@ -336,7 +338,6 @@ export class TaskStore {
     this.db.prepare('UPDATE tasks SET session_id = @sessionId WHERE id = @id').run({ id, sessionId })
     const updated = this.get(id)
     if (!updated) throw new Error(`task disappeared during setSessionId: ${id}`)
-    this.onChange?.(updated)
     return updated
   }
 

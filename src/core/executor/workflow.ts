@@ -23,8 +23,11 @@ export interface WorkflowHost {
     adapter: AgentAdapter,
     cwd: string,
     prompt: string,
-    timeoutMs: number
+    timeoutMs: number,
+    sessionId?: string
   ): Promise<{ timedOut: boolean; exitCode: number }>
+  /** 主 agent fresh run 前预生成会话 id 并落库;不支持会话的 agent 返回 undefined */
+  prepareSessionId(ctx: ExecContext, agentId: AgentId): string | undefined
   judgePlan(archiveDir: string): string | null
   judgeResult(archiveDir: string): string | null
   failTask(ctx: ExecContext, failReason: string): Task
@@ -107,12 +110,14 @@ async function runPlanPhase(
   ctx.log.append('\n===== phase: plan =====\n')
   ctx.deps.tasks.setPhase(ctx.task.id, 'plan')
   const prompt = renderPrompt(wfTemplate(ctx, 'plan'), baseVars(ctx))
+  const sessionId = host.prepareSessionId(ctx, ctx.task.agent as AgentId)
   const { timedOut, exitCode } = await host.runAdapterOnce(
     ctx,
     adapter,
     cwd,
     prompt,
-    phaseTimeoutMs(ctx, 'plan')
+    phaseTimeoutMs(ctx, 'plan'),
+    sessionId
   )
   if (timedOut) return 'timeout_plan'
   if (exitCode !== 0) return `exit_${exitCode}`
@@ -171,12 +176,15 @@ async function runReviewPhase(
     ...baseVars(ctx),
     REVIEW_ROUND: String(round)
   })
+  // 主 agent 每次 fresh run 各自生成会话,后写覆盖:任务最终留最后一次审查会话(v03 冻结)
+  const sessionId = host.prepareSessionId(ctx, ctx.task.agent as AgentId)
   const { timedOut, exitCode } = await host.runAdapterOnce(
     ctx,
     adapter,
     cwd,
     prompt,
-    phaseTimeoutMs(ctx, 'review')
+    phaseTimeoutMs(ctx, 'review'),
+    sessionId
   )
   if (timedOut) return { fail: 'timeout_review' }
   if (before) {

@@ -20,7 +20,8 @@ function summarizeToolInput(input: unknown): string {
   return s.length > 160 ? s.slice(0, 160) + '…' : s
 }
 
-interface StreamEvent {
+/** stream-json 事件形状(实测样本见文件头);会话面板传输层与本过滤器共用,不平行再写解析器 */
+export interface StreamEvent {
   type?: string
   subtype?: string
   cwd?: string
@@ -30,13 +31,45 @@ interface StreamEvent {
   total_cost_usd?: number
 }
 
-function renderEvent(line: string): string {
-  let event: StreamEvent
-  try {
-    event = JSON.parse(line) as StreamEvent
-  } catch {
-    return line + '\n' // 非 JSON 行(告警等)原样保留
+/** 按换行切分 chunk 流,残段留缓冲;过滤器与会话传输共用 */
+export class LineBuffer {
+  private buffer = ''
+
+  push(chunk: string): string[] {
+    this.buffer += chunk
+    const lines: string[] = []
+    let idx: number
+    while ((idx = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, idx).trim()
+      this.buffer = this.buffer.slice(idx + 1)
+      if (line) lines.push(line)
+    }
+    return lines
   }
+
+  /** 流结束时取出未换行残段;无残段返回 null */
+  flush(): string | null {
+    const rest = this.buffer.trim()
+    this.buffer = ''
+    return rest || null
+  }
+}
+
+/** 非 JSON 行(告警等)返回 null,调用方决定如何呈现 */
+export function parseStreamEvent(line: string): StreamEvent | null {
+  try {
+    return JSON.parse(line) as StreamEvent
+  } catch {
+    return null
+  }
+}
+
+/** 结果行:部分版本无 type 字段,以 is_error 识别(轮次边界判定与渲染共用此定义) */
+export function isResultStreamEvent(event: StreamEvent): boolean {
+  return event.type === 'result' || (event.type === undefined && event.is_error !== undefined)
+}
+
+export function renderStreamEvent(event: StreamEvent): string {
   if (event.type === 'system' && event.subtype === 'init') {
     return `▶ 会话开始 cwd=${event.cwd ?? '?'}\n`
   }
@@ -50,8 +83,7 @@ function renderEvent(line: string): string {
     }
     return out
   }
-  // 结果行:部分版本无 type 字段,以 is_error/total_cost_usd 识别
-  if (event.type === 'result' || (event.type === undefined && event.is_error !== undefined)) {
+  if (isResultStreamEvent(event)) {
     const cost = event.total_cost_usd !== undefined ? ` cost=$${event.total_cost_usd.toFixed(4)}` : ''
     return `■ 会话结束 turns=${event.num_turns ?? '?'}${cost}${event.is_error ? ' [出错]' : ''}\n`
   }
@@ -59,24 +91,20 @@ function renderEvent(line: string): string {
   return ''
 }
 
+function renderLine(line: string): string {
+  const event = parseStreamEvent(line)
+  return event ? renderStreamEvent(event) : line + '\n' // 非 JSON 行(告警等)原样保留
+}
+
 function createClaudeStreamJsonFilter(): LogFilter {
-  let buffer = ''
+  const lines = new LineBuffer()
   return {
     transform(chunk: string): string {
-      buffer += chunk
-      let out = ''
-      let idx: number
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx).trim()
-        buffer = buffer.slice(idx + 1)
-        if (line) out += renderEvent(line)
-      }
-      return out
+      return lines.push(chunk).map(renderLine).join('')
     },
     flush(): string {
-      const rest = buffer.trim()
-      buffer = ''
-      return rest ? renderEvent(rest) : ''
+      const rest = lines.flush()
+      return rest ? renderLine(rest) : ''
     }
   }
 }
