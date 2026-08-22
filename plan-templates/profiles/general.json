@@ -1,0 +1,7 @@
+{
+  "schema_version": "docs-harness/plan-template/v3",
+  "kind": "profile",
+  "id": "general",
+  "version": "2.9.1",
+  "fields": []
+}

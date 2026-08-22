@@ -1,0 +1,97 @@
+> 状态：有效（实施中）
+<!-- docs-harness:plan-document/v1 -->
+
+# 工作流第一阶段:主智能体方案 → 子智能体实现 → 主智能体审查
+
+- 冻结合同：`sha256:85d32e10b293381f6a2785daa8f00e2df17d48949cdaff2c12c2b63d2e7e00cf`
+- 关键符号：`sub_agent`、`runWorkflow`、`review_round`、`wf-implement`
+
+## 背景
+
+Dispatch 当前为单点派单:一条任务由一个 agent CLI 全包(自写方案、自实现、无审查)。真实场景需要角色分工的工作流形态:强模型出方案与把关,快/廉价模型执行。用户已确认四项设计决策:审查不过打回返工上限 2 轮;状态机不动、running 加只读 phase 展示字段;审查只评不改;每阶段独立超时。
+
+## 目标
+
+捕获窗新增可选「子智能体」选择器。未选子智能体 = 现有单点流程零变化;选了子智能体 = 三段接力工作流:主智能体产出 plan.md(仅方案不实现)→ 子智能体按方案实现并写 result.json(返工轮注入审查意见)→ 主智能体审查产出 review-<round>.json(verdict: pass|reject),reject 打回返工,超 2 轮置 failed(review_rejected);pass 进入既有合并链路。
+
+## 非目标
+
+不做多子智能体/并行子任务编排;不做自定义工作流 DSL;不改八状态状态机;审查阶段无修改权(不做「审查顺手修」);不做阶段级系统通知;不做 Windows 适配。
+
+## 成功标准
+
+1) 单点模式回归零破坏(既有 126 测试全绿);2) mock 三角色覆盖工作流全路径:pass 直通、reject→返工→pass、reject×3→failed、审查越权修改→failed(review_modified)、各阶段独立超时与缺产物精确 fail_reason;3) 实机 claude-code 主 + qwen 子跑通「方案→实现→审查 pass→自动合并」;4) UI 可选子智能体、执行中显示阶段与轮次、详情页渲染审查报告。
+
+## 执行范围
+
+src/core/db(migration 002:tasks 加 sub_agent/phase/review_round 三列;TaskStore 加受限 setPhase)、src/shared/types+ipc(Task.subAgent/phase/reviewRound、CreateTaskPayload.subAgent)、src/core/config(workflow_phase_timeout_min 具名默认)、src/core/prompt(PROMPT_VARS 加 REVIEW_FEEDBACK)、resources/prompts(新增 wf-plan.md/wf-implement.md/wf-review.md)、src/core/executor(runWorkflow 编排,runTask 按 subAgent 分流)、renderer(捕获窗/编辑表单/列表徽标/详情页)、tests。
+
+## 执行内容
+
+分三批:W1a 契约与数据层(migration、类型、setPhase、config 超时、模板三件套、PROMPT_VARS)由协调者单线冻结;W1b executor 编排 runWorkflow:Phase0 复用 → plan 阶段(主,判定 plan.md 存在)→ implement 阶段(子,注入 {REVIEW_FEEDBACK},判定 result.json)→ review 阶段(主,审查前后对比 worktree HEAD 与 status,有改动即 failed:review_modified;判定 review-<round>.json)→ verdict 分流(pass→合并;reject→round+1 归档留痕后回 implement;round>2→failed:review_rejected);每阶段独立 AbortController 与超时(fail_reason: timeout_<phase>);phase 经 setPhase 更新并随 task:changed 广播;W1c UI 与 IPC:捕获窗子智能体选择器(仅列检测通过,记忆 lastSubAgent)、编辑表单、列表「执行中·方案/实现/审查r2」徽标、详情页审查报告区。W1b/W1c 可并行(契约先冻结)。
+
+## 验收方案
+
+L2:vitest + mock 三角色(mock-agent.cjs 扩 review 模式)覆盖 success_criteria 第 2 条全部路径;单点回归全量跑。L3:实机门控测试(真实 claude-code 主 + qwen 子)跑通全链路一次;人为构造 reject 返工一次。L5:用户实际捕获一条工作流任务并在详情页确认阶段可见性与审查报告。
+
+## 是否需要 Acceptance 资产闭环
+
+```json
+true
+```
+
+## Knowledge 影响
+
+unchanged
+
+## 约束
+
+单点模式行为与协议零变化(向后兼容硬约束);状态写入仍全部经 TaskStore.transition() 收口,phase 不进状态机;提示词与代码流程同步纪律:每个阶段模板只描述该阶段职责;业务默认值(阶段超时)具名常量单一来源;不引新依赖。
+
+## 风险与回滚
+
+风险:弱子模型可能读不懂主方案导致返工率高(缓解:wf-implement 模板按弱模型写作纪律编写,方案在归档目录路径明确注入);审查判定 JSON 弱模型可能写坏(缓解:review 模板给可套用骨架,坏 JSON 精确 fail_reason:bad_review)。回滚:工作流为 subAgent 非空才进入的独立代码路径,回滚=UI 隐藏子选择器 + runTask 分流恢复单点,migration 002 三列可保留不影响旧路径。
+
+## 当前约束
+
+现有 runTask 为单 agent 两阶段一体;提示词单文件 default.md;完成判定三要素(退出码/plan.md/result.json);mock-agent.cjs 单角色;tasks 表无角色与阶段字段;八状态状态机已冻结且崩溃恢复/调度/合并链路依赖其不变。
+
+## 候选方案
+
+A. 三个正式状态 planning/implementing/reviewing 进状态机——语义最明确但状态机/恢复/UI/测试全连动,改动面大,已被用户否决;B. 子任务拆分模型(方案任务+实现任务+审查任务三条 task 记录链)——可追溯性好但引入任务间依赖与调度复杂度,留给后续多子智能体阶段;C. 审查用固定脚本(lint/test)替代主智能体——便宜但丢失语义审查能力,与需求不符。
+
+## 真实取舍
+
+选定方案(单任务内三阶段 + phase 展示字段)以最小侵入换取:状态机与恢复链路零改动、单点模式零风险;代价:单条任务的归档目录承载多轮产物(以 result-r<n>/review-<n> 命名留痕),以及 phase 字段是展示性而非状态机保证的弱语义。
+
+## 最终决策
+
+采用单任务内三阶段编排:runTask 按 sub_agent 是否为空分流至既有单点路径或新 runWorkflow;phase 为 running 期间的只读展示字段;审查打回上限 2 轮;审查只评不改并以 worktree 前后对比强制;每阶段独立超时。
+
+## 边界与接口
+
+对外契约变更仅三处:CreateTaskPayload/Task 增加 subAgent(可空,空=单点)、Task 增加 phase/reviewRound 只读字段、config 增加 workflow_phase_timeout_min。AgentAdapter 接口零变化(同一 GenericCliAdapter 按角色换模板与配置);TaskStore 新增 setPhase(仅 running 状态允许,不碰 status);模板变量集扩展 REVIEW_FEEDBACK(未知变量原样保留的既有语义不变)。
+
+## 兼容与迁移
+
+migration 002 纯加列(sub_agent/phase/review_round 均可空或有默认),旧任务行自然为 NULL=单点语义;旧 ~/.dispatch/prompts/ 用户仅有 default.md,三个 wf-*.md 首次执行工作流任务时从内置拷贝(loadPromptTemplate 既有机制参数化);用户已有 config.json 不含新超时键,zod default 补齐(加载层),落盘同步一次。
+
+## 回滚或替代路径
+
+特性开关式回滚:捕获窗隐藏子智能体选择器 + runTask 分流处短路(subAgent 视为 null)即可整体停用工作流;db 三列与模板文件保留无副作用;归档产物命名不与单点冲突,无需数据迁移回滚。
+
+## 架构验收
+
+架构层验收:1) 单点路径代码 diff 审查确认零语义变更;2) runWorkflow 与 runTask 共享 Phase0/合并/归档基础设施而非复制(复用证据:模块导入关系);3) 状态机文件零改动(git diff 为空);4) 提示词三模板与编排代码逐段对照(门禁/注入/产物路径一致)。
+
+## ADR 处理
+
+不单独立 ADR:核心取舍(phase 不进状态机、审查无修改权、返工上限)已作为本 Plan 的 decision 字段冻结;若后续多子智能体阶段推翻单任务内编排模型,届时再以 ADR 登记取代关系。
+
+<!-- docs-harness:plan-governance:start -->
+## 资产治理
+
+- 关联验收：`docs/acceptance/workflow-stage1.json`
+- 需要 Acceptance：true
+- Knowledge 影响：unchanged
+<!-- docs-harness:plan-governance:end -->
