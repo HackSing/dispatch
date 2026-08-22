@@ -1,9 +1,19 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
-import type { AgentDetection } from '@shared/types'
-import type { AppStatus, EventChannel, EventMap, InvokeChannel, InvokeMap } from '@shared/ipc'
+import type { AgentDetection, AgentId, Task } from '@shared/types'
+import type {
+  AgentSessionCapability,
+  AppStatus,
+  EventChannel,
+  EventMap,
+  InvokeChannel,
+  InvokeMap
+} from '@shared/ipc'
+import { AGENT_IDS } from '@shared/types'
 import { SCHEMA_VERSION } from '@core/db'
 import { runDetections } from '@core/agents/detection'
+import { followUpTransport, renderSessionArgs, supportsTerminalResume } from '@core/agents/session'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
 import { abandonTask, cancelScheduled, editTask, rerunFailedTask, toggleTodo } from '@core/task-edit'
@@ -12,6 +22,7 @@ import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
 import type { ExecutionService } from './execution'
+import type { SessionService } from './session-service'
 
 /** 类型化 handle 注册:channel 与载荷形状由 @shared/ipc 契约约束 */
 function handle<C extends InvokeChannel>(
@@ -42,7 +53,11 @@ export function refreshAgentDetections(ctx: AppContext): Promise<AgentDetection[
   return detectionInFlight
 }
 
-export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService): void {
+export function registerIpcHandlers(
+  ctx: AppContext,
+  execution: ExecutionService,
+  sessions: SessionService
+): void {
   handle('app:status', (): AppStatus => {
     return {
       version: app.getVersion(),
@@ -102,6 +117,41 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
     cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)
   )
 
+  handle('task:follow-up-start', ({ parentId }) => sessions.start(parentId))
+
+  handle('task:follow-up-send', ({ id, text }) => sessions.send(id, text))
+
+  handle('task:follow-up-finish', ({ id }) => sessions.finish(id))
+
+  handle('task:follow-up-abandon', ({ id }) => sessions.abandon(id))
+
+  // 终端逃生舱:活跃面板任务用会话工作目录,其余任务 worktree 存活则 worktree,否则项目目录
+  handle('task:open-session-terminal', async ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    if (!task.sessionId) throw new Error('该任务没有可续接的会话')
+    if (!task.agent) throw new Error('该任务没有 agent')
+    const agentConfig = ctx.config.agents[task.agent]
+    if (!agentConfig?.interactive_resume_cmd) {
+      throw new Error(`agent ${task.agent} 未配置终端续会话命令`)
+    }
+    const command = renderSessionArgs([agentConfig.interactive_resume_cmd], task.sessionId)[0]
+    const cwd = terminalCwd(ctx, sessions, task)
+    await getPlatformOps().openTerminal(cwd, command)
+  })
+
+  handle('agent:capabilities', () => {
+    const result = {} as Record<AgentId, AgentSessionCapability>
+    for (const id of AGENT_IDS) {
+      const cfg = ctx.config.agents[id]
+      result[id] = {
+        followUp: cfg ? followUpTransport(cfg) !== null : false,
+        terminal: cfg ? supportsTerminalResume(cfg) : false
+      }
+    }
+    return result
+  })
+
   handle('task:retry-merge', ({ id }) => {
     const task = ctx.tasks.get(id)
     if (!task) throw new Error(`任务不存在: ${id}`)
@@ -160,4 +210,13 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
   handle('ui-state:set', (patch) => saveUiState(ctx.paths.uiStateFile, patch))
 
   handle('capture:hide', () => hideCaptureWindow())
+}
+
+function terminalCwd(ctx: AppContext, sessions: SessionService, task: Task): string {
+  const active = sessions.workingDirOf(task.id)
+  if (active) return active
+  if (task.worktreePath && existsSync(task.worktreePath)) return task.worktreePath
+  const project = ctx.projects.get(task.projectId)
+  if (!project) throw new Error(`任务关联项目不存在: ${task.projectId}`)
+  return project.path
 }

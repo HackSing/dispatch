@@ -15,7 +15,8 @@ let db: Database
 function fakeOps(bins: Record<string, string>): PlatformOps {
   return {
     killTree: () => Promise.resolve(),
-    findBinary: (name) => Promise.resolve(bins[name] ?? null)
+    findBinary: (name) => Promise.resolve(bins[name] ?? null),
+    openTerminal: () => Promise.resolve()
   }
 }
 

@@ -76,6 +76,11 @@ export class FollowUpSession {
     return this.state === 'open'
   }
 
+  /** 本轮进行中(输入闸门:UI 与壳层同步校验用) */
+  get busy(): boolean {
+    return this.roundInFlight
+  }
+
   /**
    * 开启面板会话:守卫 → 建接力任务 → 同步推进 running → 归档/worktree/prepare →
    * 传输就绪。守卫失败在建任务前抛错;此后的失败落 failed 终态再抛错(任务可见可清理)。
@@ -246,7 +251,22 @@ export class FollowUpSession {
     this.assertIdle()
     this.state = 'closed'
     await this.transport.close()
-    const task = this.ctx.git ? await mergeAndFinish(this.ctx) : finishNoVcs(this.ctx)
+    let task: Task
+    try {
+      task = this.ctx.git ? await mergeAndFinish(this.ctx) : finishNoVcs(this.ctx)
+    } catch (e) {
+      // 与批量链路 failCurrent 同语义:非预期合并异常不留悬挂状态
+      const current = this.ctx.deps.tasks.get(this.ctx.task.id)
+      if (current && (current.status === 'running' || current.status === 'merging')) {
+        this.ctx.deps.tasks.transition(this.ctx.task.id, 'failed', {
+          failReason: `internal: ${(e as Error).message}`,
+          finishedAt: this.ctx.now().toISOString()
+        })
+      }
+      await this.ctx.log.close()
+      this.events.onClosed(this.ctx.deps.tasks.get(this.ctx.task.id) as Task, 'failed')
+      throw e
+    }
     await this.ctx.log.close()
     this.events.onClosed(task, 'finished')
     return task

@@ -33,6 +33,11 @@ export class ExecutionService {
     }
   }
 
+  /** 面板会话服务等壳层同侪复用同一份 deps(adapter 工厂/锁/路径单一装配点) */
+  get executorDeps(): ExecutorDeps {
+    return this.deps
+  }
+
   /** 入队执行(fire-and-forget):任务级失败由 executor 转 failed,这里只兜底编排异常 */
   enqueue(taskId: string): void {
     void runTask(this.deps, taskId).catch((e: Error) =>

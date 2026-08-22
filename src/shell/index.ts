@@ -11,6 +11,7 @@ import { createCaptureWindow, createMainWindow, showMainWindow, toggleCaptureWin
 import { broadcast, refreshAgentDetections, registerIpcHandlers } from './ipc-handlers'
 import { notifyTaskStatusChange } from './notifications'
 import { ExecutionService } from './execution'
+import { SessionService } from './session-service'
 import type { AppContext } from './context'
 
 let ctx: AppContext | null = null
@@ -47,10 +48,25 @@ if (!gotLock) {
     }
 
     const execution = new ExecutionService(ctx)
-    registerIpcHandlers(ctx, execution)
+    const sessions = new SessionService(execution.executorDeps)
+    registerIpcHandlers(ctx, execution, sessions)
     createMainWindow()
     createCaptureWindow()
     createTray()
+
+    // 面板会话退出收口:传输层含 5s 杀进程宽限,先拦一次 quit 待收口完成再真正退出
+    let sessionsDisposed = false
+    app.on('before-quit', (event) => {
+      if (sessionsDisposed || sessions.activeCount === 0) return
+      event.preventDefault()
+      void sessions
+        .disposeAll('app_quit')
+        .catch((e: Error) => log.error(`面板会话退出收口异常: ${e.message}`))
+        .finally(() => {
+          sessionsDisposed = true
+          app.quit()
+        })
+    })
 
     // spec §9:先崩溃恢复再起调度;恢复失败不阻塞调度启动,错误落日志
     const scheduler = new Scheduler({

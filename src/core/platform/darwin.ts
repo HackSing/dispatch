@@ -41,5 +41,30 @@ export const darwinOps: PlatformOps = {
         resolve(found.length > 0 ? found : null)
       })
     })
+  },
+
+  /** osascript 驱动 Terminal.app;首次调用触发系统自动化授权弹窗,拒绝时报错上抛 */
+  openTerminal(cwd: string, command: string): Promise<void> {
+    const shellCmd = `cd ${shellQuote(cwd)} && ${command}`
+    const appleScriptString = shellCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    return new Promise((resolve, reject) => {
+      execFile(
+        '/usr/bin/osascript',
+        [
+          '-e',
+          'tell application "Terminal" to activate',
+          '-e',
+          `tell application "Terminal" to do script "${appleScriptString}"`
+        ],
+        (err, _stdout, stderr) => {
+          if (err) reject(new Error(`打开终端失败: ${stderr.trim() || err.message}`))
+          else resolve()
+        }
+      )
+    })
   }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
 }

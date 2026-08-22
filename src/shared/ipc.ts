@@ -56,6 +56,31 @@ export interface ArchiveFileInfo {
   size: number
 }
 
+/** 会话能力(主进程由 config 算出,渲染层不触配置):followUp=可开面板,terminal=可开终端 */
+export interface AgentSessionCapability {
+  followUp: boolean
+  terminal: boolean
+}
+
+export interface SessionRoundResult {
+  durationMs: number
+  costUsd: number | null
+  isError: boolean
+}
+
+/** 面板会话事件流:round-start → chunk* → round-result,会话终结时 closed */
+export interface SessionEventPayload {
+  taskId: string
+  kind: 'round-start' | 'chunk' | 'round-result' | 'closed'
+  round?: number
+  /** kind=chunk:过滤后的人读文本增量 */
+  text?: string
+  /** kind=round-result */
+  result?: SessionRoundResult
+  /** kind=closed */
+  reason?: 'finished' | 'abandoned' | 'failed'
+}
+
 /** 详情页展示的归档内容,均可能尚未产生(null) */
 export interface TaskArchive {
   taskMd: string | null
@@ -87,6 +112,17 @@ export interface InvokeMap {
   'task:abandon': { req: { id: string }; res: Task }
   /** failed 任务手动清理遗留 worktree 与分支(归档保留);无 worktree 时为 no-op */
   'task:cleanup-worktree': { req: { id: string }; res: Task }
+  /** done/failed 任务开面板会话:创建接力任务并就绪 worktree/传输,返回接力任务 */
+  'task:follow-up-start': { req: { parentId: string }; res: Task }
+  /** 契约:同步校验后立即返回,轮次进展经 task:session-event 广播 */
+  'task:follow-up-send': { req: { id: string; text: string }; res: void }
+  /** 完成会话并合并;契约:立即返回当前任务,合并进展经 task:changed 广播 */
+  'task:follow-up-finish': { req: { id: string }; res: Task }
+  /** 放弃会话 → failed(session_abandoned) 并清理 worktree;同 finish 为异步契约 */
+  'task:follow-up-abandon': { req: { id: string }; res: Task }
+  /** 终端逃生舱:对有 sessionId 的任务拉起交互式 resume 终端 */
+  'task:open-session-terminal': { req: { id: string }; res: void }
+  'agent:capabilities': { req: void; res: Record<AgentId, AgentSessionCapability> }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
   'project:pick-directory': { req: void; res: string | null }
@@ -103,6 +139,7 @@ export interface EventMap {
   'agent:detections-changed': { detections: AgentDetection[] }
   /** 系统通知点击等入口要求主窗打开某任务详情 */
   'ui:open-task': { taskId: string }
+  'task:session-event': SessionEventPayload
 }
 
 export type InvokeChannel = keyof InvokeMap
@@ -123,6 +160,12 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:retry-merge',
   'task:abandon',
   'task:cleanup-worktree',
+  'task:follow-up-start',
+  'task:follow-up-send',
+  'task:follow-up-finish',
+  'task:follow-up-abandon',
+  'task:open-session-terminal',
+  'agent:capabilities',
   'project:list',
   'project:create',
   'project:pick-directory',
@@ -135,7 +178,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
 export const EVENT_CHANNELS: readonly EventChannel[] = [
   'task:changed',
   'agent:detections-changed',
-  'ui:open-task'
+  'ui:open-task',
+  'task:session-event'
 ]
 
 /** preload 暴露到 window.dispatchApi 的形状 */

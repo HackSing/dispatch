@@ -5,6 +5,8 @@ export interface PlatformOps {
   killTree(pid: number): Promise<void>
   /** 二进制探测(which / where),找不到返回 null */
   findBinary(name: string): Promise<string | null>
+  /** 拉起系统终端并在 cwd 下执行 command(终端逃生舱);失败上抛给 UI 明示 */
+  openTerminal(cwd: string, command: string): Promise<void>
 }
 
 import { darwinOps } from './darwin'
