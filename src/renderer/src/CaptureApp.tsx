@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentDetection, AgentId, Project } from '@shared/types'
-import {
-  AgentSelect,
-  ProjectSelect,
-  SubAgentSelect,
-  TriggerSelect,
-  type TriggerValue
-} from './components/selectors'
+import { DEFAULT_PROJECT_ID } from '@shared/types'
+import { AgentChainPicker } from './components/AgentChainPicker'
+import { ClockIcon, FolderIcon } from './components/icons'
+import { ProjectSelect, TriggerSelect, type TriggerValue } from './components/selectors'
 import { pickAndCreateProject } from './lib/projects'
 import { fromDatetimeLocal } from './lib/time'
 
@@ -37,7 +34,7 @@ export function CaptureApp(): React.JSX.Element {
       if (uiState.lastProjectId && projectList.some((p) => p.id === uiState.lastProjectId)) {
         return uiState.lastProjectId
       }
-      if (projectList.some((p) => p.id === 'default')) return 'default'
+      if (projectList.some((p) => p.id === DEFAULT_PROJECT_ID)) return DEFAULT_PROJECT_ID
       return projectList[0]?.id ?? ''
     })
     if (!restoredFromUiState.current) {
@@ -152,29 +149,34 @@ export function CaptureApp(): React.JSX.Element {
         }}
       />
       <div className="capture-bar">
-        <TriggerSelect value={trigger} onChange={setTrigger} />
-        <AgentSelect
+        <div className="capture-pop" title="执行时间">
+          <ClockIcon />
+          <TriggerSelect value={trigger} onChange={setTrigger} />
+        </div>
+        <AgentChainPicker
           detections={detections}
-          value={agent}
-          onChange={(next) => {
-            setAgent(next)
+          agent={agent}
+          subAgent={subAgent}
+          onChange={(nextAgent, nextSub) => {
+            setAgent(nextAgent)
             // 子依赖主:清空主智能体即回单点模式
-            if (!next) setSubAgent('')
+            setSubAgent(nextAgent ? nextSub : '')
           }}
         />
-        <SubAgentSelect
-          detections={detections}
-          value={subAgent}
-          onChange={setSubAgent}
-          disabled={!agent}
-        />
-        <ProjectSelect
-          projects={projects}
-          value={projectId}
-          onChange={setProjectId}
-          onCreateNew={createProject}
-        />
+        <div className="capture-pop" title="项目">
+          <FolderIcon />
+          <ProjectSelect
+            projects={projects}
+            value={projectId}
+            onChange={setProjectId}
+            onCreateNew={createProject}
+          />
+        </div>
         {error && <span className="form-error">{error}</span>}
+        <span className="spacer" />
+        <button className="btn primary" disabled={saving} onClick={() => void submit()}>
+          派单 <span className="key">↵</span>
+        </button>
       </div>
     </div>
   )

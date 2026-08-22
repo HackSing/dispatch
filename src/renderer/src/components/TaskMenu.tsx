@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Task } from '@shared/types'
 import { useAppStore } from '../stores/app-store'
+import { DotsIcon } from './icons'
+import { usePopoverDismiss } from '../lib/use-popover'
 
 /**
  * 任务操作统一入口:「⋯」下拉菜单,任务行与详情页共用(交互批 c4 修订)。
@@ -14,6 +16,8 @@ interface MenuItem {
   title?: string
   danger?: boolean
   confirm?: string
+  /** 渲染时在该项上方画分隔线(分组:归档入口 / 常规操作 / 危险操作) */
+  sepBefore?: boolean
   action: () => Promise<void>
 }
 
@@ -62,41 +66,25 @@ export function TaskMenu(props: {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const btnRef = useRef<HTMLButtonElement | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent): void => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        setOpen(false)
-      }
-    }
-    const close = (): void => setOpen(false)
-    document.addEventListener('mousedown', onDown)
-    // capture 阶段拦截 Esc:菜单开着时只收起菜单,不联动关闭详情抽屉
-    document.addEventListener('keydown', onKey, true)
-    // fixed 定位不随内容滚动:滚动/缩放即收起,避免菜单脱离按钮悬浮
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
-    }
-  }, [open])
+  usePopoverDismiss(open, wrapRef, () => setOpen(false))
 
   const invoke = window.dispatchApi.invoke.bind(window.dispatchApi)
   const capability = task.agent ? capabilities?.[task.agent] : undefined
   const settled = task.status === 'done' || task.status === 'failed'
   const items: MenuItem[] = []
 
-  if (task.status === 'todo' || task.status === 'done') {
+  if (task.archiveDir) {
+    items.push({
+      key: 'open-archive',
+      label: '打开归档',
+      title: '在 Finder 中打开归档目录',
+      action: async () => void (await invoke('task:open-archive', { id: task.id }))
+    })
+  }
+  if (task.status === 'todo') {
     items.push({
       key: 'toggle',
-      label: task.status === 'todo' ? '标记完成' : '重开为待办',
+      label: '标记完成',
       action: async () => void (await invoke('task:toggle-todo', { id: task.id }))
     })
   }
@@ -150,9 +138,16 @@ export function TaskMenu(props: {
   if (task.sessionId && capability?.terminal) {
     items.push({
       key: 'terminal',
-      label: '在终端打开会话',
+      label: '终端打开',
       title: '交互式续接该会话(改动不经 Dispatch 管线)',
       action: async () => void (await invoke('task:open-session-terminal', { id: task.id }))
+    })
+  }
+  if (task.status === 'done') {
+    items.push({
+      key: 'toggle',
+      label: '重开为待办',
+      action: async () => void (await invoke('task:toggle-todo', { id: task.id }))
     })
   }
   if (task.status === 'failed') {
@@ -205,6 +200,11 @@ export function TaskMenu(props: {
 
   if (items.length === 0) return null
 
+  // 分组分隔线:归档入口之后、危险的删除之前
+  if (items[0].key === 'open-archive' && items.length > 1) items[1].sepBefore = true
+  const last = items[items.length - 1]
+  if (last.key === 'delete' && items.length > 1) last.sepBefore = true
+
   const ITEM_HEIGHT = 34
 
   const toggleOpen = (): void => {
@@ -241,27 +241,29 @@ export function TaskMenu(props: {
       {error && <span className="form-error">{error}</span>}
       <button
         ref={btnRef}
-        className="btn menu-btn"
+        className="menu-btn"
         disabled={busy}
         title="任务操作"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggleOpen}
       >
-        ⋯
+        <DotsIcon />
       </button>
       {open && (
         <div className="menu-pop" role="menu" style={pos}>
           {items.map((item) => (
-            <button
-              key={item.key}
-              role="menuitem"
-              className={`menu-item${item.danger ? ' danger' : ''}`}
-              title={item.title}
-              onClick={() => select(item)}
-            >
-              {item.label}
-            </button>
+            <div key={item.key}>
+              {item.sepBefore && <div className="menu-sep" />}
+              <button
+                role="menuitem"
+                className={`menu-item${item.danger ? ' danger' : ''}`}
+                title={item.title}
+                onClick={() => select(item)}
+              >
+                {item.label}
+              </button>
+            </div>
           ))}
         </div>
       )}

@@ -3,6 +3,9 @@
 export const AGENT_IDS = ['claude-code', 'codex', 'dsh', 'kimi', 'qwen'] as const
 export type AgentId = (typeof AGENT_IDS)[number]
 
+/** 默认项目固定 id:启动种子(core/bootstrap)维护,捕获窗兜底与移除守卫共用 */
+export const DEFAULT_PROJECT_ID = 'default'
+
 export type TriggerType = 'immediate' | 'at' | 'none'
 
 /** 工作流三段接力的展示性阶段字段:仅 running 期间有值,不进状态机(Plan workflow-stage1 决策) */

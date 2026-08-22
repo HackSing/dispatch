@@ -1,0 +1,93 @@
+> 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）
+<!-- docs-harness:plan-document/v1 -->
+
+# 主窗看板化与 macOS 风格前端重设计
+
+- 冻结合同：`sha256:5db43c01e141e9ce77632ee3b5e9cec111ce58860215b5eee1ae4ec4aba4c366`
+- 关键符号：`ProjectColumn`、`AgentChainPicker`、`board-col`、`capture-pop`
+
+## 背景
+
+现有 renderer 为单列分组清单 + 原生 select 控件,视觉粗糙。经 Claude Design 画布多轮评审,与用户逐条定稿 macOS 风格方案(主窗采用方向 B 项目列看板)。设计规格以画布最终版(artifact 版本 1787402052-ee0f)的本地提取件为准。
+
+## 目标
+
+按定稿画布将 renderer 重构为 macOS 原生风格:主窗项目列看板(每项目一列、列内任务卡竖排)、统一着色徽标/分段控件/圆形勾选/原生风格菜单;详情与会话抽屉的操作统一收进头部 ⋯ 菜单;捕获窗改为三选择胶囊 + 级联智能体面板(主列表右侧顶对齐展开子面板)+ 常驻派单按钮;新增项目移除入口(仅解除登记,不动磁盘)。
+
+## 非目标
+
+不改主进程调度/状态机/workflow 逻辑;除新增 project:remove 外不改 IPC 契约;不做暗色主题;不重设计 TaskEditForm(沿用原生控件);方向 A 侧栏布局不实施。
+
+## 成功标准
+
+typecheck、lint、vitest 受影响测试全绿;四个界面与画布定稿一致(布局/控件/文案/徽标配色);既有功能(勾选、过滤、任务菜单操作、捕获提交、会话追问/完成/放弃)不回归;用户目视确认通过。
+
+## 执行范围
+
+src/renderer/src/styles.css、App.tsx、CaptureApp.tsx、components/TaskDetail.tsx、SessionPanel.tsx、TaskMenu.tsx、selectors.tsx;新增 components/ProjectColumn.tsx 与 components/AgentChainPicker.tsx;src/shared 与 src/main 新增 project:remove 处理(小增量);tests/ 下受影响用例同步。
+
+## 执行内容
+
+分 4 批:B1 styles.css 重写为 mac token 体系(着色徽标 badge.<status>、seg 分段控件、圆形勾选、mac 按钮/菜单样式),App 头部与过滤行改分段控件 + 新建项目按钮同行;B2 App.tsx 看板化:抽 ProjectColumn 列组件(列头 grip/名称/计数/⋯ 菜单含移除项目),任务卡两行元信息(徽标行+信息行),新增 project:remove IPC(main 侧解除登记);B3 TaskDetail 改分组卡片、打开归档并入 TaskMenu(菜单顺序:打开归档/继续对话/终端打开/重开为待办/删除,关闭改收起),SessionPanel 发送右置、完成,合并/放弃收进头部 ⋯ 菜单;B4 CaptureApp 三胶囊(触发/智能体链/项目)+ AgentChainPicker 级联面板(主列表,选定后右侧顶对齐展开子面板,默认不使用点选即选中)+ 派单主按钮。每批后 typecheck + 受影响测试。
+
+## 验收方案
+
+每批:npm run typecheck + 受影响 vitest 用例;收尾:npm test(renderer 全部)+ npm run lint;真实运行:npm run dev 启动,由用户逐界面目视对照画布并确认;acceptance 资产逐条记录证据。
+
+## 是否需要 Acceptance 资产闭环
+
+```json
+true
+```
+
+## Knowledge 影响
+
+unchanged
+
+## 约束
+
+IPC 与状态机契约不变(除新增 project:remove);状态/菜单文案以 task-labels.ts 与 TaskMenu 为渲染层单一来源;新增默认值用具名常量;单文件 ≤500 行、单函数 ≤60 行。
+
+## 风险与回滚
+
+改动集中在 renderer,git 整体可回退;project:remove 为增量 IPC,失败不影响既有路径;TaskEditForm 未重设计与新风格存在轻微不协调(列入非目标,后续迁移 AgentChainPicker)。
+
+## 用户与场景
+
+用户以看板视角按项目管理任务:全局过滤进行中/已结束/全部;列内直接勾选、操作任务;工具栏一键新建项目、列头移除项目;快捷键捕获窗快速派单并选择主/子智能体进入工作流;详情/会话抽屉查看进展与多轮追问。
+
+## 入口与用户流程
+
+主窗:过滤 seg → 项目列 → 任务卡(点击开详情,⋯ 开操作菜单);新建项目按钮 → 系统选目录;列头 ⋯ → 移除项目(确认弹窗)。捕获:输入文本 → 触发/智能体链/项目三胶囊(智能体胶囊点开级联面板:选主 → 右侧子面板点选子,默认不使用)→ Enter 或派单按钮提交。详情:头部 ⋯(打开归档/继续对话/终端打开/重开为待办/删除)、收起 Esc。会话:输入 → 发送(右下);头部 ⋯(完成,合并/放弃)、收起 Esc。
+
+## 完整状态矩阵
+
+徽标 8 态着色:todo 灰 / scheduled 蓝 / running 橙(含·方案|实现|审查 rN 后缀)/ merging 紫 / awaiting_merge 橙 / conflict 红 / failed 红 / done 绿;接力 indigo。勾选框:todo 可勾、done 已勾、其余禁用灰。子智能体面板:仅主智能体选定后展开,未检测项禁用置灰,默认不使用。发送按钮禁用 = 非 active 或 busy 或空文本(沿用现逻辑)。菜单项按状态出项沿用 TaskMenu 现有守卫。
+
+## 组件与交互
+
+ProjectColumn:列头(拖动手柄示意/名称/进行中计数/⋯ 菜单)+ 任务卡列表;任务卡:圆勾选 + 文本 + 徽标行 + 信息行 + ⋯;TaskMenu:扩展详情场景项(打开归档)与会话场景项(完成,合并/放弃),仍为操作唯一入口;AgentChainPicker:锚定胶囊弹出,主列表 + 子面板顶对齐右展开,外点/Esc 关闭;过滤 seg 沿用现有 filter state。
+
+## 视觉与响应式
+
+token:系统字体栈(SF Pro/PingFang SC)13px;窗口底 #F5F5F7;卡片白底 10px 圆角 + 发丝线描边;强调色 #007AFF;着色徽标 = 系统色底 + 同色系深字;等宽 SF Mono。列宽 285 固定,看板区 overflow-x auto 横向滚动;抽屉宽 min(620/680, 92vw) 沿用。
+
+## 可访问性
+
+徽标着色底配深字保证文字对比;按钮/菜单沿用 aria-haspopup/aria-expanded/role=menu;勾选保留原生 input checkbox 语义;AgentChainPicker 胶囊为 button 带 aria-expanded;Esc 关闭层级(菜单 > 面板 > 抽屉)保持现有 capture 拦截逻辑。
+
+## 设计系统复用
+
+复用既有类名体系(badge <status>、btn、menu-pop、filter chip→seg)仅改样式定义;TaskMenu 复用为唯一操作入口不再平行造菜单;Trigger/Project 选择器保留原生 select 改外观,Agent/SubAgent 在捕获窗由 AgentChainPicker 取代;TaskEditForm 暂沿用原生选择器避免平行实现。
+
+## 真实页面或桌面运行态验收
+
+npm run dev 启动 Electron,逐界面目视对照画布:主窗看板(列/卡/过滤/新建项目)、捕获窗(三胶囊/级联面板/派单)、详情抽屉(分组卡片/⋯ 菜单)、会话面板(发送右置/头部菜单)。操作烟囱:勾选 todo 完成、排程任务取消、捕获提交一条 todo、详情打开归档入口。用户确认原话记录为 User Acceptance。
+
+<!-- docs-harness:plan-governance:start -->
+## 资产治理
+
+- 关联验收：`docs/acceptance/macos-ui-redesign.json`
+- 需要 Acceptance：true
+- Knowledge 影响：unchanged
+<!-- docs-harness:plan-governance:end -->

@@ -1,0 +1,158 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "macOS 风格前端重设计验收",
+  "key_symbols": [
+    "ProjectColumn",
+    "AgentChainPicker",
+    "board-col"
+  ],
+  "objective": "renderer 按定稿画布完成 macOS 风格重构且既有功能不回归",
+  "plan_ref": "docs/plans/macos-ui-redesign.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "typecheck 与 lint 全绿",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T125341-da6c69228b",
+          "objective_fingerprint": "sha256:c9a1d8f49d1eee8dd08bdf0e70ccb1a40b045a831f405d14585563a275b26cc0",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "npm run typecheck(主进程 + renderer 双 tsconfig)与 npm run lint(eslint .)全部零错误退出",
+          "evidence_refs": [
+            ".harness-tmp/evidence/c1-typecheck-lint.log"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:53:41+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "受影响 renderer 测试通过(vitest)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T125341-3b06c4aa53",
+          "objective_fingerprint": "sha256:c9a1d8f49d1eee8dd08bdf0e70ccb1a40b045a831f405d14585563a275b26cc0",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "repository_full_test",
+          "method": "vitest 全仓 189 passed / 0 failed(9 skipped 为 real-* 环境跳过);renderer 无独立测试集,受影响面由 project-store/bootstrap 用例与共享契约全仓回归覆盖",
+          "evidence_refs": [
+            ".harness-tmp/evidence/c2-vitest-full.log"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:53:41+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "本地运行四界面与画布定稿一致且操作烟囱通过",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T125530-7534a4c6ce",
+          "objective_fingerprint": "sha256:c9a1d8f49d1eee8dd08bdf0e70ccb1a40b045a831f405d14585563a275b26cc0",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "npm run dev 启动 Electron 无错误(崩溃恢复完成、renderer dev server 正常),四界面(看板主窗/捕获窗/详情抽屉/会话面板)由用户对照画布目视检查",
+          "evidence_refs": [
+            ".harness-tmp/evidence/c3-dev-run.log"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:55:30+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "用户目视确认界面符合预期",
+      "acceptance_type": "user_acceptance",
+      "layer": "L5",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T125530-71995af297",
+          "objective_fingerprint": "sha256:c9a1d8f49d1eee8dd08bdf0e70ccb1a40b045a831f405d14585563a275b26cc0",
+          "acceptance_type": "user_acceptance",
+          "status": "passed",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": "用户在应用运行态目视验收后确认",
+          "evidence_refs": [],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:55:30+00:00",
+          "user_confirmation": {
+            "confirmed_by": "user",
+            "confirmation": "可以"
+          }
+        }
+      ]
+    }
+  ],
+  "status": "passed",
+  "revision": 6,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:ef7fabf2e56c37625073d6e472f37ce93055b28de33a37b05937bd1243256c90",
+      "updated_at": "2026-08-22T12:40:01+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:a4964980eda36206e6fa8da95708f712437aef60f908c54d4ef2a60fd519361f",
+      "updated_at": "2026-08-22T12:53:41+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:29b2b7d29de07f5e98a8b383ca9ec2c194361df36a0a3162afc7ee00d748fd2e",
+      "updated_at": "2026-08-22T12:53:41+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:d7e12a35447516f29bb77a8873f6500f38eb250323702d6005998a19c0ab6abb",
+      "updated_at": "2026-08-22T12:55:30+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:bd362d070957684a0fbdebbadccaf4414728758f59a3c5ce6d4d7f45c8661646",
+      "updated_at": "2026-08-22T12:55:30+00:00"
+    }
+  ],
+  "created_at": "2026-08-22T12:40:01+00:00",
+  "updated_at": "2026-08-22T12:55:49+00:00",
+  "settled_at": "2026-08-22T12:55:49+00:00",
+  "asset_fingerprint": "sha256:d814cffdf47d340ca66a021bf2c57077c966f36971bdf86e0fe4d30ec0b2d64e",
+  "replacement": null
+}

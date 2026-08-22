@@ -129,6 +129,8 @@ export interface InvokeMap {
   'agent:capabilities': { req: void; res: Record<AgentId, AgentSessionCapability> }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
+  /** 移除项目登记:有非终态任务时拒绝;磁盘目录与归档不动 */
+  'project:remove': { req: { id: string }; res: void }
   'project:pick-directory': { req: void; res: string | null }
   'agent:detections': { req: void; res: AgentDetection[] }
   'agent:refresh': { req: void; res: AgentDetection[] }
@@ -176,6 +178,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'agent:capabilities',
   'project:list',
   'project:create',
+  'project:remove',
   'project:pick-directory',
   'agent:detections',
   'agent:refresh',
