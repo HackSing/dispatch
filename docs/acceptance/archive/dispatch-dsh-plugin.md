@@ -1,12 +1,13 @@
-> 状态：有效（待验收）
+> 状态：已废弃-被替代
 <!-- docs-harness:acceptance-document/v1 -->
 
 # dispatch 双半插件（@aiwaretop/dsh-dispatch）验收
 
-- 修订：7
+- 修订：8
 - 关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
-- 资产指纹：`sha256:a7098155cd60b73762213d3c8ab330837c22279aa51ec9c353c2ccb72a89a15e`
+- 资产指纹：`sha256:5e5715a9ccc35ec3b102bf0c5bdddadd89c33b0c997bde5677f82213601f0100`
 - 关联方案：`docs/plans/dispatch-dsh-plugin.json`
+- 替代资产：`docs/acceptance/dispatch-dsh-plugin-v2.json`
 
 ## 验收目标
 

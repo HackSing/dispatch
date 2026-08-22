@@ -89,7 +89,7 @@
     "adr_decision": "本 plan 的架构决策（双半桥接形态、零侵入 UI 复用、共享数据目录）随 plan 冻结即可追溯；若批次 0 触发 node:sqlite 迁移（存储引擎更换，不可逆性高），再以 adr create 单独登记。"
   },
   "acceptance_refs": [
-    "docs/acceptance/dispatch-dsh-plugin.json"
+    "docs/acceptance/dispatch-dsh-plugin-v2.json"
   ],
   "governance": {
     "acceptance_required": true,
@@ -99,5 +99,5 @@
     "governance_settled_at": null
   },
   "frozen_at": "2026-08-22T11:29:30+00:00",
-  "plan_fingerprint": "sha256:a00ec3c36dfe9ff2dd4d0679eea6cef792630b16befb54bdfc012673a873a2ab"
+  "plan_fingerprint": "sha256:04c1e56a39c86d51606a0d169b09eba9625f5f9614f0be5f91b97236b23b86d4"
 }

@@ -3,7 +3,7 @@
 
 # dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）
 
-- 冻结合同：`sha256:a00ec3c36dfe9ff2dd4d0679eea6cef792630b16befb54bdfc012673a873a2ab`
+- 冻结合同：`sha256:04c1e56a39c86d51606a0d169b09eba9625f5f9614f0be5f91b97236b23b86d4`
 - 关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
 
 ## 背景
@@ -121,7 +121,7 @@ updated
 <!-- docs-harness:plan-governance:start -->
 ## 资产治理
 
-- 关联验收：`docs/acceptance/dispatch-dsh-plugin.json`
+- 关联验收：`docs/acceptance/dispatch-dsh-plugin-v2.json`
 - 需要 Acceptance：true
 - Knowledge 影响：updated
 <!-- docs-harness:plan-governance:end -->
