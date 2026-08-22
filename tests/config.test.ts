@@ -71,14 +71,30 @@ describe('config', () => {
     }
   })
 
-  it('用户已有 config.json 无会话字段时按默认吸收(向后兼容)', () => {
+  it('旧 config.json 吸收新默认:缺失键补齐、空值升级、用户非空值不动,且回写落盘', () => {
     writeFileSync(
       file,
-      JSON.stringify({ agents: { 'claude-code': { bin: 'claude', headless_args: ['-p'] } } })
+      JSON.stringify({
+        agents: {
+          // 缺全部会话字段(旧快照)→ 补当前默认;用户改过的 headless_args 非空 → 保留
+          'claude-code': { bin: 'claude', headless_args: ['-p', '--custom'] },
+          // 旧默认快照的空 headless_args + 无 log_filter → 吸收 stream 校准值
+          qwen: { bin: 'qwen', headless_args: [], prompt_via: 'stdin' }
+        }
+      })
     )
     const config = loadConfig(file)
-    // 用户显式给出的 agent 条目缺新字段 → zod default 补空,功能按能力隐藏而非报错
-    expect(config.agents['claude-code'].session_args).toEqual([])
-    expect(config.agents['claude-code'].interactive_resume_cmd).toBeNull()
+    expect(config.agents['claude-code'].headless_args).toEqual(['-p', '--custom'])
+    expect(config.agents['claude-code'].session_args).toEqual(['--session-id', '{SESSION_ID}'])
+    expect(config.agents['claude-code'].interactive_resume_cmd).toBe('claude --resume {SESSION_ID}')
+    expect(config.agents['qwen'].headless_args).toEqual(['-o', 'stream-json'])
+    expect(config.agents['qwen'].log_filter).toBe('claude_stream_json')
+    // 缺失的 agent 条目整体补齐
+    expect(config.agents['codex'].bin).toBe('codex')
+    // 吸收结果已回写:二次加载不再变更且内容一致
+    const reloaded = loadConfig(file)
+    expect(reloaded).toEqual(config)
+    const onDisk = JSON.parse(readFileSync(file, 'utf-8'))
+    expect(onDisk.agents['claude-code'].session_args).toEqual(['--session-id', '{SESSION_ID}'])
   })
 })

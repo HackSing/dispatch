@@ -84,10 +84,12 @@ const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
   },
   qwen: {
     bin: 'qwen',
-    // stdin 有内容时 qwen 自动进入非交互模式,无需 -p(避免「值必须紧跟 flag」的顺序问题)
-    headless_args: [],
+    // stdin 有内容时 qwen 自动进入非交互模式,无需 -p(避免「值必须紧跟 flag」的顺序问题);
+    // -o stream-json 实测(0.21.12)事件形状与 claude 同构(init/assistant/result),复用同一过滤器
+    headless_args: ['-o', 'stream-json'],
     auto_approve_args: ['--approval-mode', 'yolo'],
     prompt_via: 'stdin',
+    log_filter: 'claude_stream_json',
     calibrated: { date: '2026-08-22', cli_version: '0.21.12' }
   }
 }
@@ -127,7 +129,51 @@ export class ConfigError extends Error {
   }
 }
 
-/** 文件缺失 → 写入默认并返回;存在 → 校验加载。损坏的配置抛错,不静默覆盖用户文件。 */
+/** 「空值」= null 或空数组:视为未显式配置,可被新默认吸收 */
+function isEmptyValue(v: unknown): boolean {
+  return v === null || (Array.isArray(v) && v.length === 0)
+}
+
+/**
+ * 配置迁移(dev-plan B4「用户已有 config.json 吸收新默认值」):
+ * 首启写盘的是当时默认值的快照,schema 演进后新字段/新校准值永远进不去。
+ * 吸收规则(逐 agent 逐键,幂等):
+ * 1. 键缺失 → 补当前默认;
+ * 2. 键存在但值为空([]/null)且当前默认非空 → 吸收当前默认;
+ * 3. 其余(用户显式非空值)一律不动。
+ * 已知代价:用户「有意置空」某字段会被重新吸收默认——个人工具场景下接受并在此记录。
+ */
+function absorbAgentDefaults(raw: Record<string, unknown>): boolean {
+  const agents = raw.agents
+  if (typeof agents !== 'object' || agents === null) return false
+  let changed = false
+  for (const [id, defaultInput] of Object.entries(DEFAULT_AGENTS)) {
+    const defaults = AgentConfigSchema.parse(defaultInput) as unknown as Record<string, unknown>
+    const entry = (agents as Record<string, unknown>)[id]
+    if (entry === undefined) {
+      ;(agents as Record<string, unknown>)[id] = defaults
+      changed = true
+      continue
+    }
+    if (typeof entry !== 'object' || entry === null) continue
+    const record = entry as Record<string, unknown>
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      if (!(key in record)) {
+        record[key] = defaultValue
+        changed = true
+      } else if (isEmptyValue(record[key]) && !isEmptyValue(defaultValue)) {
+        record[key] = defaultValue
+        changed = true
+      }
+    }
+  }
+  return changed
+}
+
+/**
+ * 文件缺失 → 写入默认并返回;存在 → 先吸收新默认(见 absorbAgentDefaults)再校验加载,
+ * 吸收有变更时回写落盘。损坏的配置抛错,不静默覆盖用户文件。
+ */
 export function loadConfig(configFile: string): DispatchConfig {
   if (!existsSync(configFile)) {
     const defaults = ConfigSchema.parse({})
@@ -140,10 +186,13 @@ export function loadConfig(configFile: string): DispatchConfig {
   } catch (e) {
     throw new ConfigError(`config.json 不是合法 JSON: ${(e as Error).message}`, configFile)
   }
+  const absorbed =
+    typeof raw === 'object' && raw !== null && absorbAgentDefaults(raw as Record<string, unknown>)
   const parsed = ConfigSchema.safeParse(raw)
   if (!parsed.success) {
     throw new ConfigError(`config.json 校验失败: ${parsed.error.message}`, configFile)
   }
+  if (absorbed) writeConfig(configFile, parsed.data)
   return parsed.data
 }
 

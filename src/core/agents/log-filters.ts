@@ -1,7 +1,9 @@
 /**
  * 日志过滤器:把 agent CLI 的机器格式输出转成人可读的执行日志。
  * 经 AgentConfig.log_filter 按名启用,与 agent id 无关(spec §5.2 配置驱动原则)。
- * claude_stream_json 的事件形状依 2026-08-22 对 claude 2.1.229 的实测样本。
+ * claude_stream_json 的事件形状依 2026-08-22 对 claude 2.1.229 的实测样本;
+ * qwen 0.21.12 的 -o stream-json 实测同构(init/assistant/result 同形,多出的
+ * stream_event 等类型落入噪音分支),两者共用此过滤器。
  */
 
 export interface LogFilter {
