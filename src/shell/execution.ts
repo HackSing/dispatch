@@ -28,7 +28,8 @@ export class ExecutionService {
       },
       semaphore: new Semaphore(ctx.config.max_concurrency),
       mergeLocks: new KeyedLock(),
-      builtinPromptFile: join(app.getAppPath(), 'resources/prompts/default.md')
+      builtinPromptFile: join(app.getAppPath(), 'resources/prompts/default.md'),
+      builtinPromptsDir: join(app.getAppPath(), 'resources/prompts')
     }
   }
 

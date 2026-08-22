@@ -20,10 +20,16 @@ const PHASE_LABELS: Record<TaskPhase, string> = {
   review: '审查'
 }
 
-/** reviewRound 为打回返工计数(0=首轮);展示轮次 = reviewRound + 1,首轮不带后缀 */
+/**
+ * 轮次后缀,与 executor/workflow.ts 的 setPhase 语义逐一对齐:
+ * - implement 阶段 reviewRound = 已完成审查数(首轮 0)→ 实现轮次 = reviewRound + 1;
+ * - review 阶段 reviewRound = 当前审查轮次(从 1 起)→ 直接显示;
+ * 首轮(计数 ≤1 的审查、0 的实现)不带后缀,减少单点视觉噪音。
+ */
 function roundSuffix(task: Task): string {
-  if (task.phase === 'plan' || task.reviewRound <= 0) return ''
-  return ` r${task.reviewRound + 1}`
+  if (task.phase === 'implement' && task.reviewRound > 0) return ` r${task.reviewRound + 1}`
+  if (task.phase === 'review' && task.reviewRound > 1) return ` r${task.reviewRound}`
+  return ''
 }
 
 /** 状态徽标文案:running 且 phase 非空时细化为「执行中·方案/实现/审查 [rN]」 */
