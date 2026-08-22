@@ -51,7 +51,7 @@ describe('config', () => {
     expect(() => loadConfig(file)).toThrow(ConfigError)
   })
 
-  it('会话三件套:claude-code 默认已校准,其余 agent 留空即不支持', () => {
+  it('会话三件套:claude-code/dsh 默认已校准,其余 agent 留空即不支持', () => {
     const config = loadConfig(file)
     const claude = config.agents['claude-code']
     expect(claude.session_args).toEqual(['--session-id', '{SESSION_ID}'])
@@ -64,7 +64,14 @@ describe('config', () => {
       '{SESSION_ID}'
     ])
     expect(claude.interactive_resume_cmd).toBe('claude --resume {SESSION_ID}')
-    for (const id of ['codex', 'dsh', 'kimi', 'qwen'] as const) {
+    // dsh:--profile 并入 session_args(顺序原因见 DEFAULT_AGENTS 注释),resume 每轮 spawn
+    const dsh = config.agents['dsh']
+    expect(dsh.headless_args).toEqual([])
+    expect(dsh.session_args).toEqual(['--profile', 'headless-dispatch', '--session-id', '{SESSION_ID}'])
+    expect(dsh.resume_headless_args).toEqual(['--profile', 'headless-dispatch', '--resume', '{SESSION_ID}'])
+    expect(dsh.resume_stream_args).toEqual([])
+    expect(dsh.interactive_resume_cmd).toBeNull()
+    for (const id of ['codex', 'kimi', 'qwen'] as const) {
       expect(config.agents[id].session_args).toEqual([])
       expect(config.agents[id].resume_headless_args).toEqual([])
       expect(config.agents[id].interactive_resume_cmd).toBeNull()

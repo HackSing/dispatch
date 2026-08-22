@@ -14,7 +14,7 @@
 | codex | 0.147.0 | `exec --skip-git-repo-check` | `--dangerously-bypass-approvals-and-sandbox` | arg | 无 | 通过(85s) |
 | kimi | 0.36.1 | `--prompt` | (空,见下) | arg | 无 | 通过(49s) |
 | qwen | 0.21.12 | (空) | `--approval-mode yolo` | stdin | 无 | 通过(153s) |
-| dsh | 未安装 | 未校准 | 未校准 | — | — | `which dsh` 不存在,保留占位 |
+| dsh | 0.1.1-rc.1 | (空;会话参数见下) | (空,见下) | arg | 无 | 实测一次性执行 + follow-up round 传输通过(见下) |
 
 实测命令(消耗配额,默认跳过):
 
@@ -136,19 +136,51 @@ qwen --approval-mode yolo   # prompt 经 stdin 写入
 
 ---
 
-## dsh(未校准)
+## dsh(@deepseek-ai/dsh 0.1.1-rc.1)
 
-- `which dsh` 两次确认不存在(2026-08-22),无法实测。
-- DEFAULT_AGENTS 保留占位 `{ bin: 'dsh' }`;检测层(detect)会因找不到二进制而在捕获窗置灰。
-- 安装后需补:无头/自动批准参数、`ready_check_cmd`/`start_cmd`(spec §5.2 要求守护进程先行),
-  并用 `RUN_REAL_AGENTS=dsh npm test -- tests/real-agents.test.ts` 验证(测试已支持按名启用)。
+### 最终参数
+
+```
+fresh:  dsh --profile headless-dispatch --session-id <uuid> "<任务>"
+resume: dsh --profile headless-dispatch --resume <uuid> "<追问>"
+```
+
+- 无头模式:fresh = `dsh --profile headless-dispatch --session-id <uuid> "<任务>"`,任务文本作为
+  尾参(prompt_via=arg);resume = `dsh --profile headless-dispatch --resume <uuid> "<追问>"`。
+  一次性执行:打印最终消息后直接退出,退出码 0。
+- 自动批准:**留空**。CLI 无 auto-approve flag;headless-dispatch profile 本身即非交互执行
+  (沙箱 danger-full-access、审批 never,见下),无需额外 flag(与 kimi print 模式同理)。
+- 会话三件套:`session_args` / `resume_headless_args` 已配置(follow-up 面板以 round 传输可用,
+  即每轮 spawn `resume_headless_args`);`resume_stream_args` 与 `interactive_resume_cmd` 仍为空——
+  dsh 无 stream-json 线格式输出,无法做常驻多轮面板;也无交互 TUI 形态的 profile 可作终端逃生舱。
+- 版本检测:`dsh --version` → `0.1.1-rc.1`(schema 默认 `version_args` 即可用)。
+
+### headless-dispatch profile
+
+- 来源:仓库 `dsh-headless-session/` 包(@aiwaretop/dsh-headless-session),bundles =
+  dsh-base + dsh-headless + @aiwaretop/dsh-headless-session。
+- 沙箱 danger-full-access、审批 never,仅该 profile 生效;信任级别与 claude/codex/qwen 的
+  跳权限模式同级,Dispatch 侧缓解措施相同(worktree 隔离 + 合并前冲突拦截 + 全量日志)。
+- 安装位置:`~/.dsh/profiles/headless-dispatch`。
+
+### 实测结果
+
+- 2026-08-22 实测一次性执行:`dsh --profile headless-dispatch "<任务>"` 打印最终消息后退出,exit 0;
+  follow-up round 传输(`--resume <uuid> "<追问>"` 每轮 spawn)实测可用(B1 验收)。
+
+### 已知怪癖
+
+- 裸命令 `dsh` 依赖 PATH:目前仅 DSH Buddy dev 模式的 `node_modules/.bin` shim 提供;
+  打包态需全局安装 `@deepseek-ai/dsh`,或在 config 里把 `bin` 配成绝对路径。
+- 无 stream-json 事件流,执行日志为纯文本;未配 log_filter。
 
 ---
 
 ## 会话续接三件套(交互批 V0.2r2,2026-08-22 实测 claude 2.1.229)
 
 会话面板与终端逃生舱依赖的配置字段(`session_args` / `resume_headless_args` /
-`resume_stream_args` / `interactive_resume_cmd`),当前仅 claude-code 校准:
+`resume_stream_args` / `interactive_resume_cmd`),常驻传输仅 claude-code 校准;
+dsh 以 round 传输(每轮 spawn `resume_headless_args`)接入,见上方 dsh 小节:
 
 | 能力 | 参数 | 实测结论 |
 |---|---|---|
@@ -165,7 +197,7 @@ qwen --approval-mode yolo   # prompt 经 stdin 写入
 
 ## 未解决问题
 
-1. dsh 未安装,整体未校准(见上)。
+1. dsh 打包态可用性待验证:裸命令目前依赖 dev shim,打包态需全局安装或绝对路径 bin(见上)。
 2. qwen 无头模式过程日志近乎静默,详情页「执行日志尾部」在 qwen 任务运行中参考价值低;
    如需实时过程,可改配 `-o stream-json` 并新增对应 log_filter(本次按「输出可读即不过滤」原则未做)。
 3. kimi 的 `--prompt` 必须内联值 + 必须位列最后,这一约束由 DEFAULT_AGENTS 注释与本文档共同记录;

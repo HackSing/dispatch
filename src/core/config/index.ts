@@ -71,8 +71,16 @@ const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
     auto_approve_args: ['--dangerously-bypass-approvals-and-sandbox'],
     calibrated: { date: '2026-08-22', cli_version: '0.147.0' }
   },
-  // dsh 本机未安装,参数未校准(占位);安装后需实测 headless/auto_approve/ready_check/start
-  dsh: { bin: 'dsh' },
+  // dsh 0.1.1-rc.1 + 自研 headless-dispatch profile(仓库 dsh-headless-session/):--profile 并入 session_args 是因为
+  // fresh argv = session_args + headless_args,dsh launcher 要求 flag 位于任务尾参之前且 --profile 先于本应用 flag,
+  // 留在 headless_args 会拼出 '--session-id X --profile ...' 非法顺序或双 --profile;resume 每轮 spawn(round 传输),
+  // 无 stream-json 与终端逃生舱,resume_stream_args/interactive_resume_cmd 留空
+  dsh: {
+    bin: 'dsh',
+    session_args: ['--profile', 'headless-dispatch', '--session-id', '{SESSION_ID}'],
+    resume_headless_args: ['--profile', 'headless-dispatch', '--resume', '{SESSION_ID}'],
+    calibrated: { date: '2026-08-22', cli_version: '0.1.1-rc.1' }
+  },
   kimi: {
     bin: 'kimi',
     // print 模式(--prompt)禁止与 --auto/--yolo 组合(CLI 直接报错),
