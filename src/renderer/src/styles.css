@@ -293,6 +293,7 @@ input[type='datetime-local']:focus {
 .capture-bar {
   -webkit-app-region: no-drag;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
@@ -439,6 +440,17 @@ input[type='datetime-local']:focus {
 .detail-section.conflict-highlight {
   border: 1px solid #ff453a;
   background: #fff5f5;
+  border-radius: 8px;
+  padding: 0 12px 10px;
+}
+
+/* ===== W1c:工作流 UI(主→子标识 / 阶段徽标 / 审查摘要) ===== */
+.agent-chain {
+  white-space: nowrap;
+}
+.detail-section.review-summary {
+  border: 1px solid #d8c9f0;
+  background: #faf7ff;
   border-radius: 8px;
   padding: 0 12px 10px;
 }

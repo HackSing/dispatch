@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import type { AgentDetection, AgentId, Project, Task } from '@shared/types'
-import { AgentSelect, ProjectSelect, TriggerSelect, type TriggerValue } from './selectors'
+import {
+  AgentSelect,
+  ProjectSelect,
+  SubAgentSelect,
+  TriggerSelect,
+  type TriggerValue
+} from './selectors'
 import { fromDatetimeLocal, toDatetimeLocal } from '../lib/time'
 
 /** todo/scheduled 的内联编辑;补时间+agent 保存即由主进程升级为可执行任务 */
@@ -15,6 +21,7 @@ export function TaskEditForm(props: {
   const [text, setText] = useState(task.text)
   const [projectId, setProjectId] = useState(task.projectId)
   const [agent, setAgent] = useState<AgentId | ''>(task.agent ?? '')
+  const [subAgent, setSubAgent] = useState<AgentId | ''>(task.subAgent ?? '')
   const [trigger, setTrigger] = useState<TriggerValue>({
     triggerType: task.triggerType,
     triggerAtLocal: toDatetimeLocal(task.triggerAt)
@@ -43,6 +50,7 @@ export function TaskEditForm(props: {
         text,
         projectId,
         agent: agent || null,
+        subAgent: (agent && subAgent) || null,
         triggerType: trigger.triggerType,
         triggerAt
       })
@@ -59,7 +67,21 @@ export function TaskEditForm(props: {
       <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="field-row">
         <TriggerSelect value={trigger} onChange={setTrigger} />
-        <AgentSelect detections={detections} value={agent} onChange={setAgent} />
+        <AgentSelect
+          detections={detections}
+          value={agent}
+          onChange={(next) => {
+            setAgent(next)
+            // 子依赖主:清空主智能体即回单点模式
+            if (!next) setSubAgent('')
+          }}
+        />
+        <SubAgentSelect
+          detections={detections}
+          value={subAgent}
+          onChange={setSubAgent}
+          disabled={!agent}
+        />
         <ProjectSelect
           projects={projects}
           value={projectId}

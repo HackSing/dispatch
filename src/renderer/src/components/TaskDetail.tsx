@@ -3,10 +3,23 @@ import ReactMarkdown from 'react-markdown'
 import type { Task } from '@shared/types'
 import type { TaskArchive } from '@shared/ipc'
 import type { TaskResult } from '@core/agents/types'
+import { agentChainLabel, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
 import { TaskOps } from './TaskOps'
 
 const ACTIVE_POLL_MS = 3000
+
+/** 归档中的审查报告文件(review-r1.md / review-r2.json …),TaskArchive 契约不含内容,只能按文件名探测 */
+const REVIEW_FILE_RE = /^review-r(\d+)\.(md|json)$/
+
+function countReviewRounds(files: { name: string }[]): number {
+  const rounds = new Set<number>()
+  for (const f of files) {
+    const m = REVIEW_FILE_RE.exec(f.name)
+    if (m) rounds.add(Number(m[1]))
+  }
+  return rounds.size
+}
 
 function isActive(task: Task): boolean {
   return task.status === 'running' || task.status === 'merging'
@@ -80,20 +93,20 @@ export function TaskDetail(props: {
   }, [onClose])
 
   const result = parseResult(archive?.resultRaw ?? null)
+  const reviewRounds = countReviewRounds(archive?.files ?? [])
+  const openArchive = (): void => {
+    void window.dispatchApi.invoke('task:open-archive', { id: task.id })
+  }
 
   return (
     <div className="detail-overlay" onClick={onClose}>
       <div className="detail-panel" onClick={(e) => e.stopPropagation()}>
         <header className="detail-header">
-          <span className={`badge ${task.status}`}>{task.status}</span>
+          <span className={`badge ${task.status}`}>{statusBadgeLabel(task)}</span>
           <span className="detail-title">{task.text.split('\n')[0]}</span>
           <span className="spacer" />
           {task.archiveDir && (
-            <button
-              className="btn"
-              title="在 Finder 中打开归档目录"
-              onClick={() => void window.dispatchApi.invoke('task:open-archive', { id: task.id })}
-            >
+            <button className="btn" title="在 Finder 中打开归档目录" onClick={openArchive}>
               打开归档
             </button>
           )}
@@ -124,7 +137,8 @@ export function TaskDetail(props: {
 
           <Section title="元数据">
             <div className="detail-meta">
-              {task.agent && <span>智能体:{task.agent}</span>}
+              {task.agent && <span>智能体:{agentChainLabel(task)}</span>}
+              {phaseDetailLabel(task) && <span>当前阶段:{phaseDetailLabel(task)}</span>}
               <span>创建:{formatTime(task.createdAt)}</span>
               {task.startedAt && <span>开始:{formatTime(task.startedAt)}</span>}
               {isActive(task) && task.startedAt && (
@@ -139,6 +153,19 @@ export function TaskDetail(props: {
           </Section>
 
           {error && <p className="form-error">归档读取失败:{error}</p>}
+
+          {reviewRounds > 0 && (
+            <Section title="审查结论" className="review-summary">
+              <p className="detail-summary">
+                本任务经 {reviewRounds} 轮审查,审查报告(review-r*.md)见归档目录。
+              </p>
+              {task.archiveDir && (
+                <button className="btn" title="在 Finder 中打开归档目录" onClick={openArchive}>
+                  打开归档
+                </button>
+              )}
+            </Section>
+          )}
 
           {result && (
             <Section title={`结果 · ${result.status}`}>
