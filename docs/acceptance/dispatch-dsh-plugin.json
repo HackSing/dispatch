@@ -126,7 +126,25 @@
       "layer": "L5",
       "evidence_layer": "real_device",
       "status": "pending",
-      "records": []
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T120057-88edf0ae46",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "behavior_acceptance",
+          "status": "unverified",
+          "layer": "L5",
+          "evidence_layer": "real_device",
+          "method": "各环已自动验证：壳 globalShortcut 注册成功（日志）、env 注入 dsh 子进程（ps）、app:hotkey-status 端到端 registered:true（curl）、client 监听与 autoCapture 面板直出（单测+代码路径）。系统级真实按键（焦点在其他应用时按 Cmd+Shift+Space → 壳前置+面板+捕获框直出）无法自动化：osascript 被 macOS 辅助功能权限拒绝（1002）。待用户按 evidence-batch3.md 的步骤实测确认后 reaccept。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch3.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:00:57+00:00"
+        }
+      ]
     },
     {
       "id": "c6",
@@ -134,12 +152,31 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T120040-347b5f169d",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "两侧实测：隔离 dsh 服务（插件 host）停用后无 18317 遗留进程、端口关闭；dsh-buddy 退出后无壳/dsh 遗留进程、3080 端口关闭；dsh 正常重启无崩溃恢复异常日志。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch1.md",
+            ".harness-tmp/evidence-batch3.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T12:00:40+00:00"
+        }
+      ]
     }
   ],
   "status": "pending",
-  "revision": 5,
+  "revision": 7,
   "revision_history": [
     {
       "revision": 1,
@@ -160,10 +197,20 @@
       "revision": 4,
       "asset_fingerprint": "sha256:ff201f1173992cc8a4b6cd34c93acd5f71e343f6b00783c0ad1407e11b6d9dce",
       "updated_at": "2026-08-22T11:46:06+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:2c1b66eb9b2fadb3dba8c4e3520ab0edc2c15a459177082e4ea45147b52679bc",
+      "updated_at": "2026-08-22T11:55:13+00:00"
+    },
+    {
+      "revision": 6,
+      "asset_fingerprint": "sha256:9521ba324275abe8cb545e0e3c3521559d3bbb77fc176d5a40bef5050a9f11b0",
+      "updated_at": "2026-08-22T12:00:40+00:00"
     }
   ],
   "created_at": "2026-08-22T11:30:02+00:00",
-  "updated_at": "2026-08-22T11:55:13+00:00",
+  "updated_at": "2026-08-22T12:00:57+00:00",
   "settled_at": null,
-  "asset_fingerprint": "sha256:2c1b66eb9b2fadb3dba8c4e3520ab0edc2c15a459177082e4ea45147b52679bc"
+  "asset_fingerprint": "sha256:a7098155cd60b73762213d3c8ab330837c22279aa51ec9c353c2ccb72a89a15e"
 }

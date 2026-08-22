@@ -43,9 +43,13 @@ async function handle(rt, broadcast, channel, p) {
         dispatchHome: ctx.paths.home,
         platform: process.platform,
       };
-    case 'app:hotkey-status':
-      // 批次 3 接壳转发后更新;当前诚实返回未注册
-      return { accelerator: ctx.config.hotkey, registered: false };
+    case 'app:hotkey-status': {
+      // dsh-buddy 壳注册成功时在子进程 env 注入状态(lib/global-hotkey.js
+      // hotkeyChildEnv);无壳/旧壳/注册失败时诚实返回未注册
+      const registered = process.env.DSH_BUDDY_HOTKEY_REGISTERED === '1';
+      const accelerator = process.env.DSH_BUDDY_HOTKEY_ACCELERATOR || ctx.config.hotkey;
+      return { accelerator, registered };
+    }
     case 'capture:hide':
       // client 模态自管理,此通道仅为兼容 CaptureApp 调用面
       return undefined;

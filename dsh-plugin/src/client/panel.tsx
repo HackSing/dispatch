@@ -44,8 +44,8 @@ button { font: inherit; cursor: pointer; }
 
 let panelDisposer: (() => void) | null = null
 
-/** 打开任务面板;已打开时幂等 */
-export function openPanel(): void {
+/** 打开任务面板;已打开时幂等。autoCapture=壳快捷键路径,直接带出捕获模态 */
+export function openPanel(options: { autoCapture?: boolean } = {}): void {
   if (panelDisposer) return
 
   const host = document.createElement('div')
@@ -82,6 +82,7 @@ export function openPanel(): void {
     <StrictMode>
       <PanelRoot
         onClose={close}
+        initialCapture={options.autoCapture === true}
         onCapture={(setVisible) => {
           setCaptureVisible = setVisible
         }}
@@ -93,11 +94,13 @@ export function openPanel(): void {
 
 function PanelRoot(props: {
   onClose: () => void
+  /** 壳快捷键路径直接带出捕获模态 */
+  initialCapture?: boolean
   /** 面板挂载后向外部登记捕获模态的开关(capture:hide 拦截需要关它) */
   onCapture: (setVisible: (v: boolean) => void) => void
 }): React.JSX.Element {
-  const { onClose, onCapture } = props
-  const [captureVisible, setCaptureVisible] = useState(false)
+  const { onClose, initialCapture, onCapture } = props
+  const [captureVisible, setCaptureVisible] = useState(initialCapture === true)
   const frameRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {

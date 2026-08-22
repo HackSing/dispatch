@@ -3,9 +3,9 @@
 
 # dispatch 双半插件（@aiwaretop/dsh-dispatch）验收
 
-- 修订：5
+- 修订：7
 - 关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
-- 资产指纹：`sha256:2c1b66eb9b2fadb3dba8c4e3520ab0edc2c15a459177082e4ea45147b52679bc`
+- 资产指纹：`sha256:a7098155cd60b73762213d3c8ab330837c22279aa51ec9c353c2ccb72a89a15e`
 - 关联方案：`docs/plans/dispatch-dsh-plugin.json`
 
 ## 验收目标
@@ -47,11 +47,11 @@
 - 状态：pending
 - 类型：behavior_acceptance
 - 层级：L5
-- 证据：尚无
+- 证据：`.harness-tmp/evidence-batch3.md`
 
 ### `c6` 禁用/卸载插件后 dsh 正常启动且无遗留调度子进程
 
-- 状态：pending
+- 状态：passed
 - 类型：behavior_acceptance
 - 层级：L3
-- 证据：尚无
+- 证据：`.harness-tmp/evidence-batch1.md`、`.harness-tmp/evidence-batch3.md`

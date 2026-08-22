@@ -55,6 +55,20 @@ test('invoke 全链:建任务→列表→状态', async () => {
   assert.equal(statusBody.value.dispatchHome, process.env.DISPATCH_HOME);
   assert.equal(statusBody.value.platform, process.platform);
 
+  // 壳快捷键状态经 env 透出(hotkeyChildEnv 注入);无壳时诚实返回未注册
+  const hotkey = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
+  assert.equal(hotkey.body().value.registered, false);
+  const prevReg = process.env.DSH_BUDDY_HOTKEY_REGISTERED;
+  const prevAcc = process.env.DSH_BUDDY_HOTKEY_ACCELERATOR;
+  process.env.DSH_BUDDY_HOTKEY_REGISTERED = '1';
+  process.env.DSH_BUDDY_HOTKEY_ACCELERATOR = 'Alt+Space';
+  const hotkeyOn = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
+  assert.deepEqual(hotkeyOn.body().value, { accelerator: 'Alt+Space', registered: true });
+  if (prevReg === undefined) delete process.env.DSH_BUDDY_HOTKEY_REGISTERED;
+  else process.env.DSH_BUDDY_HOTKEY_REGISTERED = prevReg;
+  if (prevAcc === undefined) delete process.env.DSH_BUDDY_HOTKEY_ACCELERATOR;
+  else process.env.DSH_BUDDY_HOTKEY_ACCELERATOR = prevAcc;
+
   // client 侧 encodeURIComponent 编码冒号,host 必须解码后再比对白名单
   const encoded = await drive(handler, fakeReq({ url: `/api/dispatch/invoke/${encodeURIComponent('app:status')}` }), fakeRes());
   assert.equal(encoded.body().ok, true);
