@@ -62,7 +62,7 @@ html[data-dispatch-panel-active] [class*='centerCol'] > :not([data-dispatch-pane
 }
 `
 
-/** shadow 内部骨架:视图根(铺满容器,relative 锚定 FAB/模态)+ 返回按钮 + 模态卡片 */
+/** shadow 内部骨架:视图根(铺满容器,relative 锚定 FAB/模态)+ 模态卡片 */
 const SHELL_CSS = `
 * { box-sizing: border-box; }
 .panel-mount {
@@ -82,12 +82,6 @@ const SHELL_CSS = `
   background: #f5f5f7;
 }
 button { font: inherit; cursor: pointer; }
-.panel-back {
-  position: absolute; top: 10px; right: 12px; z-index: 10;
-  border: none; background: transparent; font-size: 12px;
-  padding: 4px 10px; border-radius: 6px; color: #6e6e73;
-}
-.panel-back:hover { background: rgba(0,0,0,0.08); }
 .capture-fab {
   position: absolute; right: 18px; bottom: 18px; z-index: 10;
   border: none; border-radius: 999px; padding: 10px 18px; font-size: 14px;
@@ -270,9 +264,6 @@ function PanelRoot(): React.JSX.Element {
 
   return (
     <div className="panel-frame">
-      <button className="panel-back" onClick={closePanel} title="收起视图(侧栏「任务派单」可重新打开)">
-        ↩ 返回对话
-      </button>
       <div style={{ flex: 1, minHeight: 0 }}>
         <App />
       </div>
