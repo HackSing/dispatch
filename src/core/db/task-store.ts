@@ -366,6 +366,29 @@ export class TaskStore {
     return updated
   }
 
+  /** parent_task_id 直接子任务(接力链一层);级联删除由 task-edit.deleteTask 编排 */
+  listChildren(id: string): Task[] {
+    const rows = this.db
+      .prepare('SELECT * FROM tasks WHERE parent_task_id = ? ORDER BY created_at')
+      .all(id) as TaskRow[]
+    return rows.map(toTask)
+  }
+
+  /**
+   * 删除单条任务行(归档在盘上,库只是索引;worktree 清理由编排层先行完成)。
+   * 执行中(running/merging)拒绝;有接力子任务时受外键约束拒绝——
+   * 级联顺序由 task-edit.deleteTask 保证(先子后父)。不触发 onChange,
+   * 删除语义的广播由壳层显式发出(避免误触发状态通知)。
+   */
+  delete(id: string): void {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status === 'running' || current.status === 'merging') {
+      throw new Error(`任务状态 ${current.status} 不可删除,请先中断`)
+    }
+    this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
+  }
+
   transition(id: string, to: TaskStatus, patch: TransitionPatch = {}): Task {
     const current = this.get(id)
     if (!current) throw new Error(`task not found: ${id}`)

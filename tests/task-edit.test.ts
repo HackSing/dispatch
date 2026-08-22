@@ -4,7 +4,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import { openDatabase, ProjectStore, TaskStore } from '@core/db'
-import { abandonTask, cancelScheduled, editTask, rerunFailedTask, toggleTodo } from '@core/task-edit'
+import {
+  abandonTask,
+  cancelScheduled,
+  deleteTask,
+  editTask,
+  previewDelete,
+  rerunFailedTask,
+  toggleTodo
+} from '@core/task-edit'
 import type { Task } from '@shared/types'
 
 let dir: string
@@ -186,6 +194,63 @@ describe('rerunFailedTask 原地重跑', () => {
 
   it('任务不存在报错', async () => {
     await expect(rerunFailedTask({ tasks: store, projects }, 'nope')).rejects.toThrow(/not found/)
+  })
+})
+
+describe('deleteTask 删除链', () => {
+  /** parent(done)← child(failed)← grandchild(todo) 的三级接力链 */
+  function makeChain(): { parent: Task; child: Task; grandchild: Task } {
+    const parent = store.create({ text: '父', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    store.transition(parent.id, 'running')
+    store.setSessionId(parent.id, 'sid-1')
+    store.transition(parent.id, 'done', { finishedAt: new Date().toISOString() })
+    const child = store.create({
+      text: '[会话] 接力',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'none',
+      sessionId: 'sid-1',
+      parentTaskId: parent.id
+    })
+    store.transition(child.id, 'scheduled')
+    store.transition(child.id, 'running')
+    store.transition(child.id, 'failed', { failReason: 'x' })
+    const grandchild = store.create({
+      text: '[会话] 二级接力',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'none',
+      sessionId: 'sid-1',
+      parentTaskId: child.id
+    })
+    return { parent, child, grandchild: grandchild }
+  }
+
+  it('级联删除全部接力后代,先子后父不触外键', async () => {
+    const { parent } = makeChain()
+    const bystander = store.create({ text: '无关任务', projectId, triggerType: 'none' })
+    expect(previewDelete(store, parent.id).chain).toHaveLength(3)
+    await deleteTask({ tasks: store, projects }, parent.id)
+    expect(store.list().map((t) => t.id)).toEqual([bystander.id])
+  })
+
+  it('链上有执行中成员时整链拒绝删除', async () => {
+    const { parent, grandchild } = makeChain()
+    store.transition(grandchild.id, 'scheduled')
+    store.transition(grandchild.id, 'running')
+    await expect(deleteTask({ tasks: store, projects }, parent.id)).rejects.toThrow(/仍在执行/)
+    expect(store.list()).toHaveLength(3)
+    // 根任务自身执行中给「先中断」提示
+    expect(() => previewDelete(store, grandchild.id)).toThrow(/先中断/)
+  })
+
+  it('previewDelete 标记未合并改动(删除说明依据)', () => {
+    const t = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    store.transition(t.id, 'running')
+    store.transition(t.id, 'merging')
+    store.transition(t.id, 'conflict', { branch: 'task/x' })
+    const preview = previewDelete(store, t.id)
+    expect(preview.unmerged.map((x) => x.id)).toEqual([t.id])
   })
 })
 

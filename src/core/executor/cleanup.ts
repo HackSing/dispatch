@@ -1,11 +1,22 @@
 import { existsSync } from 'node:fs'
-import type { Task } from '@shared/types'
+import type { Project, Task } from '@shared/types'
 import type { ProjectStore, TaskStore } from '@core/db'
 import { deleteBranchIfExists, pruneWorktrees, removeWorktree } from '@core/gitops'
 
 export interface CleanupDeps {
   tasks: TaskStore
   projects: ProjectStore
+}
+
+/** git 清理内核(worktree + 任务分支),状态守卫与字段清空由调用方各自负责;可重入 */
+export async function removeTaskWorktreeAndBranch(project: Project, task: Task): Promise<void> {
+  if (!task.worktreePath) return
+  if (existsSync(task.worktreePath) && task.branch) {
+    await removeWorktree(project.path, task.worktreePath, task.branch)
+  } else {
+    await pruneWorktrees(project.path)
+    if (task.branch) await deleteBranchIfExists(project.path, task.branch)
+  }
 }
 
 /**
@@ -23,11 +34,6 @@ export async function cleanupTaskWorkspace(deps: CleanupDeps, taskId: string): P
   const project = deps.projects.get(task.projectId)
   if (!project) throw new Error(`任务关联项目不存在: ${task.projectId}`)
 
-  if (existsSync(task.worktreePath) && task.branch) {
-    await removeWorktree(project.path, task.worktreePath, task.branch)
-  } else {
-    await pruneWorktrees(project.path)
-    if (task.branch) await deleteBranchIfExists(project.path, task.branch)
-  }
+  await removeTaskWorktreeAndBranch(project, task)
   return deps.tasks.clearWorktreePath(taskId)
 }

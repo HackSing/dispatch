@@ -4,7 +4,7 @@ import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
 import { SessionPanel } from './components/SessionPanel'
-import { TaskOps, ToggleTodoButton } from './components/TaskOps'
+import { TaskMenu } from './components/TaskMenu'
 import { pickAndCreateProject } from './lib/projects'
 import { agentChainLabel, statusBadgeLabel } from './lib/task-labels'
 import { formatElapsed, formatTime } from './lib/time'
@@ -34,6 +34,7 @@ function TaskRow(props: {
   onEdit: () => void
   onOpen: () => void
   onOpenTask: (taskId: string) => void
+  onOpenSession: (taskId: string) => void
 }): React.JSX.Element {
   const { task, onEdit, onOpen, onOpenTask } = props
   const [actionError, setActionError] = useState<string | null>(null)
@@ -75,31 +76,12 @@ function TaskRow(props: {
         </div>
       </div>
       <div className="task-actions">
-        <ToggleTodoButton task={task} />
-        {editable && (
-          <button className="btn" onClick={onEdit}>
-            编辑
-          </button>
-        )}
-        {task.status === 'scheduled' && (
-          <>
-            <button
-              className="btn"
-              title="跳过等待,立即执行"
-              onClick={() => run(() => window.dispatchApi.invoke('task:run-now', { id: task.id }))}
-            >
-              立即执行
-            </button>
-            <button
-              className="btn"
-              title="取消执行,退回普通待办"
-              onClick={() => run(() => window.dispatchApi.invoke('task:cancel', { id: task.id }))}
-            >
-              取消
-            </button>
-          </>
-        )}
-        <TaskOps task={task} onOpenTask={onOpenTask} />
+        <TaskMenu
+          task={task}
+          onEdit={editable ? onEdit : undefined}
+          onOpenTask={onOpenTask}
+          onOpenSession={props.onOpenSession}
+        />
       </div>
     </div>
   )
@@ -115,6 +97,7 @@ function ProjectSection(props: {
   editingId: string | null
   setEditingId: (id: string | null) => void
   setDetailId: (id: string | null) => void
+  onOpenSession: (taskId: string) => void
   onCreateProject: () => Promise<string | null>
 }): React.JSX.Element {
   const { project, tasks, filter, collapsed } = props
@@ -162,6 +145,7 @@ function ProjectSection(props: {
                   onEdit={() => props.setEditingId(task.id)}
                   onOpen={() => props.setDetailId(task.id)}
                   onOpenTask={props.setDetailId}
+                  onOpenSession={props.onOpenSession}
                 />
               )
             )}
@@ -277,6 +261,7 @@ export function App(): React.JSX.Element {
             editingId={editingId}
             setEditingId={setEditingId}
             setDetailId={setDetailId}
+            onOpenSession={openSessionPanel}
             onCreateProject={onCreateProject}
           />
         ))}

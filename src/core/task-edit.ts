@@ -1,7 +1,7 @@
 import type { Task } from '@shared/types'
 import type { ProjectStore } from './db/project-store'
 import type { EditableTaskPatch, TaskStore } from './db/task-store'
-import { cleanupTaskWorkspace } from './executor/cleanup'
+import { cleanupTaskWorkspace, removeTaskWorktreeAndBranch } from './executor/cleanup'
 
 /**
  * 任务编辑统一编排:字段更新走 updateEditable(),状态升降级走 transition(),
@@ -59,6 +59,68 @@ export async function rerunFailedTask(
   await cleanupTaskWorkspace(stores, id)
   stores.tasks.prepareRerun(id)
   return stores.tasks.transition(id, 'scheduled', { scheduledAt: new Date().toISOString() })
+}
+
+/** 删除链 = 自身 + 全部接力后代(深度优先展开;环由 FK 结构排除) */
+function collectDeleteChain(store: TaskStore, id: string): Task[] {
+  const root = store.get(id)
+  if (!root) throw new Error(`task not found: ${id}`)
+  const chain: Task[] = []
+  const walk = (task: Task): void => {
+    chain.push(task)
+    for (const child of store.listChildren(task.id)) walk(child)
+  }
+  walk(root)
+  return chain
+}
+
+const EXECUTING: readonly string[] = ['running', 'merging']
+
+export interface DeletePreview {
+  /** 含自身;删除按此逆序(先后代)执行 */
+  chain: Task[]
+  /** 链上有未合并改动的任务(conflict/awaiting_merge),删除等同放弃合并 */
+  unmerged: Task[]
+  /** 链上有遗留 worktree 待一并清理的任务 */
+  withWorktree: Task[]
+}
+
+/** 删除前预览(确认弹窗的说明文案依据);链上有执行中任务时抛错 */
+export function previewDelete(store: TaskStore, id: string): DeletePreview {
+  const chain = collectDeleteChain(store, id)
+  const executing = chain.find((t) => EXECUTING.includes(t.status))
+  if (executing) {
+    throw new Error(
+      executing.id === id
+        ? `任务状态 ${executing.status} 不可删除,请先中断`
+        : '该任务的接力会话仍在执行,请先终止或等待结束'
+    )
+  }
+  return {
+    chain,
+    unmerged: chain.filter((t) => t.status === 'conflict' || t.status === 'awaiting_merge'),
+    withWorktree: chain.filter((t) => t.worktreePath !== null)
+  }
+}
+
+/**
+ * 删除任务及其接力链(用户裁决,不可恢复;磁盘归档永久保留):
+ * 逐个(先后代后自身)清理 worktree 与任务分支后删行——不经状态迁移,
+ * 避免删除前触发误导性的失败通知。广播由壳层在完成后显式发出。
+ */
+export async function deleteTask(
+  stores: { tasks: TaskStore; projects: ProjectStore },
+  id: string
+): Promise<void> {
+  const { chain } = previewDelete(stores.tasks, id)
+  for (const task of [...chain].reverse()) {
+    if (task.worktreePath) {
+      const project = stores.projects.get(task.projectId)
+      if (!project) throw new Error(`任务关联项目不存在: ${task.projectId}`)
+      await removeTaskWorktreeAndBranch(project, task)
+    }
+    stores.tasks.delete(task.id)
+  }
 }
 
 /** 放弃 conflict/awaiting_merge → failed(abandoned);worktree 保留,由清理策略延后回收 */

@@ -16,7 +16,14 @@ import { runDetections } from '@core/agents/detection'
 import { followUpTransport, renderSessionArgs, supportsTerminalResume } from '@core/agents/session'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
-import { abandonTask, cancelScheduled, editTask, rerunFailedTask, toggleTodo } from '@core/task-edit'
+import {
+  abandonTask,
+  cancelScheduled,
+  deleteTask,
+  editTask,
+  rerunFailedTask,
+  toggleTodo
+} from '@core/task-edit'
 import { cleanupTaskWorkspace } from '@core/executor/cleanup'
 import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
@@ -125,6 +132,14 @@ export function registerIpcHandlers(
     if (!execution.interrupt(id)) {
       throw new Error('当前阶段不可中断(可能正在合并),稍候再试')
     }
+  })
+
+  // 删行不走 TaskStore.onChange(避免误发失败通知),完成后显式广播触发列表刷新
+  handle('task:delete', async ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    await deleteTask({ tasks: ctx.tasks, projects: ctx.projects }, id)
+    broadcast('task:changed', { taskId: id, status: task.status })
   })
 
   handle('task:follow-up-start', ({ parentId }) => sessions.start(parentId))

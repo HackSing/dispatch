@@ -564,3 +564,47 @@ input[type='datetime-local']:focus {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ── 任务操作菜单(⋯ 下拉) ── */
+.menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.menu-btn {
+  font-weight: 700;
+  padding: 3px 8px;
+}
+.menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 150px;
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  z-index: 30;
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #1d1d1f;
+}
+.menu-item:hover {
+  background: #f5f5f7;
+}
+.menu-item.danger {
+  color: #ff453a;
+}
+.menu-item.danger:hover {
+  background: #fff1f0;
+}

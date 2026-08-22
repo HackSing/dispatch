@@ -6,7 +6,7 @@ import type { TaskResult } from '@core/agents/types'
 import { useAppStore } from '../stores/app-store'
 import { agentChainLabel, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
-import { TaskOps, ToggleTodoButton } from './TaskOps'
+import { TaskMenu } from './TaskMenu'
 
 const ACTIVE_POLL_MS = 3000
 
@@ -51,78 +51,6 @@ function Section(props: {
       <h3>{props.title}</h3>
       {props.children}
     </section>
-  )
-}
-
-/** 会话入口区:继续对话(开面板)/ 打开会话面板(重入)/ 在终端打开会话(逃生舱) */
-function SessionEntry(props: {
-  task: Task
-  onOpenSession?: (taskId: string) => void
-}): React.JSX.Element | null {
-  const { task, onOpenSession } = props
-  const capabilities = useAppStore((s) => s.capabilities)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const capability = task.agent ? capabilities?.[task.agent] : undefined
-  const settled = task.status === 'done' || task.status === 'failed'
-  const canFollowUp = settled && task.sessionId !== null && capability?.followUp === true
-  const canTerminal = task.sessionId !== null && capability?.terminal === true
-  // 接力任务执行中(面板会话进行中)允许重新打开面板视图
-  const canReattach = task.status === 'running' && task.parentTaskId !== null
-
-  if (!canFollowUp && !canTerminal && !canReattach) return null
-
-  const run = (fn: () => Promise<void>): void => {
-    setBusy(true)
-    setError(null)
-    void fn()
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setBusy(false))
-  }
-
-  const startFollowUp = (): void =>
-    run(async () => {
-      const follow = await window.dispatchApi.invoke('task:follow-up-start', { parentId: task.id })
-      onOpenSession?.(follow.id)
-    })
-
-  const openTerminal = (): void =>
-    run(() => window.dispatchApi.invoke('task:open-session-terminal', { id: task.id }))
-
-  return (
-    <div className="detail-actions session-entry">
-      {canFollowUp && (
-        <button
-          className="btn primary"
-          disabled={busy}
-          title="在原会话上继续多轮对话(新工作区,结束时一次合并)"
-          onClick={startFollowUp}
-        >
-          继续对话
-        </button>
-      )}
-      {canReattach && (
-        <button
-          className="btn primary"
-          disabled={busy}
-          title="回到进行中的会话面板"
-          onClick={() => onOpenSession?.(task.id)}
-        >
-          打开会话面板
-        </button>
-      )}
-      {canTerminal && (
-        <button
-          className="btn"
-          disabled={busy}
-          title="在系统终端里交互式续接该会话(改动不经 Dispatch 管线)"
-          onClick={openTerminal}
-        >
-          在终端打开会话
-        </button>
-      )}
-      {error && <span className="form-error">{error}</span>}
-    </div>
   )
 }
 
@@ -219,27 +147,11 @@ export function TaskDetail(props: {
               打开归档
             </button>
           )}
+          <TaskMenu task={task} onOpenTask={onOpenTask} onOpenSession={props.onOpenSession} />
           <button className="btn" onClick={onClose}>
             关闭 Esc
           </button>
         </header>
-
-        {(task.status === 'running' ||
-          task.status === 'failed' ||
-          task.status === 'conflict' ||
-          task.status === 'awaiting_merge') && (
-          <div className="detail-actions">
-            <TaskOps task={task} onOpenTask={onOpenTask} />
-          </div>
-        )}
-
-        {(task.status === 'todo' || task.status === 'done') && (
-          <div className="detail-actions">
-            <ToggleTodoButton task={task} verbose />
-          </div>
-        )}
-
-        <SessionEntry task={task} onOpenSession={props.onOpenSession} />
 
         <div className="detail-body">
           {task.status === 'conflict' && task.worktreePath && (
