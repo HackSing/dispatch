@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
+ 
 /* global require, process, console, setTimeout */
 // 测试用 mock agent:纯 Node 脚本,不依赖仓库代码,由模式参数驱动行为。
 // 通过 GenericCliAdapter 以 bin=process.execPath + headless_args=[本脚本] 方式喂入,
