@@ -1,0 +1,32 @@
+# The @aiwaretop/dsh-headless-session bundle patch: one-shot task mode with
+# durable, resumable sessions, riding over dsh-base + dsh-headless. The
+# headless bundle's own startup/runner pair is disabled and replaced by this
+# bundle's session-aware pair; sandbox and approval are opened for this
+# profile only.
+
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- id: sandbox-policy
+  config:
+    mode: danger-full-access
+
+- id: approval
+  config:
+    policy: never
+
+- insert:
+    - id: dispatch-headless-startup
+      name: '@aiwaretop/dsh-headless-session/startup'
+
+    # Reads its task and session selection from the dispatchHeadlessStartup provider.
+    - id: dispatch-headless-runner
+      name: '@aiwaretop/dsh-headless-session'
+      inject: [dispatchHeadlessStartup]
+      config:
+        task: !!js ctx.dispatchHeadlessStartup.task
+        sessionId: !!js ctx.dispatchHeadlessStartup.sessionId
+        resumeId: !!js ctx.dispatchHeadlessStartup.resumeId
