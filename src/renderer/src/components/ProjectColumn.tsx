@@ -5,7 +5,7 @@ import { useAppStore } from '../stores/app-store'
 import { TaskEditForm } from './TaskEditForm'
 import { TaskMenu } from './TaskMenu'
 import { DotsIcon, GripIcon } from './icons'
-import { agentChainLabel, statusBadgeLabel } from '../lib/task-labels'
+import { agentChainLabel, humanFailReason, statusBadgeLabel } from '../lib/task-labels'
 import { FILTER_LABELS, matchesFilter, type TaskFilter } from '../lib/task-filters'
 import { usePopoverDismiss } from '../lib/use-popover'
 import { formatElapsed, formatTime } from '../lib/time'
@@ -63,7 +63,7 @@ function TaskCard(props: {
           {triggerLabel(task) && <span>{triggerLabel(task)}</span>}
           {task.agent && <span className="agent-chain mono">{agentChainLabel(task)}</span>}
           <span>创建:{formatTime(task.createdAt)}</span>
-          {task.failReason && <span className="form-error">{task.failReason}</span>}
+          {task.failReason && <span className="form-error">{humanFailReason(task.failReason)}</span>}
           {actionError && <span className="form-error">{actionError}</span>}
         </div>
       </div>

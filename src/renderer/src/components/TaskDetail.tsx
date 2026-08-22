@@ -4,7 +4,7 @@ import type { Task } from '@shared/types'
 import type { TaskArchive } from '@shared/ipc'
 import type { TaskResult } from '@core/agents/types'
 import { useAppStore } from '../stores/app-store'
-import { agentChainLabel, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
+import { agentChainLabel, humanFailReason, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
 import { TaskMenu } from './TaskMenu'
 
@@ -225,7 +225,10 @@ export function TaskDetail(props: {
               {task.failReason && (
                 <div className="kv">
                   <span className="k">失败原因</span>
-                  <span className="v form-error">{task.failReason}</span>
+                  <span className="v form-error">
+                    {humanFailReason(task.failReason)}
+                    <span style={{ color: '#8e8e93' }}>({task.failReason})</span>
+                  </span>
                 </div>
               )}
             </div>

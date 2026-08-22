@@ -51,3 +51,48 @@ export function phaseDetailLabel(task: Task): string | null {
   if (!task.phase) return null
   return `${PHASE_LABELS[task.phase]}${roundSuffix(task)}`
 }
+
+/**
+ * failReason 技术码 → 人话中文。
+ * 词表与 core 写入点同步(src/core/executor/index.ts、workflow.ts、follow-up.ts、
+ * src/core/scheduler/recovery.ts、src/core/task-edit.ts、dispose 原因来自
+ * src/shell/index.ts 与 dsh-plugin host):新增 failReason 时必须在此补映射。
+ * 未认识的码原样返回,不抛错。
+ */
+const FAIL_REASON_LABELS: Record<string, string> = {
+  timeout: '执行超时',
+  timeout_plan: '方案阶段超时',
+  timeout_implement: '实现阶段超时',
+  timeout_review: '审查阶段超时',
+  timeout_round: '本轮超时,会话终止',
+  user_interrupted: '已手动中断',
+  interrupted: '运行中被中断(应用退出)',
+  abandoned: '已放弃',
+  session_abandoned: '会话已放弃',
+  missed_skipped: '错过定时,按策略跳过',
+  prepare_failed: '准备命令失败(prepare_cmd)',
+  no_plan: '未产出方案文件(plan.md)',
+  no_result: '未产出结果文件(result.json)',
+  bad_result: '结果文件格式不合法',
+  result_failed: '智能体报告执行失败',
+  worktree_missing: '工作区已丢失',
+  review_rejected: '审查未通过,超过返工上限',
+  base_dirty: '基线分支有未提交改动',
+  base_checked_out_elsewhere: '基线被其他任务占用',
+  app_quit: '应用退出,任务被中断',
+  plugin_dispose: '服务退出,任务被中断'
+}
+
+export function humanFailReason(reason: string): string {
+  const fixed = FAIL_REASON_LABELS[reason]
+  if (fixed) return fixed
+  let m = /^exit_(-?\d+)$/.exec(reason)
+  if (m) return `进程退出(码 ${m[1]})`
+  m = /^session_exit_(-?\d+|null)$/.exec(reason)
+  if (m) return `会话进程退出(码 ${m[1] === 'null' ? '未知' : m[1]})`
+  if (reason.startsWith('agent_not_ready: ')) return `智能体未就绪:${reason.slice('agent_not_ready: '.length)}`
+  if (reason.startsWith('round_error: ')) return `轮次失败:${reason.slice('round_error: '.length)}`
+  if (reason.startsWith('internal: ')) return `内部错误:${reason.slice('internal: '.length)}`
+  if (reason.startsWith('merge_retry: ')) return `合入失败,待重试:${reason.slice('merge_retry: '.length)}`
+  return reason
+}
