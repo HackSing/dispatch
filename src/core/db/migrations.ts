@@ -51,6 +51,15 @@ const MIGRATIONS: Migration[] = [
         checked_at  TEXT NOT NULL
       );
     `
+  },
+  {
+    version: 2,
+    name: 'workflow-stage1',
+    sql: `
+      ALTER TABLE tasks ADD COLUMN sub_agent TEXT;
+      ALTER TABLE tasks ADD COLUMN phase TEXT;
+      ALTER TABLE tasks ADD COLUMN review_round INTEGER NOT NULL DEFAULT 0;
+    `
   }
 ]
 

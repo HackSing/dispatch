@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from 'better-sqlite3'
-import type { AgentId, Task, TriggerType } from '@shared/types'
+import type { AgentId, Task, TaskPhase, TriggerType } from '@shared/types'
 import { assertTransition, type TaskStatus } from '@shared/state-machine'
 
 interface TaskRow {
@@ -9,9 +9,12 @@ interface TaskRow {
   text: string
   project_id: string
   agent: string | null
+  sub_agent: string | null
   trigger_type: string
   trigger_at: string | null
   status: string
+  phase: string | null
+  review_round: number
   base_branch: string | null
   branch: string | null
   worktree_path: string | null
@@ -30,9 +33,12 @@ function toTask(row: TaskRow): Task {
     text: row.text,
     projectId: row.project_id,
     agent: row.agent as AgentId | null,
+    subAgent: row.sub_agent as AgentId | null,
     triggerType: row.trigger_type as TriggerType,
     triggerAt: row.trigger_at,
     status: row.status as TaskStatus,
+    phase: row.phase as TaskPhase | null,
+    reviewRound: row.review_round,
     baseBranch: row.base_branch,
     branch: row.branch,
     worktreePath: row.worktree_path,
@@ -49,6 +55,8 @@ export interface CreateTaskInput {
   text: string
   projectId: string
   agent?: AgentId | null
+  /** 工作流子智能体,可空;非空时 agent 为主智能体且必填 */
+  subAgent?: AgentId | null
   triggerType: TriggerType
   triggerAt?: string | null
 }
@@ -58,6 +66,7 @@ export interface EditableTaskPatch {
   text?: string
   projectId?: string
   agent?: AgentId | null
+  subAgent?: AgentId | null
   triggerType?: TriggerType
   triggerAt?: string | null
 }
@@ -113,6 +122,9 @@ export class TaskStore {
     if (input.triggerType !== 'none' && !input.agent) {
       throw new Error('可执行任务(trigger ≠ none)必须指定 agent')
     }
+    if (input.subAgent && !input.agent) {
+      throw new Error('选择子智能体时必须先选择主智能体')
+    }
     if (input.triggerType === 'at' && !input.triggerAt) {
       throw new Error('定时任务必须提供 triggerAt')
     }
@@ -123,9 +135,12 @@ export class TaskStore {
       text: input.text,
       projectId: input.projectId,
       agent: input.agent ?? null,
+      subAgent: input.subAgent ?? null,
       triggerType: input.triggerType,
       triggerAt: input.triggerType === 'at' ? (input.triggerAt ?? null) : null,
       status: input.triggerType === 'none' ? 'todo' : 'scheduled',
+      phase: null,
+      reviewRound: 0,
       baseBranch: null,
       branch: null,
       worktreePath: null,
@@ -138,10 +153,10 @@ export class TaskStore {
     }
     this.db
       .prepare(
-        `INSERT INTO tasks (id, created_at, text, project_id, agent, trigger_type, trigger_at,
-                            status, scheduled_at)
-         VALUES (@id, @createdAt, @text, @projectId, @agent, @triggerType, @triggerAt,
-                 @status, @scheduledAt)`
+        `INSERT INTO tasks (id, created_at, text, project_id, agent, sub_agent, trigger_type,
+                            trigger_at, status, scheduled_at)
+         VALUES (@id, @createdAt, @text, @projectId, @agent, @subAgent, @triggerType,
+                 @triggerAt, @status, @scheduledAt)`
       )
       .run({
         id: task.id,
@@ -149,6 +164,7 @@ export class TaskStore {
         text: task.text,
         projectId: task.projectId,
         agent: task.agent,
+        subAgent: task.subAgent,
         triggerType: task.triggerType,
         triggerAt: task.triggerAt,
         status: task.status,
@@ -191,12 +207,16 @@ export class TaskStore {
       text: patch.text ?? current.text,
       projectId: patch.projectId ?? current.projectId,
       agent: patch.agent !== undefined ? patch.agent : current.agent,
+      subAgent: patch.subAgent !== undefined ? patch.subAgent : current.subAgent,
       triggerType: patch.triggerType ?? current.triggerType,
       triggerAt: patch.triggerAt !== undefined ? patch.triggerAt : current.triggerAt
     }
     if (!next.text.trim()) throw new Error('任务文本不能为空')
     if (next.triggerType !== 'none' && !next.agent) {
       throw new Error('可执行任务(trigger ≠ none)必须指定 agent')
+    }
+    if (next.subAgent && !next.agent) {
+      throw new Error('选择子智能体时必须先选择主智能体')
     }
     if (next.triggerType === 'at' && !next.triggerAt) {
       throw new Error('定时任务必须提供 triggerAt')
@@ -205,7 +225,8 @@ export class TaskStore {
     this.db
       .prepare(
         `UPDATE tasks SET text = @text, project_id = @projectId, agent = @agent,
-           trigger_type = @triggerType, trigger_at = @triggerAt WHERE id = @id`
+           sub_agent = @subAgent, trigger_type = @triggerType, trigger_at = @triggerAt
+         WHERE id = @id`
       )
       .run({ id, ...next })
     const updated = this.get(id)
@@ -244,6 +265,29 @@ export class TaskStore {
     this.db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = @id`).run(params)
     const updated = this.get(id)
     if (!updated) throw new Error(`task disappeared during attach: ${id}`)
+    this.onChange?.(updated)
+    return updated
+  }
+
+  /**
+   * W1a 追加:工作流阶段推进,仅 running 状态允许(phase 是展示性字段,不进状态机)。
+   * 约束:reviewRound 只增不减;离开 running 前由 executor 显式 setPhase(id, null) 清场,
+   * 本方法与 transition() 各管各的字段,不互相代劳。
+   */
+  setPhase(id: string, phase: TaskPhase | null, reviewRound?: number): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'running') {
+      throw new Error(`任务状态 ${current.status} 不允许设置 phase`)
+    }
+    if (reviewRound !== undefined && reviewRound < current.reviewRound) {
+      throw new Error(`reviewRound 只能单调递增: ${current.reviewRound} -> ${reviewRound}`)
+    }
+    this.db
+      .prepare('UPDATE tasks SET phase = @phase, review_round = @reviewRound WHERE id = @id')
+      .run({ id, phase, reviewRound: reviewRound ?? current.reviewRound })
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during setPhase: ${id}`)
     this.onChange?.(updated)
     return updated
   }

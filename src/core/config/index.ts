@@ -66,6 +66,14 @@ export const ConfigSchema = z.object({
   hotkey: z.string().default('CommandOrControl+Shift+Space'),
   max_concurrency: z.number().int().min(1).default(2),
   task_timeout_min: z.number().int().min(1).default(30),
+  /** 工作流模式每阶段独立超时(Plan workflow-stage1 决策);单点模式仍用 task_timeout_min */
+  workflow_phase_timeout_min: z
+    .object({
+      plan: z.number().int().min(1).default(30),
+      implement: z.number().int().min(1).default(30),
+      review: z.number().int().min(1).default(15)
+    })
+    .default(() => ({ plan: 30, implement: 30, review: 15 })),
   daily_report_time: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)

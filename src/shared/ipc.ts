@@ -19,6 +19,8 @@ export interface CreateTaskPayload {
   text: string
   projectId: string
   agent: AgentId | null
+  /** 工作流模式子智能体,可空;非空时 agent 为主智能体 */
+  subAgent: AgentId | null
   triggerType: TriggerType
   triggerAt: string | null
 }
@@ -29,6 +31,7 @@ export interface UpdateTaskPayload {
   text?: string
   projectId?: string
   agent?: AgentId | null
+  subAgent?: AgentId | null
   triggerType?: TriggerType
   triggerAt?: string | null
 }
@@ -42,6 +45,7 @@ export interface CreateProjectPayload {
 /** 捕获窗记忆项,持久化于 ~/.dispatch/ui-state.json(机器管理,损坏即重建) */
 export interface UiState {
   lastAgent: AgentId | null
+  lastSubAgent: AgentId | null
   lastProjectId: string | null
 }
 

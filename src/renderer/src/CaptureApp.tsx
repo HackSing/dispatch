@@ -99,6 +99,8 @@ export function CaptureApp(): React.JSX.Element {
         text,
         projectId,
         agent: agent || null,
+        // 子智能体选择器由 W1c 线补齐,此处先保持单点模式载荷完整
+        subAgent: null,
         triggerType: trigger.triggerType,
         triggerAt
       })

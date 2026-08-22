@@ -6,6 +6,7 @@ import type { UiState } from '@shared/ipc'
 /** 机器管理文件,非用户手写配置:缺失/损坏一律静默重建,禁止照 config 抛错 */
 const UiStateSchema = z.object({
   lastAgent: z.enum(AGENT_IDS).nullable().default(null),
+  lastSubAgent: z.enum(AGENT_IDS).nullable().default(null),
   lastProjectId: z.string().nullable().default(null)
 })
 
@@ -33,6 +34,7 @@ export function loadUiState(file: string): UiState {
 export function saveUiState(file: string, patch: Partial<UiState>): UiState {
   const next = { ...loadUiState(file) }
   if (patch.lastAgent !== undefined) next.lastAgent = patch.lastAgent
+  if (patch.lastSubAgent !== undefined) next.lastSubAgent = patch.lastSubAgent
   if (patch.lastProjectId !== undefined) next.lastProjectId = patch.lastProjectId
   writeUiState(file, next)
   return next

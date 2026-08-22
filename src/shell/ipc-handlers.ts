@@ -59,6 +59,7 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
       text: payload.text,
       projectId: payload.projectId,
       agent: payload.agent,
+      subAgent: payload.subAgent,
       triggerType: payload.triggerType,
       triggerAt: payload.triggerAt
     })

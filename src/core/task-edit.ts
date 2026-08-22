@@ -37,7 +37,7 @@ export function cancelScheduled(store: TaskStore, id: string): Task {
   return store.updateEditable(id, { triggerType: 'none', triggerAt: null })
 }
 
-/** 失败重跑 = 复制 text/projectId/agent 为新任务立即入队(spec §3.2);原任务保持 failed 终态 */
+/** 失败重跑 = 复制 text/projectId/主子智能体为新任务立即入队(spec §3.2);原任务保持 failed 终态 */
 export function rerunFailedTask(store: TaskStore, id: string): Task {
   const current = store.get(id)
   if (!current) throw new Error(`task not found: ${id}`)
@@ -47,6 +47,7 @@ export function rerunFailedTask(store: TaskStore, id: string): Task {
     text: current.text,
     projectId: current.projectId,
     agent: current.agent,
+    subAgent: current.subAgent,
     triggerType: 'immediate'
   })
 }

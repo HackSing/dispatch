@@ -1,9 +1,25 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const PROMPT_VARS = ['TASK_TEXT', 'OUT_DIR', 'PROJECT_PATH', 'BASE_BRANCH'] as const
+export const PROMPT_VARS = [
+  'TASK_TEXT',
+  'OUT_DIR',
+  'PROJECT_PATH',
+  'BASE_BRANCH',
+  /** 工作流返工轮注入的审查意见;首轮与非工作流模板中替换为「无」 */
+  'REVIEW_FEEDBACK',
+  /** 工作流审查轮次(从 1 起),决定 review-r<N>.json 产物文件名 */
+  'REVIEW_ROUND'
+] as const
 export type PromptVarName = (typeof PROMPT_VARS)[number]
-export type PromptVars = Record<PromptVarName, string>
+/** REVIEW_FEEDBACK/REVIEW_ROUND 仅工作流模板需要,其余调用点可省略(缺省替换为「无」) */
+export type PromptVars = Record<
+  Exclude<PromptVarName, 'REVIEW_FEEDBACK' | 'REVIEW_ROUND'>,
+  string
+> & {
+  REVIEW_FEEDBACK?: string
+  REVIEW_ROUND?: string
+}
 
 /**
  * 占位模板:正式模板由 resources/prompts/default.md 提供(另一条线产出),
@@ -33,17 +49,25 @@ BASE_BRANCH: {BASE_BRANCH}
 `
 
 /**
- * promptsDir/default.md 为用户可编辑真源;缺失时从内置模板拷贝一份再读,
- * 内置文件也缺失时落盘占位模板兜底。
+ * promptsDir/<fileName> 为用户可编辑真源;缺失时从内置模板拷贝一份再读。
+ * 仅 default.md 允许占位兜底;工作流模板(wf-*.md)内置缺失属安装损坏,明确报错。
  */
-export function loadPromptTemplate(promptsDir: string, builtinFile?: string): string {
-  const target = join(promptsDir, 'default.md')
+export function loadPromptTemplate(
+  promptsDir: string,
+  builtinFile?: string,
+  fileName = 'default.md'
+): string {
+  const target = join(promptsDir, fileName)
   if (!existsSync(target)) {
     mkdirSync(promptsDir, { recursive: true })
-    const source =
-      builtinFile && existsSync(builtinFile)
-        ? readFileSync(builtinFile, 'utf-8')
-        : FALLBACK_TEMPLATE
+    let source: string
+    if (builtinFile && existsSync(builtinFile)) {
+      source = readFileSync(builtinFile, 'utf-8')
+    } else if (fileName === 'default.md') {
+      source = FALLBACK_TEMPLATE
+    } else {
+      throw new Error(`提示词模板缺失: ${fileName}(内置文件不存在: ${builtinFile ?? '未提供'})`)
+    }
     writeFileSync(target, source, 'utf-8')
   }
   return readFileSync(target, 'utf-8')
@@ -51,7 +75,10 @@ export function loadPromptTemplate(promptsDir: string, builtinFile?: string): st
 
 const VAR_PATTERN = new RegExp(`\\{(${PROMPT_VARS.join('|')})\\}`, 'g')
 
-/** 只替换四个已知变量,未知 {VAR} 原样保留 */
+/** 只替换已知变量,未知 {VAR} 原样保留;未提供的可选变量替换为「无」 */
 export function renderPrompt(template: string, vars: PromptVars): string {
-  return template.replace(VAR_PATTERN, (_, name: PromptVarName) => vars[name])
+  return template.replace(
+    VAR_PATTERN,
+    (_, name: PromptVarName) => (vars as Partial<Record<PromptVarName, string>>)[name] ?? '无'
+  )
 }
