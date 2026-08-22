@@ -73,6 +73,12 @@ export interface InvokeMap {
   'task:run-now': { req: { id: string }; res: Task }
   'task:archive': { req: { id: string }; res: TaskArchive }
   'task:open-archive': { req: { id: string }; res: void }
+  /** failed 任务复制为新任务立即入队(spec 失败重跑);返回新任务 */
+  'task:rerun': { req: { id: string }; res: Task }
+  /** awaiting_merge/conflict 手动重试合并(spec「已解决,重试合并」) */
+  'task:retry-merge': { req: { id: string }; res: Task }
+  /** conflict/awaiting_merge 放弃 → failed(fail_reason=abandoned),worktree 保留待清理 */
+  'task:abandon': { req: { id: string }; res: Task }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
   'project:pick-directory': { req: void; res: string | null }
@@ -87,6 +93,8 @@ export interface InvokeMap {
 export interface EventMap {
   'task:changed': { taskId: string; status: TaskStatus }
   'agent:detections-changed': { detections: AgentDetection[] }
+  /** 系统通知点击等入口要求主窗打开某任务详情 */
+  'ui:open-task': { taskId: string }
 }
 
 export type InvokeChannel = keyof InvokeMap
@@ -103,6 +111,9 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:run-now',
   'task:archive',
   'task:open-archive',
+  'task:rerun',
+  'task:retry-merge',
+  'task:abandon',
   'project:list',
   'project:create',
   'project:pick-directory',
@@ -112,7 +123,11 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'ui-state:set',
   'capture:hide'
 ]
-export const EVENT_CHANNELS: readonly EventChannel[] = ['task:changed', 'agent:detections-changed']
+export const EVENT_CHANNELS: readonly EventChannel[] = [
+  'task:changed',
+  'agent:detections-changed',
+  'ui:open-task'
+]
 
 /** preload 暴露到 window.dispatchApi 的形状 */
 export interface DispatchApi {
