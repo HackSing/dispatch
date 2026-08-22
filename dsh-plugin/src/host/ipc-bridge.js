@@ -44,11 +44,19 @@ async function handle(rt, broadcast, channel, p) {
         platform: process.platform,
       };
     case 'app:hotkey-status': {
-      // dsh-buddy 壳注册成功时在子进程 env 注入状态(lib/global-hotkey.js
-      // hotkeyChildEnv);无壳/旧壳/注册失败时诚实返回未注册
-      const registered = process.env.DSH_BUDDY_HOTKEY_REGISTERED === '1';
+      // 三态契约(数据源:dsh-buddy lib/global-hotkey.js 的 hotkeyChildEnv):
+      //   env 缺失 → 注册状态未知(无壳/旧壳),返回 null,渲染层不显示横幅
+      //   '1'      → 壳注册成功
+      //   '0'      → 壳尝试注册但失败,附 hint 指引(壳只读 DSH_BUDDY_HOTKEY,不看 config.json)
+      const registeredEnv = process.env.DSH_BUDDY_HOTKEY_REGISTERED;
+      if (registeredEnv === undefined) return null;
       const accelerator = process.env.DSH_BUDDY_HOTKEY_ACCELERATOR || ctx.config.hotkey;
-      return { accelerator, registered };
+      if (registeredEnv === '1') return { accelerator, registered: true };
+      return {
+        accelerator,
+        registered: false,
+        hint: '请以环境变量 DSH_BUDDY_HOTKEY=<新键位> 重启 DSH Buddy 更换键位(壳不读取 config.json 的 hotkey)。',
+      };
     }
     case 'capture:hide':
       // client 模态自管理,此通道仅为兼容 CaptureApp 调用面

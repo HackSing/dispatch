@@ -13,6 +13,8 @@ export interface AppStatus {
 export interface HotkeyStatus {
   accelerator: string
   registered: boolean
+  /** 横幅补救指引,由宿主按拓扑供给;缺省用 renderer 内置的独立版文案 */
+  hint?: string
 }
 
 export interface CreateTaskPayload {
@@ -95,7 +97,7 @@ export interface TaskArchive {
 /** invoke 型通道:渲染层请求 → 主进程响应 */
 export interface InvokeMap {
   'app:status': { req: void; res: AppStatus }
-  'app:hotkey-status': { req: void; res: HotkeyStatus }
+  'app:hotkey-status': { req: void; res: HotkeyStatus | null }
   'task:create': { req: CreateTaskPayload; res: Task }
   'task:list': { req: void; res: Task[] }
   'task:update': { req: UpdateTaskPayload; res: Task }

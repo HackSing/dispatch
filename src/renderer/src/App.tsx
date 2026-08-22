@@ -47,9 +47,13 @@ export function App(): React.JSX.Element {
     <div className="app">
       {store.hotkey && !store.hotkey.registered && (
         <div className="banner">
-          全局快捷键 <code>{store.hotkey.accelerator}</code>{' '}
-          注册失败,可能已被其他应用占用。请修改 <code>~/.dispatch/config.json</code> 的{' '}
-          <code>hotkey</code> 字段后重启应用(设置页将在后续版本提供)。
+          全局快捷键 <code>{store.hotkey.accelerator}</code> 注册失败,可能已被其他应用占用。
+          {store.hotkey.hint ?? (
+            <>
+              请修改 <code>~/.dispatch/config.json</code> 的 <code>hotkey</code>{' '}
+              字段后重启应用(设置页将在后续版本提供)。
+            </>
+          )}
         </div>
       )}
       <header className="app-header">

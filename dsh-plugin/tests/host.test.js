@@ -55,15 +55,26 @@ test('invoke 全链:建任务→列表→状态', async () => {
   assert.equal(statusBody.value.dispatchHome, process.env.DISPATCH_HOME);
   assert.equal(statusBody.value.platform, process.platform);
 
-  // 壳快捷键状态经 env 透出(hotkeyChildEnv 注入);无壳时诚实返回未注册
-  const hotkey = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
-  assert.equal(hotkey.body().value.registered, false);
+  // 壳快捷键状态经 env 透出(hotkeyChildEnv 注入),三态:缺失→null 未知;'1'→成功;'0'→失败带 hint
   const prevReg = process.env.DSH_BUDDY_HOTKEY_REGISTERED;
   const prevAcc = process.env.DSH_BUDDY_HOTKEY_ACCELERATOR;
+  delete process.env.DSH_BUDDY_HOTKEY_REGISTERED;
+  delete process.env.DSH_BUDDY_HOTKEY_ACCELERATOR;
+  const hotkeyUnknown = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
+  assert.equal(hotkeyUnknown.body().value, null);
+
   process.env.DSH_BUDDY_HOTKEY_REGISTERED = '1';
   process.env.DSH_BUDDY_HOTKEY_ACCELERATOR = 'Alt+Space';
   const hotkeyOn = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
   assert.deepEqual(hotkeyOn.body().value, { accelerator: 'Alt+Space', registered: true });
+
+  process.env.DSH_BUDDY_HOTKEY_REGISTERED = '0';
+  const hotkeyFailed = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/app:hotkey-status' }), fakeRes());
+  const failedBody = hotkeyFailed.body().value;
+  assert.equal(failedBody.registered, false);
+  assert.equal(failedBody.accelerator, 'Alt+Space');
+  assert.ok(failedBody.hint.includes('DSH_BUDDY_HOTKEY'));
+
   if (prevReg === undefined) delete process.env.DSH_BUDDY_HOTKEY_REGISTERED;
   else process.env.DSH_BUDDY_HOTKEY_REGISTERED = prevReg;
   if (prevAcc === undefined) delete process.env.DSH_BUDDY_HOTKEY_ACCELERATOR;
