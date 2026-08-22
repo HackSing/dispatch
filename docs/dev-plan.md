@@ -2,7 +2,7 @@
 
 > 依据 [dispatch-spec.md](dispatch-spec.md) v0.1 制定。已确认决策:**macOS 先行、Windows 随后**;技术栈 **Electron + React + TypeScript**;harness 任务流程以 `/Users/aiware/projects/docs-harness`(v2.9.1)的 AGENTS.md 工作流规则为合并来源。
 >
-> 状态:有效(现行方案)
+> 状态:有效(现行方案)。完整业务流程图见 [flows.md](flows.md)(端到端时序、状态机、执行/合并/调度恢复流程,与 main 实现逐边核对)。
 
 ---
 
