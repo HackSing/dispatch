@@ -404,3 +404,41 @@ input[type='datetime-local']:focus {
 .task-body {
   cursor: pointer;
 }
+
+/* ===== B3:失败重跑 / 冲突处理操作 ===== */
+.btn.danger {
+  border-color: #ff453a;
+  color: #ff453a;
+}
+.btn.danger:hover {
+  background: #fff1f0;
+}
+.detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e5e5ea;
+}
+.conflict-callout {
+  border: 1px solid #ff453a;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  font-size: 13px;
+}
+.conflict-callout p {
+  margin: 0 0 6px;
+}
+.conflict-callout code {
+  user-select: all;
+  word-break: break-all;
+}
+.detail-section.conflict-highlight {
+  border: 1px solid #ff453a;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 0 12px 10px;
+}

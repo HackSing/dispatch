@@ -51,16 +51,26 @@ describe('run', () => {
     process.env.MOCK_MODE = 'hang'
     const adapter = makeAdapter()
     const controller = new AbortController()
-    setTimeout(() => controller.abort(), 200)
-    const { exitCode } = await adapter.run({
-      prompt: `OUT_DIR: ${dir}\n`,
-      cwd: dir,
-      outDir: dir,
-      timeoutMs: 60_000,
-      onLog: () => {},
-      signal: controller.signal
-    })
-    expect(exitCode).toBe(-1)
+    // 必须等 pid 文件落盘再 abort:固定延时在全量并行跑满载时会先于 mock 启动完成而竞态
+    const waitPid = setInterval(() => {
+      if (existsSync(join(dir, 'mock.pid'))) {
+        clearInterval(waitPid)
+        controller.abort()
+      }
+    }, 50)
+    try {
+      const { exitCode } = await adapter.run({
+        prompt: `OUT_DIR: ${dir}\n`,
+        cwd: dir,
+        outDir: dir,
+        timeoutMs: 60_000,
+        onLog: () => {},
+        signal: controller.signal
+      })
+      expect(exitCode).toBe(-1)
+    } finally {
+      clearInterval(waitPid)
+    }
     const pid = Number(readFileSync(join(dir, 'mock.pid'), 'utf-8'))
     expect(() => process.kill(pid, 0)).toThrow()
   }, 15_000)

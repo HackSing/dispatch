@@ -6,7 +6,7 @@ import { SCHEMA_VERSION } from '@core/db'
 import { runDetections } from '@core/agents/detection'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
-import { cancelScheduled, completeTodo, editTask } from '@core/task-edit'
+import { abandonTask, cancelScheduled, completeTodo, editTask, rerunFailedTask } from '@core/task-edit'
 import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
@@ -82,6 +82,15 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
     execution.enqueue(task.id)
     return task
   })
+
+  // task:retry-merge 的 handler 由 B3 合并线注册,本线只提供 UI 入口
+  handle('task:rerun', ({ id }) => {
+    const copy = rerunFailedTask(ctx.tasks, id)
+    execution.maybeRunImmediate(copy)
+    return copy
+  })
+
+  handle('task:abandon', ({ id }) => abandonTask(ctx.tasks, id))
 
   handle('task:archive', ({ id }) => {
     const task = ctx.tasks.get(id)

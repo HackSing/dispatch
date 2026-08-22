@@ -4,6 +4,7 @@ import type { TaskStatus } from '@shared/state-machine'
 import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
+import { TaskOps } from './components/TaskOps'
 import { pickAndCreateProject } from './lib/projects'
 import { formatElapsed, formatTime } from './lib/time'
 
@@ -24,8 +25,13 @@ function triggerLabel(task: Task): string {
   return ''
 }
 
-function TaskRow(props: { task: Task; onEdit: () => void; onOpen: () => void }): React.JSX.Element {
-  const { task, onEdit, onOpen } = props
+function TaskRow(props: {
+  task: Task
+  onEdit: () => void
+  onOpen: () => void
+  onOpenTask: (taskId: string) => void
+}): React.JSX.Element {
+  const { task, onEdit, onOpen, onOpenTask } = props
   const [actionError, setActionError] = useState<string | null>(null)
   const editable = task.status === 'todo' || task.status === 'scheduled'
   const active = task.status === 'running' || task.status === 'merging'
@@ -87,6 +93,7 @@ function TaskRow(props: { task: Task; onEdit: () => void; onOpen: () => void }):
             </button>
           </>
         )}
+        <TaskOps task={task} onOpenTask={onOpenTask} />
       </div>
     </div>
   )
@@ -100,7 +107,13 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     void store.loadAll()
-    return store.subscribe()
+    const offStore = store.subscribe()
+    // 系统通知点击等入口要求打开指定任务详情
+    const offOpenTask = window.dispatchApi.on('ui:open-task', ({ taskId }) => setDetailId(taskId))
+    return () => {
+      offStore()
+      offOpenTask()
+    }
     // 仅挂载时执行一次:store 的方法引用稳定
   }, [])
 
@@ -163,6 +176,7 @@ export function App(): React.JSX.Element {
                       task={task}
                       onEdit={() => setEditingId(task.id)}
                       onOpen={() => setDetailId(task.id)}
+                      onOpenTask={setDetailId}
                     />
                   )
                 )}
@@ -171,7 +185,9 @@ export function App(): React.JSX.Element {
           )
         })}
       </main>
-      {detailTask && <TaskDetail task={detailTask} onClose={() => setDetailId(null)} />}
+      {detailTask && (
+        <TaskDetail task={detailTask} onClose={() => setDetailId(null)} onOpenTask={setDetailId} />
+      )}
     </div>
   )
 }

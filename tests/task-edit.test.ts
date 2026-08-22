@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import { openDatabase, ProjectStore, TaskStore } from '@core/db'
-import { cancelScheduled, completeTodo, editTask } from '@core/task-edit'
+import { abandonTask, cancelScheduled, completeTodo, editTask, rerunFailedTask } from '@core/task-edit'
 import type { Task } from '@shared/types'
 
 let dir: string
@@ -112,5 +112,94 @@ describe('completeTodo / cancelScheduled', () => {
       agent: 'claude-code'
     })
     expect(() => cancelScheduled(store, t.id)).toThrow(/scheduled/)
+  })
+})
+
+function makeFailed(): Task {
+  const t = store.create({
+    text: '原任务首行\n第二行细节',
+    projectId,
+    agent: 'claude-code',
+    triggerType: 'at',
+    triggerAt: '2026-09-01T10:00:00.000Z'
+  })
+  store.transition(t.id, 'running', { startedAt: new Date().toISOString() })
+  return store.transition(t.id, 'failed', {
+    failReason: 'timeout',
+    finishedAt: new Date().toISOString()
+  })
+}
+
+function makeMerging(): Task {
+  const t = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+  store.transition(t.id, 'running')
+  return store.transition(t.id, 'merging')
+}
+
+describe('rerunFailedTask 失败重跑', () => {
+  it('failed → 复制 text/projectId/agent 为新任务,immediate 入队', () => {
+    const failed = makeFailed()
+    const copy = rerunFailedTask(store, failed.id)
+    expect(copy.id).not.toBe(failed.id)
+    expect(copy).toMatchObject({
+      text: failed.text,
+      projectId: failed.projectId,
+      agent: failed.agent,
+      triggerType: 'immediate',
+      triggerAt: null,
+      status: 'scheduled',
+      failReason: null,
+      startedAt: null,
+      finishedAt: null
+    })
+    // 原任务保持 failed 终态不动
+    expect(store.get(failed.id)).toMatchObject({ status: 'failed', failReason: 'timeout' })
+  })
+
+  it('非 failed 拒绝重跑', () => {
+    const scheduled = store.create({
+      text: 'x',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'immediate'
+    })
+    expect(() => rerunFailedTask(store, scheduled.id)).toThrow(/failed/)
+    const todo = store.create({ text: 'y', projectId, triggerType: 'none' })
+    store.transition(todo.id, 'done')
+    expect(() => rerunFailedTask(store, todo.id)).toThrow(/failed/)
+  })
+
+  it('任务不存在报错', () => {
+    expect(() => rerunFailedTask(store, 'nope')).toThrow(/not found/)
+  })
+})
+
+describe('abandonTask 放弃', () => {
+  it('conflict → failed(fail_reason=abandoned)', () => {
+    const t = makeMerging()
+    store.transition(t.id, 'conflict', { finishedAt: '2026-08-22T01:00:00.000Z' })
+    const abandoned = abandonTask(store, t.id)
+    expect(abandoned).toMatchObject({
+      status: 'failed',
+      failReason: 'abandoned',
+      finishedAt: '2026-08-22T01:00:00.000Z'
+    })
+  })
+
+  it('awaiting_merge → failed(fail_reason=abandoned)', () => {
+    const t = makeMerging()
+    store.transition(t.id, 'awaiting_merge', { failReason: 'base_dirty' })
+    const abandoned = abandonTask(store, t.id)
+    expect(abandoned.status).toBe('failed')
+    expect(abandoned.failReason).toBe('abandoned')
+    expect(abandoned.finishedAt).not.toBeNull()
+  })
+
+  it('其余状态拒绝放弃', () => {
+    const failed = makeFailed()
+    expect(() => abandonTask(store, failed.id)).toThrow(/可放弃/)
+    const merging = makeMerging()
+    expect(() => abandonTask(store, merging.id)).toThrow(/可放弃/)
+    expect(() => abandonTask(store, 'nope')).toThrow(/not found/)
   })
 })

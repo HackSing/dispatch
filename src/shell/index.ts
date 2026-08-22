@@ -8,6 +8,7 @@ import { seedDefaultProject } from '@core/bootstrap'
 import { createTray } from './tray'
 import { createCaptureWindow, createMainWindow, showMainWindow, toggleCaptureWindow } from './windows'
 import { broadcast, refreshAgentDetections, registerIpcHandlers } from './ipc-handlers'
+import { notifyTaskStatusChange } from './notifications'
 import { ExecutionService } from './execution'
 import type { AppContext } from './context'
 
@@ -28,7 +29,10 @@ if (!gotLock) {
 
     const config = loadConfig(paths.configFile)
     const db = openDatabase(paths.dbFile)
-    const tasks = new TaskStore(db, (t) => broadcast('task:changed', { taskId: t.id, status: t.status }))
+    const tasks = new TaskStore(db, (t) => {
+      broadcast('task:changed', { taskId: t.id, status: t.status })
+      notifyTaskStatusChange(t)
+    })
     const projects = new ProjectStore(db)
     const detections = new DetectionStore(db)
     ctx = {
