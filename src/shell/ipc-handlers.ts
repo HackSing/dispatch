@@ -83,7 +83,6 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
     return task
   })
 
-  // task:retry-merge 的 handler 由 B3 合并线注册,本线只提供 UI 入口
   handle('task:rerun', ({ id }) => {
     const copy = rerunFailedTask(ctx.tasks, id)
     execution.maybeRunImmediate(copy)
@@ -91,6 +90,17 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
   })
 
   handle('task:abandon', ({ id }) => abandonTask(ctx.tasks, id))
+
+  handle('task:retry-merge', ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    if (task.status !== 'awaiting_merge' && task.status !== 'conflict') {
+      throw new Error(`任务状态 ${task.status} 不可重试合并`)
+    }
+    // 契约:立即返回当前任务,合并异步进行,进展经 task:changed 广播
+    execution.retryMerge(id)
+    return task
+  })
 
   handle('task:archive', ({ id }) => {
     const task = ctx.tasks.get(id)

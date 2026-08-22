@@ -75,6 +75,21 @@ export interface TransitionPatch {
   mergedAt?: string | null
 }
 
+/** B3 追加:崩溃恢复回填孤儿 worktree 的运行期路径,见 attachRuntimePaths() */
+export interface RuntimePathsPatch {
+  worktreePath?: string | null
+  branch?: string | null
+  archiveDir?: string | null
+}
+
+const RUNTIME_PATH_COLUMNS: Record<keyof RuntimePathsPatch, string> = {
+  worktreePath: 'worktree_path',
+  branch: 'branch',
+  archiveDir: 'archive_dir'
+}
+
+const RUNTIME_PATH_STATUSES = ['failed', 'conflict', 'awaiting_merge'] as const
+
 const PATCH_COLUMNS: Record<keyof TransitionPatch, string> = {
   failReason: 'fail_reason',
   baseBranch: 'base_branch',
@@ -195,6 +210,40 @@ export class TaskStore {
       .run({ id, ...next })
     const updated = this.get(id)
     if (!updated) throw new Error(`task disappeared during update: ${id}`)
+    this.onChange?.(updated)
+    return updated
+  }
+
+  /**
+   * B3 追加:崩溃恢复专用的受限回填入口,不是通用更新方法。约束:
+   * - 仅允许 failed/conflict/awaiting_merge 状态(恢复链路的落定态),其余状态一律抛错;
+   * - 仅允许 worktree_path/branch/archive_dir 三个字段,且只能补写当前为 NULL 的字段,
+   *   已有值不得覆盖(避免绕过 transition() 改写执行期事实);
+   * - 状态变更仍必须走 transition(),本方法不碰 status。
+   */
+  attachRuntimePaths(id: string, patch: RuntimePathsPatch): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (!(RUNTIME_PATH_STATUSES as readonly TaskStatus[]).includes(current.status)) {
+      throw new Error(`任务状态 ${current.status} 不允许回填运行期路径`)
+    }
+    const sets: string[] = []
+    const params: Record<string, unknown> = { id }
+    for (const [key, column] of Object.entries(RUNTIME_PATH_COLUMNS) as [
+      keyof RuntimePathsPatch,
+      string
+    ][]) {
+      if (patch[key] === undefined) continue
+      if (current[key] !== null) {
+        throw new Error(`任务 ${id} 的 ${key} 已有值,禁止覆盖回填`)
+      }
+      sets.push(`${column} = @${key}`)
+      params[key] = patch[key]
+    }
+    if (sets.length === 0) return current
+    this.db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = @id`).run(params)
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during attach: ${id}`)
     this.onChange?.(updated)
     return updated
   }

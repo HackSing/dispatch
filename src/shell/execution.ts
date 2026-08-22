@@ -5,7 +5,7 @@ import type { AgentId, Task } from '@shared/types'
 import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
 import { getPlatformOps } from '@core/platform'
 import { KeyedLock, Semaphore } from '@core/executor/locks'
-import { runTask, type ExecutorDeps } from '@core/executor'
+import { retryMerge, runTask, type ExecutorDeps } from '@core/executor'
 import type { AppContext } from './context'
 
 /**
@@ -41,5 +41,12 @@ export class ExecutionService {
 
   maybeRunImmediate(task: Task): void {
     if (task.triggerType === 'immediate' && task.status === 'scheduled') this.enqueue(task.id)
+  }
+
+  /** 重试合并(fire-and-forget):调度器周期重试与 task:retry-merge 手动触发共用 */
+  retryMerge(taskId: string): void {
+    void retryMerge(this.deps, taskId).catch((e: Error) =>
+      log.error(`任务 ${taskId} 重试合并编排异常: ${e.message}`)
+    )
   }
 }
