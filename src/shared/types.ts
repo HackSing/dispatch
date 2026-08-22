@@ -22,6 +22,13 @@ export interface Task {
   status: TaskStatus
   /** 见 TASK_PHASES;单点模式恒为 null */
   phase: TaskPhase | null
+  /**
+   * 主智能体最近一次 fresh run 的会话 id(执行前预生成落库;工作流模式 plan/review
+   * 各自生成、后写覆盖,任务最终留最后一次主 agent 会话)。null = 尚未执行或 agent 不支持会话。
+   */
+  sessionId: string | null
+  /** 接力任务指向原任务;null = 非接力。接力任务以 --resume 续原会话执行 */
+  parentTaskId: string | null
   /** 审查打回返工轮次,0 = 首轮实现 */
   reviewRound: number
   baseBranch: string | null

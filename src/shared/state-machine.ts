@@ -16,6 +16,7 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 /**
  * 合法迁移表。
  * - todo → done:普通待办手动勾选
+ * - done → todo:手动重开(勾错回退/完成后再改再跑);执行期历史字段保留不清
  * - scheduled → todo:取消执行,退回普通待办
  * - running → done:非 git 项目(no_vcs)执行成功,跳过合并
  * - running/merging → failed:含崩溃恢复(interrupted)
@@ -29,7 +30,7 @@ export const TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   awaiting_merge: ['merging', 'failed'],
   conflict: ['merging', 'failed'],
   failed: [],
-  done: []
+  done: ['todo']
 }
 
 export function canTransition(from: TaskStatus, to: TaskStatus): boolean {

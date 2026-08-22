@@ -4,6 +4,7 @@ import type { AgentConfig } from '@core/config'
 import type { PlatformOps } from '@core/platform'
 import { runShell, spawnShellDetached } from '@core/proc/shell'
 import { createLogFilter } from './log-filters'
+import { buildBaseArgs } from './session'
 import type { AgentAdapter, AgentRunOptions, DetectResult } from './types'
 
 const READY_TIMEOUT_MS = 30_000
@@ -64,7 +65,8 @@ export class GenericCliAdapter implements AgentAdapter {
 
   async run(opts: AgentRunOptions): Promise<{ exitCode: number }> {
     if (opts.signal?.aborted) return { exitCode: -1 }
-    const argv = [...this.config.headless_args, ...this.config.auto_approve_args]
+    const base = buildBaseArgs(this.id, this.config, opts)
+    const argv = [...base, ...this.config.auto_approve_args]
     if (this.config.prompt_via === 'arg') argv.push(opts.prompt)
     const child = spawn(this.config.bin, argv, {
       cwd: opts.cwd,

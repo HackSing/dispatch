@@ -15,6 +15,16 @@ export const AgentConfigSchema = z.object({
   start_cmd: z.string().nullable().default(null),
   /** 输出日志过滤器名,见 core/agents/log-filters.ts;null = 原样落盘 */
   log_filter: z.enum(['claude_stream_json']).nullable().default(null),
+  /**
+   * 会话寻址三件套({SESSION_ID} 占位,渲染见 core/agents/session.ts):
+   * - session_args:fresh run 追加(置于 headless_args 之前,保住 kimi「prompt flag 最后」约束),
+   *   空数组 = 该 agent 不支持预生成会话 id;
+   * - resume_headless_args:接力(resume)运行时整体替换 headless_args,空 = 不支持续会话;
+   * - interactive_resume_cmd:终端逃生舱命令模板,null = 不提供终端入口。
+   */
+  session_args: z.array(z.string()).default([]),
+  resume_headless_args: z.array(z.string()).default([]),
+  interactive_resume_cmd: z.string().nullable().default(null),
   calibrated: z
     .object({ date: z.string(), cli_version: z.string() })
     .nullable()
@@ -31,6 +41,10 @@ const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
     headless_args: ['-p', '--output-format', 'stream-json', '--verbose'],
     auto_approve_args: ['--dangerously-skip-permissions'],
     log_filter: 'claude_stream_json',
+    // 实测 2.1.229:--session-id 可预生成;-p --resume 跨目录可用且多轮 id 稳定(docs/agent-calibration.md)
+    session_args: ['--session-id', '{SESSION_ID}'],
+    resume_headless_args: ['-p', '--output-format', 'stream-json', '--verbose', '--resume', '{SESSION_ID}'],
+    interactive_resume_cmd: 'claude --resume {SESSION_ID}',
     calibrated: { date: '2026-08-22', cli_version: '2.1.229' }
   },
   codex: {

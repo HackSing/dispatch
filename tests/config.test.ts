@@ -50,4 +50,35 @@ describe('config', () => {
     writeFileSync(file, JSON.stringify({ missed_task_policy: 'yolo' }))
     expect(() => loadConfig(file)).toThrow(ConfigError)
   })
+
+  it('会话三件套:claude-code 默认已校准,其余 agent 留空即不支持', () => {
+    const config = loadConfig(file)
+    const claude = config.agents['claude-code']
+    expect(claude.session_args).toEqual(['--session-id', '{SESSION_ID}'])
+    expect(claude.resume_headless_args).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--resume',
+      '{SESSION_ID}'
+    ])
+    expect(claude.interactive_resume_cmd).toBe('claude --resume {SESSION_ID}')
+    for (const id of ['codex', 'dsh', 'kimi', 'qwen'] as const) {
+      expect(config.agents[id].session_args).toEqual([])
+      expect(config.agents[id].resume_headless_args).toEqual([])
+      expect(config.agents[id].interactive_resume_cmd).toBeNull()
+    }
+  })
+
+  it('用户已有 config.json 无会话字段时按默认吸收(向后兼容)', () => {
+    writeFileSync(
+      file,
+      JSON.stringify({ agents: { 'claude-code': { bin: 'claude', headless_args: ['-p'] } } })
+    )
+    const config = loadConfig(file)
+    // 用户显式给出的 agent 条目缺新字段 → zod default 补空,功能按能力隐藏而非报错
+    expect(config.agents['claude-code'].session_args).toEqual([])
+    expect(config.agents['claude-code'].interactive_resume_cmd).toBeNull()
+  })
 })

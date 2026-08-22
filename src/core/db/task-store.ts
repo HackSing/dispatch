@@ -15,6 +15,8 @@ interface TaskRow {
   status: string
   phase: string | null
   review_round: number
+  session_id: string | null
+  parent_task_id: string | null
   base_branch: string | null
   branch: string | null
   worktree_path: string | null
@@ -39,6 +41,8 @@ function toTask(row: TaskRow): Task {
     status: row.status as TaskStatus,
     phase: row.phase as TaskPhase | null,
     reviewRound: row.review_round,
+    sessionId: row.session_id,
+    parentTaskId: row.parent_task_id,
     baseBranch: row.base_branch,
     branch: row.branch,
     worktreePath: row.worktree_path,
@@ -59,6 +63,9 @@ export interface CreateTaskInput {
   subAgent?: AgentId | null
   triggerType: TriggerType
   triggerAt?: string | null
+  /** 接力任务专用:继承原任务会话并以 --resume 执行,两者必须同时提供 */
+  sessionId?: string | null
+  parentTaskId?: string | null
 }
 
 /** B1 追加:updateEditable() 可更新的字段,限 todo/scheduled 状态 */
@@ -128,6 +135,9 @@ export class TaskStore {
     if (input.triggerType === 'at' && !input.triggerAt) {
       throw new Error('定时任务必须提供 triggerAt')
     }
+    if (Boolean(input.parentTaskId) !== Boolean(input.sessionId)) {
+      throw new Error('接力任务必须同时提供 parentTaskId 与 sessionId')
+    }
     const now = new Date().toISOString()
     const task: Task = {
       id: randomUUID(),
@@ -141,6 +151,8 @@ export class TaskStore {
       status: input.triggerType === 'none' ? 'todo' : 'scheduled',
       phase: null,
       reviewRound: 0,
+      sessionId: input.sessionId ?? null,
+      parentTaskId: input.parentTaskId ?? null,
       baseBranch: null,
       branch: null,
       worktreePath: null,
@@ -154,9 +166,9 @@ export class TaskStore {
     this.db
       .prepare(
         `INSERT INTO tasks (id, created_at, text, project_id, agent, sub_agent, trigger_type,
-                            trigger_at, status, scheduled_at)
+                            trigger_at, status, scheduled_at, session_id, parent_task_id)
          VALUES (@id, @createdAt, @text, @projectId, @agent, @subAgent, @triggerType,
-                 @triggerAt, @status, @scheduledAt)`
+                 @triggerAt, @status, @scheduledAt, @sessionId, @parentTaskId)`
       )
       .run({
         id: task.id,
@@ -168,7 +180,9 @@ export class TaskStore {
         triggerType: task.triggerType,
         triggerAt: task.triggerAt,
         status: task.status,
-        scheduledAt: task.scheduledAt
+        scheduledAt: task.scheduledAt,
+        sessionId: task.sessionId,
+        parentTaskId: task.parentTaskId
       })
     this.onChange?.(task)
     return task
@@ -305,6 +319,23 @@ export class TaskStore {
     this.db.prepare('UPDATE tasks SET worktree_path = NULL WHERE id = ?').run(id)
     const updated = this.get(id)
     if (!updated) throw new Error(`task disappeared during clearWorktreePath: ${id}`)
+    this.onChange?.(updated)
+    return updated
+  }
+
+  /**
+   * 会话 id 落库,仅 running 状态允许(executor 在 fresh run 前预生成写入)。
+   * 工作流模式 plan/review 各写一次,后写覆盖(last-wins),任务留最后一次主 agent 会话。
+   */
+  setSessionId(id: string, sessionId: string): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'running') {
+      throw new Error(`任务状态 ${current.status} 不允许写入 sessionId`)
+    }
+    this.db.prepare('UPDATE tasks SET session_id = @sessionId WHERE id = @id').run({ id, sessionId })
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during setSessionId: ${id}`)
     this.onChange?.(updated)
     return updated
   }

@@ -88,6 +88,58 @@ describe('TaskStore', () => {
     expect(store.get(task.id)?.status).toBe('todo')
   })
 
+  it('接力任务字段落库往返;parentTaskId 与 sessionId 必须成对', () => {
+    const store = new TaskStore(db)
+    const parent = store.create({
+      text: '原任务',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'immediate'
+    })
+    const follow = store.create({
+      text: '追问',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'immediate',
+      sessionId: 'sid-1',
+      parentTaskId: parent.id
+    })
+    expect(store.get(follow.id)).toMatchObject({ sessionId: 'sid-1', parentTaskId: parent.id })
+    expect(() =>
+      store.create({
+        text: 'x',
+        projectId,
+        agent: 'claude-code',
+        triggerType: 'immediate',
+        parentTaskId: parent.id
+      })
+    ).toThrow(/成对|同时提供/)
+  })
+
+  it('setSessionId 仅 running 允许,后写覆盖(工作流 last-wins)', () => {
+    const store = new TaskStore(db)
+    const task = store.create({
+      text: 'x',
+      projectId,
+      agent: 'claude-code',
+      triggerType: 'immediate'
+    })
+    expect(() => store.setSessionId(task.id, 'sid-early')).toThrow(/scheduled/)
+    store.transition(task.id, 'running')
+    store.setSessionId(task.id, 'sid-plan')
+    store.setSessionId(task.id, 'sid-review')
+    expect(store.get(task.id)?.sessionId).toBe('sid-review')
+  })
+
+  it('done → todo 手动重开,执行期历史字段保留', () => {
+    const store = new TaskStore(db)
+    const task = store.create({ text: '手写 todo', projectId, triggerType: 'none' })
+    store.transition(task.id, 'done', { finishedAt: '2026-08-22T10:00:00Z' })
+    const reopened = store.transition(task.id, 'todo')
+    expect(reopened.status).toBe('todo')
+    expect(reopened.finishedAt).toBe('2026-08-22T10:00:00Z')
+  })
+
   it('外键约束:项目不存在时任务拒绝入库', () => {
     const store = new TaskStore(db)
     expect(() =>

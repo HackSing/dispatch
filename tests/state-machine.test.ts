@@ -27,23 +27,24 @@ describe('state machine', () => {
       ['running', 'failed'],
       ['running', 'done'], // no_vcs 项目
       ['todo', 'done'], // 手动勾选
-      ['scheduled', 'todo'] // 取消执行
+      ['scheduled', 'todo'], // 取消执行
+      ['done', 'todo'] // 手动重开(交互批 V0.2)
     ] as const
     for (const [from, to] of happyPath) {
       expect(canTransition(from, to), `${from} -> ${to}`).toBe(true)
     }
   })
 
-  it('终态不可再迁移', () => {
+  it('failed 为终态;done 仅可手动重开回 todo', () => {
     for (const to of TASK_STATUSES) {
-      expect(canTransition('done', to)).toBe(false)
+      expect(canTransition('done', to)).toBe(to === 'todo')
       expect(canTransition('failed', to)).toBe(false)
     }
   })
 
   it('非法迁移抛 IllegalTransitionError', () => {
     expect(() => assertTransition('todo', 'running')).toThrow(IllegalTransitionError)
-    expect(() => assertTransition('done', 'todo')).toThrow(IllegalTransitionError)
+    expect(() => assertTransition('done', 'scheduled')).toThrow(IllegalTransitionError)
     expect(() => assertTransition('scheduled', 'merging')).toThrow(IllegalTransitionError)
   })
 })

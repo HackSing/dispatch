@@ -60,6 +60,14 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE tasks ADD COLUMN phase TEXT;
       ALTER TABLE tasks ADD COLUMN review_round INTEGER NOT NULL DEFAULT 0;
     `
+  },
+  {
+    version: 3,
+    name: 'session-follow-up',
+    sql: `
+      ALTER TABLE tasks ADD COLUMN session_id TEXT;
+      ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id);
+    `
   }
 ]
 

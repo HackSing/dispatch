@@ -19,6 +19,10 @@ export interface AgentRunOptions {
   onLog: (chunk: string) => void
   /** 取消/超时统一走 AbortSignal,由 executor 持有控制权 */
   signal?: AbortSignal
+  /** 会话 id:fresh run 时渲染 session_args 预生成会话;resume 时渲染 resume_headless_args */
+  sessionId?: string
+  /** true = 接力运行,argv 以 resume_headless_args 整体替换 headless_args,必须配 sessionId */
+  resume?: boolean
 }
 
 export interface AgentAdapter {
