@@ -21,11 +21,15 @@ export function editTask(store: TaskStore, id: string, patch: EditableTaskPatch)
   return task
 }
 
-export function completeTodo(store: TaskStore, id: string): Task {
+/** 双向勾选:todo → done(完成)/ done → todo(重开);执行期历史字段保留不清 */
+export function toggleTodo(store: TaskStore, id: string): Task {
   const current = store.get(id)
   if (!current) throw new Error(`task not found: ${id}`)
-  if (current.status !== 'todo') throw new Error('仅 todo 任务可勾选完成')
-  return store.transition(id, 'done', { finishedAt: new Date().toISOString() })
+  if (current.status === 'todo') {
+    return store.transition(id, 'done', { finishedAt: new Date().toISOString() })
+  }
+  if (current.status === 'done') return store.transition(id, 'todo')
+  throw new Error(`仅 todo/done 任务可勾选切换,当前状态 ${current.status}`)
 }
 
 /** 取消执行退回普通待办;agent 保留作为下次升级的默认值 */

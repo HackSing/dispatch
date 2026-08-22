@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import { openDatabase, ProjectStore, TaskStore } from '@core/db'
-import { abandonTask, cancelScheduled, completeTodo, editTask, rerunFailedTask } from '@core/task-edit'
+import { abandonTask, cancelScheduled, editTask, rerunFailedTask, toggleTodo } from '@core/task-edit'
 import type { Task } from '@shared/types'
 
 let dir: string
@@ -92,13 +92,19 @@ describe('editTask 升降级编排', () => {
   })
 })
 
-describe('completeTodo / cancelScheduled', () => {
-  it('todo 勾选完成 → done + finishedAt', () => {
+describe('toggleTodo / cancelScheduled', () => {
+  it('todo 勾选完成 → done + finishedAt;再切换重开回 todo', () => {
     const t = store.create({ text: 'x', projectId, triggerType: 'none' })
-    const done = completeTodo(store, t.id)
+    const done = toggleTodo(store, t.id)
     expect(done.status).toBe('done')
     expect(done.finishedAt).not.toBeNull()
-    expect(() => completeTodo(store, t.id)).toThrow(/todo/)
+    const reopened = toggleTodo(store, t.id)
+    expect(reopened.status).toBe('todo')
+  })
+
+  it('todo/done 之外的状态不可勾选切换', () => {
+    const t = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    expect(() => toggleTodo(store, t.id)).toThrow(/scheduled/)
   })
 
   it('scheduled 取消 → todo,trigger 清空、agent 保留', () => {

@@ -7,7 +7,8 @@ import type { UiState } from '@shared/ipc'
 const UiStateSchema = z.object({
   lastAgent: z.enum(AGENT_IDS).nullable().default(null),
   lastSubAgent: z.enum(AGENT_IDS).nullable().default(null),
-  lastProjectId: z.string().nullable().default(null)
+  lastProjectId: z.string().nullable().default(null),
+  collapsedProjectIds: z.array(z.string()).default([])
 })
 
 function defaults(): UiState {
@@ -36,6 +37,7 @@ export function saveUiState(file: string, patch: Partial<UiState>): UiState {
   if (patch.lastAgent !== undefined) next.lastAgent = patch.lastAgent
   if (patch.lastSubAgent !== undefined) next.lastSubAgent = patch.lastSubAgent
   if (patch.lastProjectId !== undefined) next.lastProjectId = patch.lastProjectId
+  if (patch.collapsedProjectIds !== undefined) next.collapsedProjectIds = patch.collapsedProjectIds
   writeUiState(file, next)
   return next
 }

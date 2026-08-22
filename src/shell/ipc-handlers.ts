@@ -6,7 +6,7 @@ import { SCHEMA_VERSION } from '@core/db'
 import { runDetections } from '@core/agents/detection'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
-import { abandonTask, cancelScheduled, completeTodo, editTask, rerunFailedTask } from '@core/task-edit'
+import { abandonTask, cancelScheduled, editTask, rerunFailedTask, toggleTodo } from '@core/task-edit'
 import { cleanupTaskWorkspace } from '@core/executor/cleanup'
 import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
@@ -72,7 +72,7 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
 
   handle('task:update', ({ id, ...patch }) => editTask(ctx.tasks, id, patch))
 
-  handle('task:toggle-todo', ({ id }) => completeTodo(ctx.tasks, id))
+  handle('task:toggle-todo', ({ id }) => toggleTodo(ctx.tasks, id))
 
   handle('task:cancel', ({ id }) => cancelScheduled(ctx.tasks, id))
 

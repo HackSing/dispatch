@@ -42,11 +42,13 @@ export interface CreateProjectPayload {
   name?: string
 }
 
-/** 捕获窗记忆项,持久化于 ~/.dispatch/ui-state.json(机器管理,损坏即重建) */
+/** 界面记忆项(捕获窗默认值 + 主窗折叠态),持久化于 ~/.dispatch/ui-state.json(机器管理,损坏即重建) */
 export interface UiState {
   lastAgent: AgentId | null
   lastSubAgent: AgentId | null
   lastProjectId: string | null
+  /** 主窗清单页折叠起来的项目分组 */
+  collapsedProjectIds: string[]
 }
 
 export interface ArchiveFileInfo {
