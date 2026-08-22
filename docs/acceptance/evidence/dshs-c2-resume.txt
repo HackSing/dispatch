@@ -1,0 +1,12 @@
+# c2 resume 跨目录续接复验(审查者亲跑,2026-08-22)
+# 承接 dshs-c1-fresh.txt 的会话 f09c2c7f-b55a-4e10-85eb-a840b62888d1
+
+$ cd $(mktemp -d)  # 与 c1 运行目录不同的新目录
+$ dsh --profile headless-dispatch --resume f09c2c7f-b55a-4e10-85eb-a840b62888d1 "我上一轮让你写入的文件完整路径是什么?只回答路径本身"
+/var/folders/hl/rh7jx3k53wq1pvqqx6mgfdnw0000gn/T/tmp.IRBaHEHW1U/probe.txt
+EXIT=0
+
+期望路径:/var/folders/hl/rh7jx3k53wq1pvqqx6mgfdnw0000gn/T/tmp.IRBaHEHW1U/probe.txt —— 逐字命中。
+
+断言:exit 0;从不同 cwd 按 id 找到持久化会话(跨项目目录查找生效);续接后能引用上一轮内容。全部通过。
+负例(kimi B1 报告):--session-id 与 --resume 并给 → exit 1 报互斥;无 task → exit 1。

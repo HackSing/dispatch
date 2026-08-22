@@ -1,0 +1,49 @@
+{
+  "schema_version": "docs-harness/knowledge-asset/v1",
+  "title": "dsh agent 会话接入:headless-dispatch profile 与 CLI 契约",
+  "key_symbols": [
+    "dsh-headless-session",
+    "headless-dispatch",
+    "resume_headless_args",
+    "dispatchHeadlessStartup"
+  ],
+  "summary": "dsh agent 经自研 headless-dispatch profile 获得 --session-id/--resume 与沙箱放行,dispatch 侧纯 DEFAULT_AGENTS 配置接入,追问面板走 round 传输",
+  "facts": [
+    {
+      "id": "profile.composition",
+      "statement": "headless-dispatch profile = dsh-base + dsh-headless + @aiwaretop/dsh-headless-session(仓库 dsh-headless-session/ 包);bundle patch 禁用上游 headless-startup/headless-runner 两行并插入自研 startup/runner,同时覆写 sandbox-policy mode=danger-full-access 与 approval policy=never,仅本 profile 生效",
+      "source_refs": [
+        "dsh-headless-session/cordis.patch.yml"
+      ]
+    },
+    {
+      "id": "cli.contract",
+      "statement": "dsh 会话 CLI 契约:fresh = dsh --profile headless-dispatch --session-id <uuid> \"<任务>\",resume = --resume <uuid>;launcher flag 必须位于任务尾参之前且 --profile 先于本应用 flag,故 dispatch 的 --profile 并入 session_args 而 headless_args 留空(fresh argv = session_args + headless_args)",
+      "source_refs": [
+        "src/core/config/index.ts",
+        "docs/agent-calibration.md"
+      ]
+    },
+    {
+      "id": "resume.cross-cwd",
+      "statement": "dsh 会话按 cwd slug 落盘于 ~/.dsh/sessions,但持久层支持按 id 跨项目目录查找,面板在新 worktree 中 resume 旧 worktree 会话已实测通过(c2/c4);插件 runner 对裸 uuid 自动加 session- 前缀",
+      "source_refs": [
+        "dsh-headless-session/lib/index.js",
+        "docs/acceptance/evidence/dshs-c2-resume.txt"
+      ]
+    },
+    {
+      "id": "plugin.no-deepseek-imports-exception",
+      "statement": "profile 安装的第三方 host 插件可声明 @deepseek-ai/* 为 peerDependencies 并直接 import(loader 解析到宿主运行时),dsh-headless-session 与 docs-harness 均为此形态;profile 的 pnpm 仅安装其 dependencies(如 commander)",
+      "source_refs": [
+        "dsh-headless-session/package.json"
+      ]
+    }
+  ],
+  "status": "active",
+  "revision": 1,
+  "revision_history": [],
+  "created_at": "2026-08-22T15:34:36+00:00",
+  "updated_at": "2026-08-22T15:34:36+00:00",
+  "asset_fingerprint": "sha256:8c18dce1f088ebb3fe699e7aafe37688e96559e86e63610b3d81b0b9514aa8a4"
+}

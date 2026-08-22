@@ -1,0 +1,18 @@
+# c1 fresh 运行复验(审查者亲跑,2026-08-22)
+# dsh = /Users/aiware/projects/dsh-buddy-hotkey/node_modules/.bin/dsh(@deepseek-ai/dsh 0.1.1-rc.1)
+
+$ UUID=f09c2c7f-b55a-4e10-85eb-a840b62888d1
+$ OUT=/var/folders/hl/rh7jx3k53wq1pvqqx6mgfdnw0000gn/T/tmp.IRBaHEHW1U   # cwd 之外的目录
+$ cd $(mktemp -d)  # tmp.ibgKGvTVbd
+$ dsh --profile headless-dispatch --session-id $UUID "在 $OUT/probe.txt 写入一行 review-pass,写完后只回答 done"
+done
+EXIT=0
+
+$ cat $OUT/probe.txt
+review-pass
+
+$ ls -d ~/.dsh/sessions/*/session-$UUID
+/Users/aiware/.dsh/sessions/--private-var-folders-hl-rh7jx3k53wq1pvqqx6mgfdnw0000gn-T-tmp.ibgKGvTVbd--/session-f09c2c7f-b55a-4e10-85eb-a840b62888d1
+
+断言:exit 0;沙箱放行 cwd 外写入(danger-full-access 生效);会话以给定 id 落盘。全部通过。
+kimi B1 首跑同型证据(uuid dd400327-*)见实施报告;此文件为审查者独立复跑。

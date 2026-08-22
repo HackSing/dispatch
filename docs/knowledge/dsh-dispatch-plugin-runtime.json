@@ -7,7 +7,7 @@
     "mountPanelView",
     "mountSidebarEntry"
   ],
-  "summary": "dsh 服务进程是 Electron-as-Node(ABI 139),插件必须 vendor Electron-ABI better-sqlite3;client bundle 须为自声明 module 的 __ModuleLoader__ 懒 CJS 形状;UI 呈现为 task-board 同款中列接管视图。",
+  "summary": "dsh 服务进程是 Electron-as-Node(ABI 139),插件必须 vendor Electron-ABI better-sqlite3;client bundle 须为自声明 module 的 __ModuleLoader__ 懒 CJS 形状;UI 呈现为 task-board 同款中列接管视图,renderer 弹层须 Shadow DOM 兼容(外点判定用 composedPath)。",
   "facts": [
     {
       "id": "abi-vendor-discipline",
@@ -41,18 +41,44 @@
         "dsh-plugin/src/client/sidebar-entry.ts",
         "dsh-plugin/README.md"
       ]
+    },
+    {
+      "id": "shadow-dom-popover-compat",
+      "statement": "插件 client 的 React 树渲染于 open shadow root,事件跨 shadow 边界后 document 层看到的 target 重定向为 shadow host:renderer 弹层代码的外点关闭判定必须用 event.composedPath().includes(wrapRef.current) 而非 contains(e.target)(后者恒判外点,弹层内任何点击会在 click 前被 mousedown 误关);usePopoverDismiss 的全部消费点(AgentChainPicker/TaskMenu/ProjectColumn/SessionPanel)共用该约束,独立 app light DOM 下两种写法等价。dsh plugin add 对同路径 file: tarball 内容变更不重装,重装须先 remove 再 add。",
+      "source_refs": [
+        "src/renderer/src/lib/use-popover.ts",
+        "dsh-plugin/src/client/panel.tsx"
+      ]
+    },
+    {
+      "id": "pack-files-prompts",
+      "statement": "dsh-plugin package.json 的 files 排除项必须收窄为 !vendor/node_modules/**/*.md:曾用 !vendor/**/*.md 误杀 vendor/prompts/*.md,tgz 从不含内置提示词模板,面板首轮 renderFirstTurn 缺 follow-up.md 静默失败、relay 任务滞留 running(2026-08-22 修复);批量任务此前未暴露仅因 ~/.dispatch/prompts 恰有 default.md 兜底",
+      "source_refs": [
+        "dsh-plugin/package.json",
+        "docs/acceptance/evidence/dshs-c3-e2e.txt"
+      ]
     }
   ],
   "status": "active",
-  "revision": 2,
+  "revision": 4,
   "revision_history": [
     {
       "revision": 1,
       "asset_fingerprint": "sha256:55da87edb7b0e86fe96d1d0a606174944d3b7e6704100cbd4f4a69b160a0faec",
       "updated_at": "2026-08-22T12:01:50+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:c5408ea27badf9bee80ddc10dc5128c2aa629b2be5bbafea0e988d5bd8932d8f",
+      "updated_at": "2026-08-22T13:50:23+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:6b6f30369e11db97841398f04401960591d6740dbfb5791baff7cb974ef1be69",
+      "updated_at": "2026-08-22T14:37:50+00:00"
     }
   ],
   "created_at": "2026-08-22T12:01:50+00:00",
-  "updated_at": "2026-08-22T13:50:23+00:00",
-  "asset_fingerprint": "sha256:c5408ea27badf9bee80ddc10dc5128c2aa629b2be5bbafea0e988d5bd8932d8f"
+  "updated_at": "2026-08-22T15:35:15+00:00",
+  "asset_fingerprint": "sha256:25f03effb0e97674077dc2bc63c470c18447bedbb60bf988781ec3a4ae147b7e"
 }

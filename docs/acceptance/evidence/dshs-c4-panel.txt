@@ -1,0 +1,24 @@
+# c4 追问面板链路(dsh-plugin 安装态,2026-08-22)
+# 父任务 = c3 的 e2cdbbe4(done,sessionId 9cff2f93-*)
+
+$ POST invoke/task:follow-up-start {"parentId":"e2cdbbe4-*"}
+→ relay a9d52954-63b4-4221-bd5e-c8bbd681782a running,继承 sessionId 9cff2f93-*
+  (followUpTransport(dsh)=round 判定通过,守卫「未配置会话续接能力」不再触发)
+
+$ POST invoke/task:follow-up-send {"id":"a9d52954-*","text":"你在本会话最初的任务里创建的文件叫什么名字、内容是什么?只用一行回答:文件名=内容"}
+→ ok
+
+rounds.jsonl:
+{"round":1,"user_text":"...","duration_ms":2310,"cost_usd":null,"is_error":false,"at":"2026-08-22T15:32:30.977Z"}
+
+output.log:
+===== round 1 =====
+[user] 你在本会话最初的任务里创建的文件叫什么名字、内容是什么?...
+NOTES-dshs.md=c3-e2e-ok        ← 新 worktree 中经 --resume 续接,准确回忆原会话产物
+
+$ POST invoke/task:follow-up-finish {"id":"a9d52954-*"}
+→ relay 终态 done
+
+断言:start(守卫/建 relay/继承会话)、send(round spawn resume 运行)、round-result 落盘、
+finish(合并收尾至 done)全通;会话连续性另有 c2 跨目录证据(文件不在 cwd 时仍可回忆)。
+全部通过。

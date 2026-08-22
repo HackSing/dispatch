@@ -1,0 +1,27 @@
+# c3 dispatch 端到端(dsh-plugin 安装态,2026-08-22)
+# 前置:aiwaretop-dsh-dispatch-0.1.0.tgz 重装进 ~/.dsh/profiles/web(remove+add),
+# dsh web 由修复后的 ~/.dsh/restart-web.sh 重启(pid 81001,probe 200);
+# ~/.dispatch/config.json dsh 条目已同步新默认(session_args/resume_headless_args=headless-dispatch)。
+
+$ POST /api/dispatch/invoke/task:create
+  {"text":"在当前目录创建文件 NOTES-dshs.md,内容为一行:c3-e2e-ok。不要改其他文件。",
+   "projectId":"default","agent":"dsh","triggerType":"immediate"}
+→ task e2cdbbe4-f13a-42c6-a51d-14a77bc5a8ba scheduled
+
+轮询终态:
+FINAL: done  failReason=-  sessionId=9cff2f93-5e0a-4790-9b04-18488fc6d62f
+archive=/Users/aiware/.dispatch/archives/default/2026-08-22-e2cdbbe4
+
+断言:
+- 归档含 plan.md + result.json(result.status=success)——no_plan 消除,沙箱放行生效;
+- ~/Dispatch/default/NOTES-dshs.md 内容 c3-e2e-ok——worktree→commit→merge 全链路通过;
+- ~/.dsh/sessions/--Users-aiware-.dispatch-worktrees-default-e2cdbbe4-*--/session-9cff2f93-* 存在
+  ——dispatch 预生成 uuid 经 --session-id 落为 dsh 持久会话;
+- 任务 sessionId 落库(追问前提)。
+全部通过。
+
+# 过程中发现并修复的阻塞(首次 c4 尝试暴露):
+# dsh-plugin/package.json files 排除项 !vendor/**/*.md 误杀 vendor/prompts/*.md,
+# tgz 从不含内置提示词模板,面板首轮 renderFirstTurn 因缺 follow-up.md 静默失败
+# (relay 3c851056 滞留 running,已显式 abandon)。修复:排除范围收窄为
+# !vendor/node_modules/**/*.md,重打包后 tgz 42 文件含全部 5 个模板,重装重启后 c4 通过。

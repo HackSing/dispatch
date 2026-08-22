@@ -9,11 +9,13 @@
 - [交互批 V0.2r2:追问改为常驻会话面板(单 worktree 多轮对话,结束一次合并)](plans/interaction-batch-v03.md) — 状态：有效（实施中）；关键符号：`FollowUpSession`、`resume_stream_args`、`task:follow-up-send`、`rounds.jsonl`
 - [主窗看板化与 macOS 风格前端重设计](plans/macos-ui-redesign.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`ProjectColumn`、`AgentChainPicker`、`board-col`、`capture-pop`
 - [dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）](plans/dispatch-dsh-plugin.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
+- [dsh 追问面板与沙箱放行:headless-dispatch 专用 profile 与会话续接](plans/dsh-headless-session-panel.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 <!-- docs-harness:plans-index:end -->
 
 <!-- docs-harness:knowledge-index:start -->
 ## 项目知识
 
+- [dsh agent 会话接入:headless-dispatch profile 与 CLI 契约](knowledge/dsh-headless-dispatch-profile.md) — 状态：有效（现行事实）；关键符号：`dsh-headless-session`、`headless-dispatch`、`resume_headless_args`、`dispatchHeadlessStartup`
 - [dsh-dispatch 插件的运行时 ABI 与 loader/UI 呈现契约](knowledge/dsh-dispatch-plugin-runtime.md) — 状态：有效（现行事实）；关键符号：`seed-vendor.mjs`、`build-client.mjs`、`mountPanelView`、`mountSidebarEntry`
 <!-- docs-harness:knowledge-index:end -->
 
@@ -24,6 +26,7 @@
 - [交互批 V0.2r2 验收:多项目清单、手动状态与会话面板](acceptance/interaction-batch-v03.md) — 状态：有效（待验收）；关键符号：`FollowUpSession`、`task:follow-up-send`、`sessionId`
 - [macOS 风格前端重设计验收](acceptance/macos-ui-redesign.md) — 状态：已验收-仅追溯；关键符号：`ProjectColumn`、`AgentChainPicker`、`board-col`
 - [dispatch 双半插件（@aiwaretop/dsh-dispatch）验收](acceptance/dispatch-dsh-plugin-v2.md) — 状态：已验收-仅追溯；关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
+- [dsh 追问面板与沙箱放行验收](acceptance/dsh-headless-session-panel.md) — 状态：已验收-仅追溯；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 <!-- docs-harness:acceptance-index:end -->
 
 <!-- docs-harness:adr-index:start -->

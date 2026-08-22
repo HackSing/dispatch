@@ -1,0 +1,230 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "dsh 追问面板与沙箱放行验收",
+  "key_symbols": [
+    "dsh-headless-session",
+    "headless-dispatch",
+    "agents.resume",
+    "sandbox-policy"
+  ],
+  "objective": "dsh 任务产物可落归档目录(no_plan 消除),追问面板以 round 传输点亮;dispatch core 零代码改动",
+  "plan_ref": "docs/plans/dsh-headless-session-panel.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "fresh 运行:--session-id 指定会话 id,沙箱放行 cwd 外写入,exit 0",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T152001-8629982556",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "审查者亲跑 fresh 运行:mktemp 新目录下 dsh --profile headless-dispatch --session-id <uuid> 指定 cwd 外输出目录写文件,断言 exit 0、文件内容、会话目录 id;kimi 实施侧同型首跑另有一份",
+          "evidence_refs": [
+            "docs/acceptance/evidence/dshs-c1-fresh.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:20:01+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "resume 运行:--resume 跨目录续接并引用上一轮内容",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T152001-6689088f42",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "审查者亲跑 resume 运行:在与 c1 不同的 mktemp 目录 dsh --profile headless-dispatch --resume <同一 uuid> 询问上一轮写入路径,输出逐字命中期望路径,exit 0;负例(互斥/缺 task)见 kimi B1 报告",
+          "evidence_refs": [
+            "docs/acceptance/evidence/dshs-c2-resume.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:20:01+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "dispatch 端到端:重装后 dsh 任务终态 done,plan.md/result.json 落归档,sessionId 落库",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T153356-3027910b83",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "安装态端到端:tgz 重装进 web profile + restart-web.sh 重启后,经 HTTP invoke 建 dsh 写文件任务,轮询终态 done;核对归档 plan.md/result.json、合并进 default 项目的文件内容、sessionId 落库与 dsh 会话落盘",
+          "evidence_refs": [
+            "docs/acceptance/evidence/dshs-c3-e2e.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:33:56+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "面板链路:task:follow-up-start/send/finish 对 dsh 任务全通",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T153357-72dbdebb6d",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "安装态端到端:同一次重装重启后,HTTP invoke 走 follow-up-start(建 relay 继承会话)→ send(round 传输 resume 运行)→ rounds.jsonl 落轮次(is_error=false)→ 面板回答准确引用原会话产物 → finish 收尾 relay 终态 done;首次尝试暴露的 vendor/prompts 打包缺陷已修复并重验",
+          "evidence_refs": [
+            "docs/acceptance/evidence/dshs-c4-panel.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:33:57+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "title": "用户在 DSH Buddy 面板实操确认 dsh 任务与追问可用",
+      "acceptance_type": "user_acceptance",
+      "layer": "L5",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T153534-1f7521d345",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "user_acceptance",
+          "status": "user_pending",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": null,
+          "evidence_refs": [],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:35:34+00:00",
+          "user_handoff": {
+            "automatically_verified": [
+              "c1/c2:headless-dispatch profile fresh/resume CLI 级实测通过(跨 cwd 写入、跨目录续接)",
+              "c3:安装态 dsh 任务端到端 done,plan.md/result.json 落归档,文件合并进 default,sessionId 落库",
+              "c4:面板链路 follow-up start/send/round/finish 全通,回答准确引用原会话产物"
+            ],
+            "user_checks": [
+              "DSH Buddy 面板里 dsh 任务能正常跑完并显示完成",
+              "已完成的 dsh 任务详情里能打开追问面板、对话有记忆、收尾正常"
+            ],
+            "steps": [
+              "重新打开 DSH Buddy(dsh web 已在 3080 运行,会直接复用)",
+              "在 Dispatch 面板用 dsh 智能体派一个任务,等它完成",
+              "在该任务详情打开追问面板问一个引用任务内容的问题,确认回答连贯后结束会话"
+            ],
+            "environment_ready": true
+          }
+        },
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T155836-9ee00c1ffe",
+          "objective_fingerprint": "sha256:b755d6762c6c7737255042345cc0164ca4ff4d8244eeab2221c719be460e9cfe",
+          "acceptance_type": "user_acceptance",
+          "status": "passed",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": "用户在 DSH Buddy(dev 壳复用 3080 服务)面板实操:看板可见 dsh 任务「在当前目录创建文件 NOTES-dshs.md…」完成,并亲自对已完成任务追问对话成功",
+          "evidence_refs": [
+            "docs/acceptance/evidence/dshs-c4-panel.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T15:58:36+00:00",
+          "user_confirmation": {
+            "confirmed_by": "user",
+            "confirmation": "刚追加对话成功了"
+          }
+        }
+      ]
+    }
+  ],
+  "status": "passed",
+  "revision": 8,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:a5831750e804f65ad4edefb9df39e88b7839b39223850346bc6732b7e60f67cd",
+      "updated_at": "2026-08-22T15:09:16+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:9d18ed96669f936f172ad0f9d49f35e6689a989c1a4ac27749eb1aeeaff1d668",
+      "updated_at": "2026-08-22T15:20:01+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:b830611e84733437eebd498b1ccdd0989dc4c35712c266185141de09e2da10c9",
+      "updated_at": "2026-08-22T15:20:01+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:c8bc35a1866ee223cbe52ee88f11f92de91dc63dc51db75d80124ee145dff0b2",
+      "updated_at": "2026-08-22T15:33:56+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:9933ac2f6fd3744cf9253bb3641b6279e87ee75a500da52192defc75690245c9",
+      "updated_at": "2026-08-22T15:33:57+00:00"
+    },
+    {
+      "revision": 6,
+      "asset_fingerprint": "sha256:52d3f553df7c9daa6d9a98e96bfe10ee3f280f74ac11741675cdd006ff218d97",
+      "updated_at": "2026-08-22T15:35:34+00:00"
+    },
+    {
+      "revision": 7,
+      "asset_fingerprint": "sha256:0f637156de2632054e627248ab07b47ae03e4a70accae40ac1e73c9bfffd604d",
+      "updated_at": "2026-08-22T15:58:36+00:00"
+    }
+  ],
+  "created_at": "2026-08-22T15:09:16+00:00",
+  "updated_at": "2026-08-22T15:58:48+00:00",
+  "settled_at": "2026-08-22T15:58:48+00:00",
+  "asset_fingerprint": "sha256:d3a11466f2601ba34565edc9698f9238688d06ea6515afb6a7db76b823b92372",
+  "replacement": null
+}
