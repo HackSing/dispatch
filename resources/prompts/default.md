@@ -30,9 +30,17 @@
 | 参数 | 值 | 说明 |
 |---|---|---|
 | 任务原文 TASK_TEXT | 见 §1 | 用户随手记录的文本,可能口语化、含糊,需要你推断真实意图 |
-| 归档目录 OUT_DIR | {OUT_DIR} | plan.md 与 result.json 的唯一写入处,写文件时使用此绝对路径 |
-| 工作目录 PROJECT_PATH | {PROJECT_PATH} | 所有代码改动只发生在这里 |
-| 基线分支 BASE_BRANCH | {BASE_BRANCH} | 值为空表示非 git 项目:跳过本工单所有 git 相关要求 |
+| 归档目录 OUT_DIR | 见下方机读参数 | plan.md 与 result.json 的唯一写入处,写文件时使用此绝对路径 |
+| 工作目录 PROJECT_PATH | 见下方机读参数 | 所有代码改动只发生在这里 |
+| 基线分支 BASE_BRANCH | 见下方机读参数 | 值为空表示非 git 项目:跳过本工单所有 git 相关要求 |
+
+机读参数(逐行键值,格式固定,勿删——工具链按行首键名解析):
+
+```
+OUT_DIR: {OUT_DIR}
+PROJECT_PATH: {PROJECT_PATH}
+BASE_BRANCH: {BASE_BRANCH}
+```
 
 ## 3. Phase 1 — 方案(强制,先于任何代码改动)
 
