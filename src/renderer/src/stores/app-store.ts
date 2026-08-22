@@ -56,11 +56,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const offTask = window.dispatchApi.on('task:changed', () => {
       void get().refreshTasks()
     })
+    // 捕获窗新建项目后,主窗项目分组必须跟上,否则其下任务整组不可见
+    const offProject = window.dispatchApi.on('project:changed', () => {
+      void get().refreshProjects()
+    })
     const offDetections = window.dispatchApi.on('agent:detections-changed', ({ detections }) => {
       set({ detections })
     })
     return () => {
       offTask()
+      offProject()
       offDetections()
     }
   }

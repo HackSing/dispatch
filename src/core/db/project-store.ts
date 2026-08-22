@@ -36,7 +36,11 @@ export interface CreateProjectInput {
 }
 
 export class ProjectStore {
-  constructor(private readonly db: Database) {}
+  /** onChange 供 shell 层接 IPC 广播(与 TaskStore 同型):捕获窗新建项目须让主窗项目列表同步 */
+  constructor(
+    private readonly db: Database,
+    private readonly onChange?: (projectId: string) => void
+  ) {}
 
   create(input: CreateProjectInput): Project {
     const project: Project = {
@@ -53,6 +57,7 @@ export class ProjectStore {
          VALUES (@id, @name, @path, @prepareCmd, @baseBranch, @createdAt)`
       )
       .run({ ...project })
+    this.onChange?.(project.id)
     return project
   }
 
@@ -92,6 +97,7 @@ export class ProjectStore {
         prepareCmd: next.prepareCmd,
         baseBranch: next.baseBranch
       })
+    this.onChange?.(id)
     return next
   }
 
@@ -110,6 +116,7 @@ export class ProjectStore {
       this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
     })
     run()
+    this.onChange?.(id)
   }
 }
 

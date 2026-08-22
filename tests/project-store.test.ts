@@ -22,6 +22,17 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
+describe('ProjectStore.onChange', () => {
+  it('create/update/delete 各触发一次变更回调(主窗项目列表同步依赖)', () => {
+    const changed: string[] = []
+    const store = new ProjectStore(db, (id) => changed.push(id))
+    const p = store.create({ name: 'demo', path: '/tmp/demo' })
+    store.update(p.id, { name: 'demo2' })
+    store.delete(p.id)
+    expect(changed).toEqual([p.id, p.id, p.id])
+  })
+})
+
 describe('ProjectStore.update', () => {
   it('部分更新生效,null 可显式清空可空字段', () => {
     const p = projects.create({ name: 'demo', path: '/tmp/demo', prepareCmd: 'npm i' })

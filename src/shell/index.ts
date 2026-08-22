@@ -35,7 +35,9 @@ if (!gotLock) {
       broadcast('task:changed', { taskId: t.id, status: t.status })
       notifyTaskStatusChange(t)
     })
-    const projects = new ProjectStore(db)
+    const projects = new ProjectStore(db, (projectId) =>
+      broadcast('project:changed', { projectId })
+    )
     const detections = new DetectionStore(db)
     ctx = {
       paths,

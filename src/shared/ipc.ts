@@ -140,6 +140,8 @@ export interface EventMap {
   /** 系统通知点击等入口要求主窗打开某任务详情 */
   'ui:open-task': { taskId: string }
   'task:session-event': SessionEventPayload
+  /** 项目增改删(常来自捕获窗),各窗口项目列表随之刷新 */
+  'project:changed': { projectId: string }
 }
 
 export type InvokeChannel = keyof InvokeMap
@@ -179,7 +181,8 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'task:changed',
   'agent:detections-changed',
   'ui:open-task',
-  'task:session-event'
+  'task:session-event',
+  'project:changed'
 ]
 
 /** preload 暴露到 window.dispatchApi 的形状 */
