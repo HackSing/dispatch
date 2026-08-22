@@ -125,7 +125,7 @@
       "acceptance_type": "user_acceptance",
       "layer": "L5",
       "evidence_layer": null,
-      "status": "pending",
+      "status": "passed",
       "records": [
         {
           "schema_version": "docs-harness/acceptance-record/v3",
@@ -160,6 +160,28 @@
             ],
             "environment_ready": true
           }
+        },
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T135002-2d2954ae4a",
+          "objective_fingerprint": "sha256:91c96b1f1b14b4173c68b8bd7f43e925c40dd4aead0f42e1279fd4fc91d5d159",
+          "acceptance_type": "user_acceptance",
+          "status": "passed",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": "快捷键链路双侧实机证据：壳侧启动日志 global hotkey CommandOrControl+Shift+Space registered（本会话三次重启均在）+ env 注入使插件 app:hotkey-status 报 registered；批次 3 实机验证过 globalShortcut→窗口前置→CustomEvent→面板+捕获弹窗全链（evidence-batch3.md）。本会话用户实际使用后按体验逐轮反馈 UI（三张截图），最终以结项指示代替逐项确认：原话见 confirmation。快捷键路径的弹窗部分（openPanel autoCapture→中列视图+捕获模态）经浏览器实机复验。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch3.md",
+            ".harness-tmp/evidence-ui-rounds.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T13:50:02+00:00",
+          "user_confirmation": {
+            "confirmed_by": "user",
+            "confirmation": "你先结项， UI交互有些问题我让 fable 继续处理"
+          }
         }
       ]
     },
@@ -192,8 +214,8 @@
       ]
     }
   ],
-  "status": "pending",
-  "revision": 7,
+  "status": "passed",
+  "revision": 8,
   "revision_history": [
     {
       "revision": 1,
@@ -224,10 +246,16 @@
       "revision": 6,
       "asset_fingerprint": "sha256:6692258f500c168eeeef03926f674c538fa7e706bb725f1047988eeb35777ff2",
       "updated_at": "2026-08-22T12:02:58+00:00"
+    },
+    {
+      "revision": 7,
+      "asset_fingerprint": "sha256:73feb5ae51dec04c5f0126f89198970055914d74be33cc592b182cfd482932ed",
+      "updated_at": "2026-08-22T12:03:11+00:00"
     }
   ],
   "created_at": "2026-08-22T12:02:52+00:00",
-  "updated_at": "2026-08-22T12:03:11+00:00",
-  "settled_at": null,
-  "asset_fingerprint": "sha256:73feb5ae51dec04c5f0126f89198970055914d74be33cc592b182cfd482932ed"
+  "updated_at": "2026-08-22T13:50:02+00:00",
+  "settled_at": "2026-08-22T13:50:02+00:00",
+  "asset_fingerprint": "sha256:6c6b513efcad53a9e23eda31dee1fbe52307af46e0ed64b04d81fd961b96f397",
+  "replacement": null
 }

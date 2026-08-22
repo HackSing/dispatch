@@ -94,10 +94,12 @@
   "governance": {
     "acceptance_required": true,
     "knowledge_impact": "updated",
-    "updated_knowledge_refs": [],
+    "updated_knowledge_refs": [
+      "docs/knowledge/dsh-dispatch-plugin-runtime.json"
+    ],
     "unchanged_reason": null,
-    "governance_settled_at": null
+    "governance_settled_at": "2026-08-22T13:50:31+00:00"
   },
   "frozen_at": "2026-08-22T11:29:30+00:00",
-  "plan_fingerprint": "sha256:04c1e56a39c86d51606a0d169b09eba9625f5f9614f0be5f91b97236b23b86d4"
+  "plan_fingerprint": "sha256:17d73e31040740316ee10fa136498e874d363afb39e093b7dcd4fd0d774e3af4"
 }

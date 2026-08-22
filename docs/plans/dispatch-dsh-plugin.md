@@ -1,9 +1,9 @@
-> 状态：有效（实施中）
+> 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）
 <!-- docs-harness:plan-document/v1 -->
 
 # dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）
 
-- 冻结合同：`sha256:04c1e56a39c86d51606a0d169b09eba9625f5f9614f0be5f91b97236b23b86d4`
+- 冻结合同：`sha256:17d73e31040740316ee10fa136498e874d363afb39e093b7dcd4fd0d774e3af4`
 - 关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
 
 ## 背景

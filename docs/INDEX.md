@@ -7,14 +7,14 @@
 
 - [工作流第一阶段:主智能体方案 → 子智能体实现 → 主智能体审查](plans/workflow-stage1.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`sub_agent`、`runWorkflow`、`review_round`、`wf-implement`
 - [交互批 V0.2r2:追问改为常驻会话面板(单 worktree 多轮对话,结束一次合并)](plans/interaction-batch-v03.md) — 状态：有效（实施中）；关键符号：`FollowUpSession`、`resume_stream_args`、`task:follow-up-send`、`rounds.jsonl`
-- [dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）](plans/dispatch-dsh-plugin.md) — 状态：有效（实施中）；关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
 - [主窗看板化与 macOS 风格前端重设计](plans/macos-ui-redesign.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`ProjectColumn`、`AgentChainPicker`、`board-col`、`capture-pop`
+- [dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）](plans/dispatch-dsh-plugin.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
 <!-- docs-harness:plans-index:end -->
 
 <!-- docs-harness:knowledge-index:start -->
 ## 项目知识
 
-- [dsh-dispatch 插件的运行时 ABI 与 loader 契约](knowledge/dsh-dispatch-plugin-runtime.md) — 状态：有效（现行事实）；关键符号：`seed-vendor.mjs`、`build-client.mjs`、`dispatch-core.mjs`、`hotkeyChildEnv`
+- [dsh-dispatch 插件的运行时 ABI 与 loader/UI 呈现契约](knowledge/dsh-dispatch-plugin-runtime.md) — 状态：有效（现行事实）；关键符号：`seed-vendor.mjs`、`build-client.mjs`、`mountPanelView`、`mountSidebarEntry`
 <!-- docs-harness:knowledge-index:end -->
 
 <!-- docs-harness:acceptance-index:start -->
@@ -22,8 +22,8 @@
 
 - [工作流第一阶段验收:主方案→子实现→主审查](acceptance/workflow-stage1.md) — 状态：已验收-仅追溯；关键符号：`runWorkflow`、`sub_agent`、`review_round`
 - [交互批 V0.2r2 验收:多项目清单、手动状态与会话面板](acceptance/interaction-batch-v03.md) — 状态：有效（待验收）；关键符号：`FollowUpSession`、`task:follow-up-send`、`sessionId`
-- [dispatch 双半插件（@aiwaretop/dsh-dispatch）验收](acceptance/dispatch-dsh-plugin-v2.md) — 状态：有效（待验收）；关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
 - [macOS 风格前端重设计验收](acceptance/macos-ui-redesign.md) — 状态：已验收-仅追溯；关键符号：`ProjectColumn`、`AgentChainPicker`、`board-col`
+- [dispatch 双半插件（@aiwaretop/dsh-dispatch）验收](acceptance/dispatch-dsh-plugin-v2.md) — 状态：已验收-仅追溯；关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
 <!-- docs-harness:acceptance-index:end -->
 
 <!-- docs-harness:adr-index:start -->
