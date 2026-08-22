@@ -341,6 +341,31 @@ export class TaskStore {
     return updated
   }
 
+  /**
+   * 原地重跑的前置清场,仅 failed 允许:清空上一轮执行期字段(含 phase/reviewRound,
+   * 否则工作流重跑会撞 setPhase 单调递增守卫)并把触发改为 immediate。
+   * 不触发 onChange:紧随其后的 failed→scheduled 迁移会广播整任务。
+   */
+  prepareRerun(id: string): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'failed') {
+      throw new Error(`任务状态 ${current.status} 不可原地重跑(仅 failed)`)
+    }
+    this.db
+      .prepare(
+        `UPDATE tasks SET trigger_type = 'immediate', trigger_at = NULL, phase = NULL,
+           review_round = 0, session_id = NULL, fail_reason = NULL, worktree_path = NULL,
+           branch = NULL, archive_dir = NULL, started_at = NULL, finished_at = NULL,
+           merged_at = NULL
+         WHERE id = ?`
+      )
+      .run(id)
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during prepareRerun: ${id}`)
+    return updated
+  }
+
   transition(id: string, to: TaskStatus, patch: TransitionPatch = {}): Task {
     const current = this.get(id)
     if (!current) throw new Error(`task not found: ${id}`)

@@ -99,15 +99,15 @@ async function reattachOrphanWorktrees(deps: RecoveryDeps, report: RecoveryRepor
   }
 }
 
-/** 归档目录名为 <本地日期>-<短 id>,同短 id 多次出现时取最新 */
+/** 归档目录名为 <本地日期>-<短 id>[-N](N 为原地重跑撞名后缀),同短 id 多次出现时取最新 */
 function findArchiveDir(deps: RecoveryDeps, task: Task): string | null {
   const project = deps.projects.get(task.projectId)
   if (!project) return null
   const dir = join(deps.paths.archivesDir, sanitizeName(project.name))
   if (!existsSync(dir)) return null
-  const suffix = `-${shortId(task.id)}`
+  const pattern = new RegExp(`-${shortId(task.id)}(-\\d+)?$`)
   const matches = readdirSync(dir)
-    .filter((name) => name.endsWith(suffix))
+    .filter((name) => pattern.test(name))
     .sort()
   return matches.length > 0 ? join(dir, matches[matches.length - 1]) : null
 }

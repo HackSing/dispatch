@@ -100,10 +100,10 @@ export function registerIpcHandlers(
     return task
   })
 
-  handle('task:rerun', ({ id }) => {
-    const copy = rerunFailedTask(ctx.tasks, id)
-    execution.maybeRunImmediate(copy)
-    return copy
+  handle('task:rerun', async ({ id }) => {
+    const task = await rerunFailedTask({ tasks: ctx.tasks, projects: ctx.projects }, id)
+    execution.maybeRunImmediate(task)
+    return task
   })
 
   // 放弃 = 明确不要了:置败后同步清理 worktree 与分支;清理失败时任务已是 failed,

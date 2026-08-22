@@ -1,5 +1,7 @@
 import type { Task } from '@shared/types'
+import type { ProjectStore } from './db/project-store'
 import type { EditableTaskPatch, TaskStore } from './db/task-store'
+import { cleanupTaskWorkspace } from './executor/cleanup'
 
 /**
  * 任务编辑统一编排:字段更新走 updateEditable(),状态升降级走 transition(),
@@ -41,19 +43,22 @@ export function cancelScheduled(store: TaskStore, id: string): Task {
   return store.updateEditable(id, { triggerType: 'none', triggerAt: null })
 }
 
-/** 失败重跑 = 复制 text/projectId/主子智能体为新任务立即入队(spec §3.2);原任务保持 failed 终态 */
-export function rerunFailedTask(store: TaskStore, id: string): Task {
-  const current = store.get(id)
+/**
+ * 失败重跑 = 原地重新入队(交互批 c4 修订,取代 spec §3.2 的复制语义):
+ * 清理遗留 worktree → 清执行期字段 → failed→scheduled。列表不再堆积失败副本;
+ * 上一轮归档留盘(重跑得到新归档目录,createArchive 撞名自动加后缀)。
+ */
+export async function rerunFailedTask(
+  stores: { tasks: TaskStore; projects: ProjectStore },
+  id: string
+): Promise<Task> {
+  const current = stores.tasks.get(id)
   if (!current) throw new Error(`task not found: ${id}`)
   if (current.status !== 'failed') throw new Error(`仅 failed 任务可重跑,当前状态 ${current.status}`)
   if (!current.agent) throw new Error('原任务缺少 agent,无法重跑')
-  return store.create({
-    text: current.text,
-    projectId: current.projectId,
-    agent: current.agent,
-    subAgent: current.subAgent,
-    triggerType: 'immediate'
-  })
+  await cleanupTaskWorkspace(stores, id)
+  stores.tasks.prepareRerun(id)
+  return stores.tasks.transition(id, 'scheduled', { scheduledAt: new Date().toISOString() })
 }
 
 /** 放弃 conflict/awaiting_merge → failed(abandoned);worktree 保留,由清理策略延后回收 */

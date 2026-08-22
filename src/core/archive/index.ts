@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync, writeFileSync, type WriteStream } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, writeFileSync, type WriteStream } from 'node:fs'
 import { join } from 'node:path'
 import type { DispatchPaths } from '@core/paths'
 import { sanitizeName, shortId } from '@core/naming'
@@ -14,6 +14,18 @@ export interface CreateArchiveOptions {
 export interface ArchiveInfo {
   archiveDir: string
   taskMdFile: string
+}
+
+const ARCHIVE_SUFFIX_LIMIT = 100
+
+/** 撞名时追加 -2/-3…(recovery 的归档回填匹配同步认识该后缀);上限防御性封顶 */
+function firstFreeDir(base: string): string {
+  if (!existsSync(base)) return base
+  for (let n = 2; n <= ARCHIVE_SUFFIX_LIMIT; n++) {
+    const candidate = `${base}-${n}`
+    if (!existsSync(candidate)) return candidate
+  }
+  throw new Error(`归档目录后缀耗尽: ${base}`)
 }
 
 /** 归档目录使用本地日期,与用户对「当天任务」的感知一致 */
@@ -50,11 +62,9 @@ export function createArchive(
   opts: CreateArchiveOptions
 ): ArchiveInfo {
   const date = formatLocalDate(opts.now ?? new Date())
-  const archiveDir = join(
-    paths.archivesDir,
-    sanitizeName(project.name),
-    `${date}-${shortId(task.id)}`
-  )
+  const base = join(paths.archivesDir, sanitizeName(project.name), `${date}-${shortId(task.id)}`)
+  // 同任务同日再次执行(原地重跑)不得复用旧目录:上一轮残留的 result.json 会污染完成判定
+  const archiveDir = firstFreeDir(base)
   mkdirSync(archiveDir, { recursive: true })
   const taskMdFile = join(archiveDir, 'task.md')
   writeFileSync(taskMdFile, renderTaskMd(project, task, opts), 'utf-8')

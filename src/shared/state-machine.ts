@@ -21,6 +21,8 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
  * - running → done:非 git 项目(no_vcs)执行成功,跳过合并
  * - running/merging → failed:含崩溃恢复(interrupted)
  * - conflict/awaiting_merge → failed:用户放弃
+ * - failed → scheduled:原地重跑(清执行期字段后重新入队,不复制新任务行;
+ *   历史归档留盘,旧记录不在列表堆积)
  */
 export const TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   todo: ['scheduled', 'done'],
@@ -29,7 +31,7 @@ export const TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   merging: ['done', 'awaiting_merge', 'conflict', 'failed'],
   awaiting_merge: ['merging', 'failed'],
   conflict: ['merging', 'failed'],
-  failed: [],
+  failed: ['scheduled'],
   done: ['todo']
 }
 

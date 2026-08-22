@@ -35,10 +35,10 @@ describe('state machine', () => {
     }
   })
 
-  it('failed 为终态;done 仅可手动重开回 todo', () => {
+  it('done 仅可手动重开回 todo;failed 仅可原地重跑回 scheduled', () => {
     for (const to of TASK_STATUSES) {
       expect(canTransition('done', to)).toBe(to === 'todo')
-      expect(canTransition('failed', to)).toBe(false)
+      expect(canTransition('failed', to)).toBe(to === 'scheduled')
     }
   })
 

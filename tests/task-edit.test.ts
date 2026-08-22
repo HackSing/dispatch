@@ -12,13 +12,15 @@ let db: Database
 let store: TaskStore
 let projectId: string
 let changes: Task[]
+let projects: ProjectStore
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'dispatch-task-edit-'))
   db = openDatabase(join(dir, 'test.db'))
   changes = []
   store = new TaskStore(db, (t) => changes.push(t))
-  projectId = new ProjectStore(db).create({ name: 'demo', path: '/tmp/demo' }).id
+  projects = new ProjectStore(db)
+  projectId = projects.create({ name: 'demo', path: '/tmp/demo' }).id
 })
 
 afterEach(() => {
@@ -142,41 +144,48 @@ function makeMerging(): Task {
   return store.transition(t.id, 'merging')
 }
 
-describe('rerunFailedTask 失败重跑', () => {
-  it('failed → 复制 text/projectId/agent 为新任务,immediate 入队', () => {
+describe('rerunFailedTask 原地重跑', () => {
+  it('failed → 清执行期字段(含 phase/reviewRound/sessionId)后同任务重新入队,不复制新行', async () => {
     const failed = makeFailed()
-    const copy = rerunFailedTask(store, failed.id)
-    expect(copy.id).not.toBe(failed.id)
-    expect(copy).toMatchObject({
+    const rerun = await rerunFailedTask({ tasks: store, projects }, failed.id)
+    expect(rerun.id).toBe(failed.id)
+    expect(rerun).toMatchObject({
       text: failed.text,
-      projectId: failed.projectId,
-      agent: failed.agent,
       triggerType: 'immediate',
       triggerAt: null,
       status: 'scheduled',
       failReason: null,
       startedAt: null,
-      finishedAt: null
+      finishedAt: null,
+      mergedAt: null,
+      phase: null,
+      reviewRound: 0,
+      sessionId: null,
+      worktreePath: null,
+      branch: null,
+      archiveDir: null
     })
-    // 原任务保持 failed 终态不动
-    expect(store.get(failed.id)).toMatchObject({ status: 'failed', failReason: 'timeout' })
+    // 唯一任务行:列表不堆积失败副本
+    expect(store.list()).toHaveLength(1)
   })
 
-  it('非 failed 拒绝重跑', () => {
+  it('非 failed 拒绝重跑', async () => {
     const scheduled = store.create({
       text: 'x',
       projectId,
       agent: 'claude-code',
       triggerType: 'immediate'
     })
-    expect(() => rerunFailedTask(store, scheduled.id)).toThrow(/failed/)
+    await expect(rerunFailedTask({ tasks: store, projects }, scheduled.id)).rejects.toThrow(
+      /failed/
+    )
     const todo = store.create({ text: 'y', projectId, triggerType: 'none' })
     store.transition(todo.id, 'done')
-    expect(() => rerunFailedTask(store, todo.id)).toThrow(/failed/)
+    await expect(rerunFailedTask({ tasks: store, projects }, todo.id)).rejects.toThrow(/failed/)
   })
 
-  it('任务不存在报错', () => {
-    expect(() => rerunFailedTask(store, 'nope')).toThrow(/not found/)
+  it('任务不存在报错', async () => {
+    await expect(rerunFailedTask({ tasks: store, projects }, 'nope')).rejects.toThrow(/not found/)
   })
 })
 
