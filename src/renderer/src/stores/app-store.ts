@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { AgentDetection, Project, Task } from '@shared/types'
-import type { AppStatus, HotkeyStatus } from '@shared/ipc'
+import type { AgentDetection, AgentId, Project, Task } from '@shared/types'
+import type { AgentSessionCapability, AppStatus, HotkeyStatus } from '@shared/ipc'
 
 /** 主进程是唯一事实源,本 store 只做订阅镜像,不做本地状态推演(dev-plan §1.2) */
 interface AppState {
@@ -9,6 +9,8 @@ interface AppState {
   tasks: Task[]
   projects: Project[]
   detections: AgentDetection[]
+  /** 会话能力(config 派生,主进程算好),null = 尚未加载 */
+  capabilities: Record<AgentId, AgentSessionCapability> | null
   loadError: string | null
   loadAll: () => Promise<void>
   refreshTasks: () => Promise<void>
@@ -23,18 +25,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   tasks: [],
   projects: [],
   detections: [],
+  capabilities: null,
   loadError: null,
 
   async loadAll() {
     try {
-      const [status, hotkey, tasks, projects, detections] = await Promise.all([
+      const [status, hotkey, tasks, projects, detections, capabilities] = await Promise.all([
         window.dispatchApi.invoke('app:status', undefined),
         window.dispatchApi.invoke('app:hotkey-status', undefined),
         window.dispatchApi.invoke('task:list', undefined),
         window.dispatchApi.invoke('project:list', undefined),
-        window.dispatchApi.invoke('agent:detections', undefined)
+        window.dispatchApi.invoke('agent:detections', undefined),
+        window.dispatchApi.invoke('agent:capabilities', undefined)
       ])
-      set({ status, hotkey, tasks, projects, detections, loadError: null })
+      set({ status, hotkey, tasks, projects, detections, capabilities, loadError: null })
     } catch (e) {
       set({ loadError: (e as Error).message })
     }

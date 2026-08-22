@@ -230,6 +230,9 @@ button {
 .badge.done {
   background: #30d158;
 }
+.badge.relay {
+  background: #5e5ce6;
+}
 
 .btn {
   border: 1px solid #d2d2d7;
@@ -501,4 +504,63 @@ input[type='datetime-local']:focus {
   background: #faf7ff;
   border-radius: 8px;
   padding: 0 12px 10px;
+}
+
+/* ── 会话面板 ── */
+.session-panel {
+  width: min(720px, 94vw);
+}
+.session-log {
+  flex: 1;
+  margin: 0;
+  padding: 12px 18px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.6;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5ea;
+}
+.session-closed {
+  margin: 0;
+  padding: 8px 18px;
+  color: #6e6e73;
+  font-size: 12px;
+  border-bottom: 1px solid #e5e5ea;
+}
+.session-input {
+  padding: 10px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.session-input textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn.link {
+  border: none;
+  background: none;
+  color: #0a84ff;
+  padding: 0 4px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

@@ -3,6 +3,7 @@ import type { Task, TaskStatus } from '@shared/types'
 import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
+import { SessionPanel } from './components/SessionPanel'
 import { TaskOps } from './components/TaskOps'
 import { pickAndCreateProject } from './lib/projects'
 import { agentChainLabel, statusBadgeLabel } from './lib/task-labels'
@@ -64,6 +65,7 @@ function TaskRow(props: {
         <div className={`task-text${task.status === 'done' ? ' done' : ''}`}>{task.text}</div>
         <div className="task-meta">
           <span className={`badge ${task.status}`}>{statusBadgeLabel(task)}</span>
+          {task.parentTaskId && <span className="badge relay">接力</span>}
           {active && task.startedAt && <span>已执行 {formatElapsed(task.startedAt, nowMs)}</span>}
           {triggerLabel(task) && <span>{triggerLabel(task)}</span>}
           {task.agent && <span className="agent-chain">{agentChainLabel(task)}</span>}
@@ -172,9 +174,16 @@ export function App(): React.JSX.Element {
   const store = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [filter, setFilter] = useState<TaskFilter>('active')
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const detailTask = detailId ? (store.tasks.find((t) => t.id === detailId) ?? null) : null
+  const sessionTask = sessionId ? (store.tasks.find((t) => t.id === sessionId) ?? null) : null
+
+  const openSessionPanel = (taskId: string): void => {
+    setDetailId(null)
+    setSessionId(taskId)
+  }
 
   useEffect(() => {
     void store.loadAll()
@@ -272,8 +281,14 @@ export function App(): React.JSX.Element {
         ))}
       </main>
       {detailTask && (
-        <TaskDetail task={detailTask} onClose={() => setDetailId(null)} onOpenTask={setDetailId} />
+        <TaskDetail
+          task={detailTask}
+          onClose={() => setDetailId(null)}
+          onOpenTask={setDetailId}
+          onOpenSession={openSessionPanel}
+        />
       )}
+      {sessionTask && <SessionPanel task={sessionTask} onClose={() => setSessionId(null)} />}
     </div>
   )
 }
