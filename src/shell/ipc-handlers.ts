@@ -7,6 +7,7 @@ import { runDetections } from '@core/agents/detection'
 import { getPlatformOps } from '@core/platform'
 import { loadUiState, saveUiState } from '@core/ui-state'
 import { abandonTask, cancelScheduled, completeTodo, editTask, rerunFailedTask } from '@core/task-edit'
+import { cleanupTaskWorkspace } from '@core/executor/cleanup'
 import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
@@ -90,7 +91,16 @@ export function registerIpcHandlers(ctx: AppContext, execution: ExecutionService
     return copy
   })
 
-  handle('task:abandon', ({ id }) => abandonTask(ctx.tasks, id))
+  // 放弃 = 明确不要了:置败后同步清理 worktree 与分支;清理失败时任务已是 failed,
+  // 错误上抛给 UI,用户可经「清理 worktree」按钮重试(cleanupTaskWorkspace 可重入)
+  handle('task:abandon', async ({ id }) => {
+    abandonTask(ctx.tasks, id)
+    return cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)
+  })
+
+  handle('task:cleanup-worktree', ({ id }) =>
+    cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)
+  )
 
   handle('task:retry-merge', ({ id }) => {
     const task = ctx.tasks.get(id)

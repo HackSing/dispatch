@@ -174,6 +174,18 @@ export async function removeWorktree(
   await git(['branch', '-D', branch], projectPath)
 }
 
+/** worktree 目录已在盘外消失时,清掉 git 的登记残留 */
+export async function pruneWorktrees(projectPath: string): Promise<void> {
+  await git(['worktree', 'prune'], projectPath)
+}
+
+/** 分支存在才删,不存在为幂等 no-op(清理链路可重入) */
+export async function deleteBranchIfExists(projectPath: string, branch: string): Promise<void> {
+  const listed = await git(['branch', '--list', branch], projectPath)
+  if (listed.trim().length === 0) return
+  await git(['branch', '-D', branch], projectPath)
+}
+
 export interface ConflictReportOptions {
   archiveDir: string
   worktreePath: string

@@ -292,6 +292,23 @@ export class TaskStore {
     return updated
   }
 
+  /**
+   * 清理 worktree 后清空路径字段,仅 failed 终态允许(done 在合并链路内清理,
+   * conflict/awaiting_merge 的 worktree 是重试合并的前提,不允许清)。branch 名保留作历史。
+   */
+  clearWorktreePath(id: string): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'failed') {
+      throw new Error(`任务状态 ${current.status} 不允许清空 worktree 路径`)
+    }
+    this.db.prepare('UPDATE tasks SET worktree_path = NULL WHERE id = ?').run(id)
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during clearWorktreePath: ${id}`)
+    this.onChange?.(updated)
+    return updated
+  }
+
   transition(id: string, to: TaskStatus, patch: TransitionPatch = {}): Task {
     const current = this.get(id)
     if (!current) throw new Error(`task not found: ${id}`)

@@ -81,8 +81,10 @@ export interface InvokeMap {
   'task:rerun': { req: { id: string }; res: Task }
   /** awaiting_merge/conflict 手动重试合并(spec「已解决,重试合并」) */
   'task:retry-merge': { req: { id: string }; res: Task }
-  /** conflict/awaiting_merge 放弃 → failed(fail_reason=abandoned),worktree 保留待清理 */
+  /** conflict/awaiting_merge 放弃 → failed(abandoned),并同步清理 worktree 与任务分支 */
   'task:abandon': { req: { id: string }; res: Task }
+  /** failed 任务手动清理遗留 worktree 与分支(归档保留);无 worktree 时为 no-op */
+  'task:cleanup-worktree': { req: { id: string }; res: Task }
   'project:list': { req: void; res: Project[] }
   'project:create': { req: CreateProjectPayload; res: Project }
   'project:pick-directory': { req: void; res: string | null }
@@ -118,6 +120,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:rerun',
   'task:retry-merge',
   'task:abandon',
+  'task:cleanup-worktree',
   'project:list',
   'project:create',
   'project:pick-directory',

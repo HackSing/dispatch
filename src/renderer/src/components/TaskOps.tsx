@@ -35,9 +35,17 @@ export function TaskOps(props: {
     })
 
   const abandon = (): void => {
-    if (!window.confirm('放弃该任务?将标记为失败,worktree 保留待清理。')) return
+    if (!window.confirm('放弃该任务?将标记为失败,并删除其 worktree 与任务分支(归档保留)。'))
+      return
     run(async () => {
       await window.dispatchApi.invoke('task:abandon', { id: task.id })
+    })
+  }
+
+  const cleanupWorktree = (): void => {
+    if (!window.confirm('删除该任务遗留的 worktree 与任务分支?归档不受影响。')) return
+    run(async () => {
+      await window.dispatchApi.invoke('task:cleanup-worktree', { id: task.id })
     })
   }
 
@@ -49,6 +57,16 @@ export function TaskOps(props: {
       {task.status === 'failed' && (
         <button className="btn" disabled={busy} title="复制任务重新入队执行" onClick={rerun}>
           重跑
+        </button>
+      )}
+      {task.status === 'failed' && task.worktreePath && (
+        <button
+          className="btn"
+          disabled={busy}
+          title="删除遗留 worktree 与任务分支,归档保留"
+          onClick={cleanupWorktree}
+        >
+          清理 worktree
         </button>
       )}
       {task.status === 'conflict' && (

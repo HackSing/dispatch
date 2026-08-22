@@ -146,7 +146,15 @@ export function TaskDetail(props: {
               )}
               {task.finishedAt && <span>结束:{formatTime(task.finishedAt)}</span>}
               {task.baseBranch && <span>基线:{task.baseBranch}</span>}
-              {task.branch && <span>分支:{task.branch}</span>}
+              {task.branch && (
+                <span>
+                  分支:{task.branch}
+                  {/* 分支名是历史记录;终态且 worktree 已清即分支已删 */}
+                  {!task.worktreePath && (task.status === 'done' || task.status === 'failed')
+                    ? '(已删除)'
+                    : ''}
+                </span>
+              )}
               {task.worktreePath && <span>worktree:{task.worktreePath}</span>}
               {task.failReason && <span className="form-error">失败原因:{task.failReason}</span>}
             </div>
