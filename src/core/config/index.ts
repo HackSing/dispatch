@@ -33,10 +33,32 @@ const DEFAULT_AGENTS: Record<string, z.input<typeof AgentConfigSchema>> = {
     log_filter: 'claude_stream_json',
     calibrated: { date: '2026-08-22', cli_version: '2.1.229' }
   },
-  codex: { bin: 'codex', headless_args: ['exec'] },
+  codex: {
+    bin: 'codex',
+    // --skip-git-repo-check:兼容非 git 项目(git 项目下为无害 no-op)
+    headless_args: ['exec', '--skip-git-repo-check'],
+    auto_approve_args: ['--dangerously-bypass-approvals-and-sandbox'],
+    calibrated: { date: '2026-08-22', cli_version: '0.147.0' }
+  },
+  // dsh 本机未安装,参数未校准(占位);安装后需实测 headless/auto_approve/ready_check/start
   dsh: { bin: 'dsh' },
-  kimi: { bin: 'kimi' },
-  qwen: { bin: 'qwen' }
+  kimi: {
+    bin: 'kimi',
+    // print 模式(--prompt)禁止与 --auto/--yolo 组合(CLI 直接报错),
+    // 该模式本身即非交互执行,故 auto_approve_args 留空;--prompt 要求内联值,
+    // adapter 把 prompt 追加在 argv 末尾,因此 --prompt 必须是最后一个 flag
+    headless_args: ['--prompt'],
+    auto_approve_args: [],
+    calibrated: { date: '2026-08-22', cli_version: '0.36.1' }
+  },
+  qwen: {
+    bin: 'qwen',
+    // stdin 有内容时 qwen 自动进入非交互模式,无需 -p(避免「值必须紧跟 flag」的顺序问题)
+    headless_args: [],
+    auto_approve_args: ['--approval-mode', 'yolo'],
+    prompt_via: 'stdin',
+    calibrated: { date: '2026-08-22', cli_version: '0.21.12' }
+  }
 }
 
 export const ConfigSchema = z.object({
