@@ -55,6 +55,10 @@ test('invoke 全链:建任务→列表→状态', async () => {
   assert.equal(statusBody.value.dispatchHome, process.env.DISPATCH_HOME);
   assert.equal(statusBody.value.platform, process.platform);
 
+  // client 侧 encodeURIComponent 编码冒号,host 必须解码后再比对白名单
+  const encoded = await drive(handler, fakeReq({ url: `/api/dispatch/invoke/${encodeURIComponent('app:status')}` }), fakeRes());
+  assert.equal(encoded.body().ok, true);
+
   for (const d of fake.runDisposers()) await d?.();
 });
 

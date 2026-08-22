@@ -7,13 +7,19 @@
   "main": "src/host/index.js",
   "exports": {
     ".": "./src/host/index.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" }
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "inject": ["@deepseek-ai/dsh-client-runtime"],
+      "platform": "web"
+    }
   },
   "files": [
     "src",
+    "lib",
     "vendor",
     "cordis.patch.yml",
     "!vendor/**/README.md",
@@ -21,10 +27,12 @@
   ],
   "scripts": {
     "seed-vendor": "node scripts/seed-vendor.mjs",
+    "build-client": "node scripts/build-client.mjs",
+    "build": "npm run seed-vendor && npm run build-client",
     "verify": "node scripts/verify-package.mjs",
     "pretest": "npm run seed-vendor",
     "test": "node scripts/run-tests.mjs",
-    "prepack": "npm run seed-vendor && npm run verify"
+    "prepack": "npm run build && npm run verify"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

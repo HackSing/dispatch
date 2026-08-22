@@ -3,9 +3,9 @@
 
 # dispatch 双半插件（@aiwaretop/dsh-dispatch）验收
 
-- 修订：4
+- 修订：5
 - 关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
-- 资产指纹：`sha256:ff201f1173992cc8a4b6cd34c93acd5f71e343f6b00783c0ad1407e11b6d9dce`
+- 资产指纹：`sha256:2c1b66eb9b2fadb3dba8c4e3520ab0edc2c15a459177082e4ea45147b52679bc`
 - 关联方案：`docs/plans/dispatch-dsh-plugin.json`
 
 ## 验收目标
@@ -37,10 +37,10 @@
 
 ### `c4` client 半实机 UI 全流程：dsh-buddy 内建任务→进度→会话追问（流式）→归档查看
 
-- 状态：pending
+- 状态：passed
 - 类型：behavior_acceptance
 - 层级：L3
-- 证据：尚无
+- 证据：`.harness-tmp/evidence-batch2.md`
 
 ### `c5` 系统快捷键捕获弹窗：任意应用聚焦时按键→dsh-buddy 前置+弹窗→入库
 

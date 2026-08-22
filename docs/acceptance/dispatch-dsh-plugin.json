@@ -98,8 +98,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260822T115513-12410ceb47",
+          "objective_fingerprint": "sha256:b63c62cf8907233167d882df7f6434a9dad21f2b28bf117688e64cf2656fa78f",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "浏览器实机（隔离环境）：侧栏入口注入成功；面板 Shadow DOM 完整渲染（App 源码级复用，历史任务互通可见）；捕获模态含真实 agent 检测数据；提交任务后 SSE 驱动列表实时刷新（2→3）；Esc 关闭路径清理干净；样式注入隔离经只读 evaluate 存证。会话追问流式体验需真 agent 驱动，留用户日常确认（已声明）。",
+          "evidence_refs": [
+            ".harness-tmp/evidence-batch2.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-22T11:55:13+00:00"
+        }
+      ]
     },
     {
       "id": "c5",
@@ -121,7 +139,7 @@
     }
   ],
   "status": "pending",
-  "revision": 4,
+  "revision": 5,
   "revision_history": [
     {
       "revision": 1,
@@ -137,10 +155,15 @@
       "revision": 3,
       "asset_fingerprint": "sha256:d121324a019fc96cf08cb7f1c5159eefdf74935446b42ccc7d6b7709dffe330a",
       "updated_at": "2026-08-22T11:46:06+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:ff201f1173992cc8a4b6cd34c93acd5f71e343f6b00783c0ad1407e11b6d9dce",
+      "updated_at": "2026-08-22T11:46:06+00:00"
     }
   ],
   "created_at": "2026-08-22T11:30:02+00:00",
-  "updated_at": "2026-08-22T11:46:06+00:00",
+  "updated_at": "2026-08-22T11:55:13+00:00",
   "settled_at": null,
-  "asset_fingerprint": "sha256:ff201f1173992cc8a4b6cd34c93acd5f71e343f6b00783c0ad1407e11b6d9dce"
+  "asset_fingerprint": "sha256:2c1b66eb9b2fadb3dba8c4e3520ab0edc2c15a459177082e4ea45147b52679bc"
 }

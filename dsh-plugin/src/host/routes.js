@@ -39,7 +39,8 @@ async function handle(req, res, { invoke, hub }) {
     return;
   }
   if (req.method === 'POST' && pathname.startsWith(INVOKE_PATH_PREFIX)) {
-    const channel = pathname.slice(INVOKE_PATH_PREFIX.length);
+    // client 端 encodeURIComponent 编码了通道名里的冒号,此处还原后比对白名单
+    const channel = decodeURIComponent(pathname.slice(INVOKE_PATH_PREFIX.length));
     const body = await readBody(req);
     try {
       const value = await invoke(channel, body);
