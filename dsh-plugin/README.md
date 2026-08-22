@@ -8,8 +8,10 @@ dsh-buddy —— 任务捕获、30s 调度、git worktree 隔离执行、会话�
 
 - **host 半**（`src/host/`）：跑在 dsh 服务进程内（Electron-as-Node）。core 运行时
   （`vendor/dispatch-core.mjs`，esbuild 产物）+ 28 个 invoke 通道桥 + SSE 事件流。
-- **client 半**（`src/client/` → `lib/client.js`）：dsh 侧栏注入「派单」入口，点击打开
-  body 级 Shadow DOM 面板（renderer 组件源码级复用，React 19 自包含 bundle）。
+- **client 半**（`src/client/` → `lib/client.js`）：dsh 侧栏注入「任务派单」入口，
+  点击在中列（centerCol）接管出任务视图（task-board 同款：常驻 DOM、
+  `<html data-dispatch-panel-active>` 切显隐、与 task-board/ssh 互相让位），
+  renderer 组件源码级复用，React 19 自包含 bundle + Shadow DOM 样式隔离。
 
 ## 安装
 
@@ -17,7 +19,7 @@ dsh-buddy —— 任务捕获、30s 调度、git worktree 隔离执行、会话�
 dsh plugin --profile web add @aiwaretop/dsh-dispatch
 ```
 
-重启 dsh-buddy 生效。侧栏顶部出现「派单 Dispatch」入口。
+重启 dsh-buddy 生效。侧栏「新建会话」之后出现「任务派单」入口。
 
 ## 数据目录与双开
 

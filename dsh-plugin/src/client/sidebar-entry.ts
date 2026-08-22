@@ -137,7 +137,8 @@ function placeEntry(root: HTMLElement, entry: HTMLButtonElement): boolean {
 }
 
 export interface SidebarEntryOptions {
-  onOpen: () => void
+  /** 点击行:开合切换(视图常驻 DOM,显隐走 html 属性) */
+  onToggle: () => void
 }
 
 /**
@@ -145,13 +146,13 @@ export interface SidebarEntryOptions {
  * 面板开着时行高亮(active 桥接 panel.tsx 的开合状态)。
  * @returns disposer 移除入口与观察器
  */
-export function installSidebarEntry({ onOpen }: SidebarEntryOptions): () => void {
+export function installSidebarEntry({ onToggle }: SidebarEntryOptions): () => void {
   // DOM 级幂等:重复 apply/HMR 重注入时保留既有行,不挂第二份
   if (document.querySelector(ENTRY_SELECTOR) !== null) {
     return () => {}
   }
   ensureStyle()
-  const entry = createEntry(onOpen)
+  const entry = createEntry(onToggle)
   let root: HTMLElement | undefined
   let placed = false
 
