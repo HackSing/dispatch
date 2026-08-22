@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentDetection, AgentId, Project } from '@shared/types'
-import { AgentSelect, ProjectSelect, TriggerSelect, type TriggerValue } from './components/selectors'
+import {
+  AgentSelect,
+  ProjectSelect,
+  SubAgentSelect,
+  TriggerSelect,
+  type TriggerValue
+} from './components/selectors'
 import { pickAndCreateProject } from './lib/projects'
 import { fromDatetimeLocal } from './lib/time'
 
@@ -11,6 +17,7 @@ export function CaptureApp(): React.JSX.Element {
   const [text, setText] = useState('')
   const [trigger, setTrigger] = useState<TriggerValue>({ triggerType: 'none', triggerAtLocal: '' })
   const [agent, setAgent] = useState<AgentId | ''>('')
+  const [subAgent, setSubAgent] = useState<AgentId | ''>('')
   const [projectId, setProjectId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -35,11 +42,12 @@ export function CaptureApp(): React.JSX.Element {
     })
     if (!restoredFromUiState.current) {
       restoredFromUiState.current = true
-      if (
-        uiState.lastAgent &&
-        detectionList.some((d) => d.agentId === uiState.lastAgent && d.ok)
-      ) {
+      const usable = (id: AgentId | null): id is AgentId =>
+        id !== null && detectionList.some((d) => d.agentId === id && d.ok)
+      if (usable(uiState.lastAgent)) {
         setAgent(uiState.lastAgent)
+        // 子智能体依赖主智能体,仅在主恢复成功时一并恢复
+        if (usable(uiState.lastSubAgent)) setSubAgent(uiState.lastSubAgent)
       }
     }
   }, [])
@@ -99,13 +107,13 @@ export function CaptureApp(): React.JSX.Element {
         text,
         projectId,
         agent: agent || null,
-        // 子智能体选择器由 W1c 线补齐,此处先保持单点模式载荷完整
-        subAgent: null,
+        subAgent: (agent && subAgent) || null,
         triggerType: trigger.triggerType,
         triggerAt
       })
       await window.dispatchApi.invoke('ui-state:set', {
         lastAgent: agent || null,
+        lastSubAgent: (agent && subAgent) || null,
         lastProjectId: projectId
       })
       setText('')
@@ -145,7 +153,21 @@ export function CaptureApp(): React.JSX.Element {
       />
       <div className="capture-bar">
         <TriggerSelect value={trigger} onChange={setTrigger} />
-        <AgentSelect detections={detections} value={agent} onChange={setAgent} />
+        <AgentSelect
+          detections={detections}
+          value={agent}
+          onChange={(next) => {
+            setAgent(next)
+            // 子依赖主:清空主智能体即回单点模式
+            if (!next) setSubAgent('')
+          }}
+        />
+        <SubAgentSelect
+          detections={detections}
+          value={subAgent}
+          onChange={setSubAgent}
+          disabled={!agent}
+        />
         <ProjectSelect
           projects={projects}
           value={projectId}

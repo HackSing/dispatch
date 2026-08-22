@@ -7,7 +7,8 @@ let captureWindow: BrowserWindow | null = null
 let captureAutoHideSuspended = false
 
 const CAPTURE_WIDTH = 560
-const CAPTURE_HEIGHT = 220
+/** W1c 增加子智能体选择器后控件条可能折两行,高度随之上调 */
+const CAPTURE_HEIGHT = 250
 
 function webPreferences(): Electron.WebPreferences {
   return {

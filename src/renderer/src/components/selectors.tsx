@@ -38,6 +38,25 @@ export function TriggerSelect(props: {
   )
 }
 
+/** 主/子选择器共用的候选项渲染:仅检测通过可选,未通过置灰含原因 */
+function agentOptions(detections: AgentDetection[]): React.JSX.Element[] {
+  return AGENT_IDS.map((id) => {
+    const d = detections.find((x) => x.agentId === id)
+    if (!d) {
+      return (
+        <option key={id} value={id} disabled>
+          {id}(未检测)
+        </option>
+      )
+    }
+    return (
+      <option key={id} value={id} disabled={!d.ok}>
+        {d.ok ? `${id}${d.version ? ` · ${d.version}` : ''}` : `${id}(${d.failReason ?? '不可用'})`}
+      </option>
+    )
+  })
+}
+
 export function AgentSelect(props: {
   detections: AgentDetection[]
   value: AgentId | ''
@@ -51,21 +70,31 @@ export function AgentSelect(props: {
       onChange={(e) => onChange(e.target.value as AgentId | '')}
     >
       <option value="">智能体(不指定)</option>
-      {AGENT_IDS.map((id) => {
-        const d = detections.find((x) => x.agentId === id)
-        if (!d) {
-          return (
-            <option key={id} value={id} disabled>
-              {id}(未检测)
-            </option>
-          )
-        }
-        return (
-          <option key={id} value={id} disabled={!d.ok}>
-            {d.ok ? `${id}${d.version ? ` · ${d.version}` : ''}` : `${id}(${d.failReason ?? '不可用'})`}
-          </option>
-        )
-      })}
+      {agentOptions(detections)}
+    </select>
+  )
+}
+
+/**
+ * 子智能体选择器(工作流模式,可选):行为同主选择器;仅在已选主智能体时可用。
+ * 允许主=子(自审模式),选「不使用」即回到单点流程。
+ */
+export function SubAgentSelect(props: {
+  detections: AgentDetection[]
+  value: AgentId | ''
+  onChange: (next: AgentId | '') => void
+  disabled: boolean
+}): React.JSX.Element {
+  const { detections, value, onChange, disabled } = props
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      title={disabled ? '先选择主智能体' : '子智能体(可选):选择后进入 方案→实现→审查 工作流'}
+      onChange={(e) => onChange(e.target.value as AgentId | '')}
+    >
+      <option value="">子智能体(不使用)</option>
+      {agentOptions(detections)}
     </select>
   )
 }

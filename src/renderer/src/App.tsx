@@ -1,23 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { Task } from '@shared/types'
-import type { TaskStatus } from '@shared/state-machine'
 import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
 import { TaskOps } from './components/TaskOps'
 import { pickAndCreateProject } from './lib/projects'
+import { agentChainLabel, statusBadgeLabel } from './lib/task-labels'
 import { formatElapsed, formatTime } from './lib/time'
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: '待办',
-  scheduled: '已排程',
-  running: '执行中',
-  merging: '合并中',
-  awaiting_merge: '待合并',
-  conflict: '冲突',
-  failed: '失败',
-  done: '完成'
-}
 
 function triggerLabel(task: Task): string {
   if (task.triggerType === 'immediate') return '触发:立即'
@@ -60,10 +49,10 @@ function TaskRow(props: {
       <div className="task-body" onClick={onOpen} title="查看详情">
         <div className={`task-text${task.status === 'done' ? ' done' : ''}`}>{task.text}</div>
         <div className="task-meta">
-          <span className={`badge ${task.status}`}>{STATUS_LABELS[task.status]}</span>
+          <span className={`badge ${task.status}`}>{statusBadgeLabel(task)}</span>
           {active && task.startedAt && <span>已执行 {formatElapsed(task.startedAt, nowMs)}</span>}
           {triggerLabel(task) && <span>{triggerLabel(task)}</span>}
-          {task.agent && <span>{task.agent}</span>}
+          {task.agent && <span className="agent-chain">{agentChainLabel(task)}</span>}
           <span>创建:{formatTime(task.createdAt)}</span>
           {task.failReason && <span className="form-error">{task.failReason}</span>}
           {actionError && <span className="form-error">{actionError}</span>}
