@@ -5,6 +5,7 @@ import { resolvePaths, ensureDispatchDirs } from '@core/paths'
 import { loadConfig } from '@core/config'
 import { openDatabase, TaskStore, ProjectStore, DetectionStore } from '@core/db'
 import { seedDefaultProject } from '@core/bootstrap'
+import { recoverOnStartup, Scheduler } from '@core/scheduler'
 import { createTray } from './tray'
 import { createCaptureWindow, createMainWindow, showMainWindow, toggleCaptureWindow } from './windows'
 import { broadcast, refreshAgentDetections, registerIpcHandlers } from './ipc-handlers'
@@ -41,10 +42,36 @@ if (!gotLock) {
       hotkey: { accelerator: config.hotkey, registered: false }
     }
 
-    registerIpcHandlers(ctx, new ExecutionService(ctx))
+    const execution = new ExecutionService(ctx)
+    registerIpcHandlers(ctx, execution)
     createMainWindow()
     createCaptureWindow()
     createTray()
+
+    // spec §9:先崩溃恢复再起调度;恢复失败不阻塞调度启动,错误落日志
+    const scheduler = new Scheduler({
+      tasks,
+      enqueue: (id) => execution.enqueue(id),
+      retryMerge: (id) => execution.retryMerge(id)
+    })
+    void recoverOnStartup({
+      tasks,
+      projects,
+      config,
+      paths,
+      enqueue: (id) => scheduler.enqueueNow(id)
+    })
+      .then((r) => {
+        log.info(
+          `崩溃恢复完成: interrupted=${r.interrupted.length} reattached=${r.reattached.length} ` +
+            `missedRun=${r.missedRun.length} missedSkipped=${r.missedSkipped.length} ` +
+            `awaitingMerge=${r.awaitingMerge.length}`
+        )
+        for (const err of r.errors) log.error(`崩溃恢复单项失败: ${err}`)
+      })
+      .catch((e: Error) => log.error(`崩溃恢复失败: ${e.message}`))
+      .finally(() => scheduler.start())
+    app.on('will-quit', () => scheduler.stop())
 
     // 注册失败不静默:状态入 ctx,主窗顶部横幅提示改键(dev-plan 风险 4)
     ctx.hotkey.registered = globalShortcut.register(config.hotkey, () => toggleCaptureWindow())

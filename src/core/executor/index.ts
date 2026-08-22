@@ -251,6 +251,64 @@ function finishNoVcs(ctx: ExecContext): Task {
   })
 }
 
+/**
+ * B3 追加:重试合并入口。起点 awaiting_merge(调度器自动 / 用户手动)或
+ * conflict(仅手动,用户在 worktree 解决并提交后触发)。不占执行信号量,只持项目合并锁。
+ */
+export async function retryMerge(deps: ExecutorDeps, taskId: string): Promise<Task> {
+  const task = deps.tasks.get(taskId)
+  if (!task) throw new Error(`任务不存在: ${taskId}`)
+  if (task.status !== 'awaiting_merge' && task.status !== 'conflict') {
+    throw new Error(`任务 ${taskId} 状态 ${task.status} 不可重试合并`)
+  }
+  const project = deps.projects.get(task.projectId)
+  if (!project) throw new Error(`任务 ${taskId} 关联项目不存在: ${task.projectId}`)
+  const now = deps.now ?? (() => new Date())
+  // 恢复场景回填缺失(或 worktree 目录已被删)→ 无从合并,落定 failed
+  if (
+    !task.worktreePath ||
+    !task.branch ||
+    !task.baseBranch ||
+    !existsSync(task.worktreePath)
+  ) {
+    return deps.tasks.transition(task.id, 'failed', {
+      failReason: 'worktree_missing',
+      finishedAt: now().toISOString()
+    })
+  }
+  const o = {
+    projectPath: project.path,
+    worktreePath: task.worktreePath,
+    baseBranch: task.baseBranch,
+    branch: task.branch
+  }
+  deps.tasks.transition(task.id, 'merging', { failReason: null })
+  try {
+    const outcome = await deps.mergeLocks.withLock(project.id, () => mergeFlow(o))
+    if (outcome.kind === 'merged') {
+      await removeWorktree(o.projectPath, o.worktreePath, o.branch)
+      return deps.tasks.transition(task.id, 'done', {
+        mergedAt: now().toISOString(),
+        worktreePath: null
+      })
+    }
+    if (outcome.kind === 'conflict') {
+      // archiveDir 仅在恢复未回填时缺失,此时无处落报告,状态仍如实置 conflict
+      if (task.archiveDir) {
+        await writeConflictReport({ archiveDir: task.archiveDir, ...o, files: outcome.files })
+      }
+      return deps.tasks.transition(task.id, 'conflict')
+    }
+    return deps.tasks.transition(task.id, 'awaiting_merge', { failReason: outcome.reason })
+  } catch (e) {
+    // 非预期 git 错误(如用户 worktree 中 merge 未收尾):宁可误停,worktree 保留供排查
+    return deps.tasks.transition(task.id, 'failed', {
+      failReason: `merge_retry: ${(e as Error).message}`,
+      finishedAt: now().toISOString()
+    })
+  }
+}
+
 function failTask(ctx: ExecContext, failReason: string): Task {
   ctx.log.append(`[dispatch] 任务失败: ${failReason}\n`)
   return ctx.deps.tasks.transition(ctx.task.id, 'failed', {
