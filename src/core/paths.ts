@@ -11,6 +11,7 @@ export interface DispatchPaths {
   home: string
   configFile: string
   dbFile: string
+  uiStateFile: string
   promptsDir: string
   worktreesDir: string
   archivesDir: string
@@ -23,6 +24,7 @@ export function resolvePaths(home: string = dispatchHome()): DispatchPaths {
     home,
     configFile: join(home, 'config.json'),
     dbFile: join(home, 'dispatch.db'),
+    uiStateFile: join(home, 'ui-state.json'),
     promptsDir: join(home, 'prompts'),
     worktreesDir: join(home, 'worktrees'),
     archivesDir: join(home, 'archives'),

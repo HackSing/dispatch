@@ -1,12 +1,13 @@
-import { app } from 'electron'
+import { app, globalShortcut } from 'electron'
 import log from 'electron-log/main'
 import { join } from 'node:path'
 import { resolvePaths, ensureDispatchDirs } from '@core/paths'
 import { loadConfig } from '@core/config'
-import { openDatabase } from '@core/db'
+import { openDatabase, TaskStore, ProjectStore, DetectionStore } from '@core/db'
+import { seedDefaultProject } from '@core/bootstrap'
 import { createTray } from './tray'
-import { createMainWindow, showMainWindow } from './windows'
-import { registerIpcHandlers } from './ipc-handlers'
+import { createCaptureWindow, createMainWindow, showMainWindow, toggleCaptureWindow } from './windows'
+import { broadcast, refreshAgentDetections, registerIpcHandlers } from './ipc-handlers'
 import type { AppContext } from './context'
 
 let ctx: AppContext | null = null
@@ -26,11 +27,40 @@ if (!gotLock) {
 
     const config = loadConfig(paths.configFile)
     const db = openDatabase(paths.dbFile)
-    ctx = { paths, config, db }
+    const tasks = new TaskStore(db, (t) => broadcast('task:changed', { taskId: t.id, status: t.status }))
+    const projects = new ProjectStore(db)
+    const detections = new DetectionStore(db)
+    ctx = {
+      paths,
+      config,
+      db,
+      tasks,
+      projects,
+      detections,
+      hotkey: { accelerator: config.hotkey, registered: false }
+    }
 
     registerIpcHandlers(ctx)
     createMainWindow()
+    createCaptureWindow()
     createTray()
+
+    // 注册失败不静默:状态入 ctx,主窗顶部横幅提示改键(dev-plan 风险 4)
+    ctx.hotkey.registered = globalShortcut.register(config.hotkey, () => toggleCaptureWindow())
+    if (!ctx.hotkey.registered) {
+      log.warn(`全局快捷键 ${config.hotkey} 注册失败,可能被其他应用占用`)
+    }
+
+    // 首启种子 default 项目;git 初始化失败不建项目行,下次启动重试
+    void seedDefaultProject(projects)
+      .then((r) => {
+        if (r.created) log.info(`default 项目已创建: ${r.project.path}`)
+      })
+      .catch((e: Error) => log.error(`default 项目初始化失败: ${e.message}`))
+
+    // 启动检测异步跑,不阻塞窗口
+    void refreshAgentDetections(ctx).catch((e: Error) => log.error(`agent 检测失败: ${e.message}`))
+
     log.info(`Dispatch ${app.getVersion()} 启动,home=${paths.home}`)
   })
 
@@ -38,6 +68,8 @@ if (!gotLock) {
   app.on('window-all-closed', () => {})
 
   app.on('activate', () => showMainWindow())
+
+  app.on('will-quit', () => globalShortcut.unregisterAll())
 }
 
 export function getContext(): AppContext {

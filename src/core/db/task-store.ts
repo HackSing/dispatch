@@ -53,6 +53,15 @@ export interface CreateTaskInput {
   triggerAt?: string | null
 }
 
+/** B1 追加:updateEditable() 可更新的字段,限 todo/scheduled 状态 */
+export interface EditableTaskPatch {
+  text?: string
+  projectId?: string
+  agent?: AgentId | null
+  triggerType?: TriggerType
+  triggerAt?: string | null
+}
+
 /** 迁移时可一并更新的执行期字段(状态之外的写入也必须经 transition 收口) */
 export interface TransitionPatch {
   failReason?: string | null
@@ -151,6 +160,43 @@ export class TaskStore {
       .prepare('SELECT * FROM tasks WHERE status = ? ORDER BY created_at')
       .all(status) as TaskRow[]
     return rows.map(toTask)
+  }
+
+  /**
+   * B1 追加:可编辑字段更新,仅 todo/scheduled 允许。
+   * 只改字段不改状态——trigger 变化引发的 todo↔scheduled 升降级仍必须经 transition() 收口。
+   */
+  updateEditable(id: string, patch: EditableTaskPatch): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'todo' && current.status !== 'scheduled') {
+      throw new Error(`任务状态 ${current.status} 不可编辑`)
+    }
+    const next = {
+      text: patch.text ?? current.text,
+      projectId: patch.projectId ?? current.projectId,
+      agent: patch.agent !== undefined ? patch.agent : current.agent,
+      triggerType: patch.triggerType ?? current.triggerType,
+      triggerAt: patch.triggerAt !== undefined ? patch.triggerAt : current.triggerAt
+    }
+    if (!next.text.trim()) throw new Error('任务文本不能为空')
+    if (next.triggerType !== 'none' && !next.agent) {
+      throw new Error('可执行任务(trigger ≠ none)必须指定 agent')
+    }
+    if (next.triggerType === 'at' && !next.triggerAt) {
+      throw new Error('定时任务必须提供 triggerAt')
+    }
+    if (next.triggerType !== 'at') next.triggerAt = null
+    this.db
+      .prepare(
+        `UPDATE tasks SET text = @text, project_id = @projectId, agent = @agent,
+           trigger_type = @triggerType, trigger_at = @triggerAt WHERE id = @id`
+      )
+      .run({ id, ...next })
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during update: ${id}`)
+    this.onChange?.(updated)
+    return updated
   }
 
   transition(id: string, to: TaskStatus, patch: TransitionPatch = {}): Task {

@@ -12,4 +12,5 @@ export function openDatabase(dbFile: string): Database {
 
 export { SCHEMA_VERSION } from './migrations'
 export { TaskStore } from './task-store'
-export { ProjectStore } from './project-store'
+export { ProjectStore, ProjectHasActiveTasksError } from './project-store'
+export { DetectionStore } from './detection-store'
