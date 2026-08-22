@@ -4,6 +4,7 @@ import type { Task } from '@shared/types'
 import type { TaskArchive } from '@shared/ipc'
 import type { TaskResult } from '@core/agents/types'
 import { formatElapsed, formatTime } from '../lib/time'
+import { TaskOps } from './TaskOps'
 
 const ACTIVE_POLL_MS = 3000
 
@@ -26,17 +27,25 @@ function parseResult(raw: string | null): TaskResult | null {
   }
 }
 
-function Section(props: { title: string; children: React.ReactNode }): React.JSX.Element {
+function Section(props: {
+  title: string
+  className?: string
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
-    <section className="detail-section">
+    <section className={`detail-section${props.className ? ` ${props.className}` : ''}`}>
       <h3>{props.title}</h3>
       {props.children}
     </section>
   )
 }
 
-export function TaskDetail(props: { task: Task; onClose: () => void }): React.JSX.Element {
-  const { task, onClose } = props
+export function TaskDetail(props: {
+  task: Task
+  onClose: () => void
+  onOpenTask?: (taskId: string) => void
+}): React.JSX.Element {
+  const { task, onClose, onOpenTask } = props
   const [archive, setArchive] = useState<TaskArchive | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -93,7 +102,22 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
           </button>
         </header>
 
+        {(task.status === 'failed' ||
+          task.status === 'conflict' ||
+          task.status === 'awaiting_merge') && (
+          <div className="detail-actions">
+            <TaskOps task={task} onOpenTask={onOpenTask} />
+          </div>
+        )}
+
         <div className="detail-body">
+          {task.status === 'conflict' && task.worktreePath && (
+            <div className="conflict-callout">
+              <p>合并冲突:请在下方 worktree 内手动解决后点「已解决,重试合并」,或放弃该任务。</p>
+              <code>{task.worktreePath}</code>
+            </div>
+          )}
+
           <Section title="任务原文">
             <pre className="detail-pre">{task.text}</pre>
           </Section>
@@ -137,7 +161,10 @@ export function TaskDetail(props: { task: Task; onClose: () => void }): React.JS
           )}
 
           {archive?.conflictReport && (
-            <Section title="冲突报告">
+            <Section
+              title="冲突报告"
+              className={task.status === 'conflict' ? 'conflict-highlight' : undefined}
+            >
               <div className="markdown">
                 <ReactMarkdown>{archive.conflictReport}</ReactMarkdown>
               </div>
