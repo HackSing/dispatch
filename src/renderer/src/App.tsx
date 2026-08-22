@@ -4,7 +4,7 @@ import { useAppStore } from './stores/app-store'
 import { TaskEditForm } from './components/TaskEditForm'
 import { TaskDetail } from './components/TaskDetail'
 import { SessionPanel } from './components/SessionPanel'
-import { TaskOps } from './components/TaskOps'
+import { TaskOps, ToggleTodoButton } from './components/TaskOps'
 import { pickAndCreateProject } from './lib/projects'
 import { agentChainLabel, statusBadgeLabel } from './lib/task-labels'
 import { formatElapsed, formatTime } from './lib/time'
@@ -75,6 +75,7 @@ function TaskRow(props: {
         </div>
       </div>
       <div className="task-actions">
+        <ToggleTodoButton task={task} />
         {editable && (
           <button className="btn" onClick={onEdit}>
             编辑

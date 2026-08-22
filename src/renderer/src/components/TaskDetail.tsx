@@ -6,7 +6,7 @@ import type { TaskResult } from '@core/agents/types'
 import { useAppStore } from '../stores/app-store'
 import { agentChainLabel, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
-import { TaskOps } from './TaskOps'
+import { TaskOps, ToggleTodoButton } from './TaskOps'
 
 const ACTIVE_POLL_MS = 3000
 
@@ -229,6 +229,12 @@ export function TaskDetail(props: {
           task.status === 'awaiting_merge') && (
           <div className="detail-actions">
             <TaskOps task={task} onOpenTask={onOpenTask} />
+          </div>
+        )}
+
+        {(task.status === 'todo' || task.status === 'done') && (
+          <div className="detail-actions">
+            <ToggleTodoButton task={task} verbose />
           </div>
         )}
 

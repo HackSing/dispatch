@@ -3,6 +3,44 @@ import type { Task } from '@shared/types'
 import { useAppStore } from '../stores/app-store'
 
 /**
+ * 手动状态切换按钮(todo→完成 / done→重开),任务行与详情页共用;
+ * 与勾选框走同一 task:toggle-todo 通道,只是给状态更新一个显式可发现的入口。
+ */
+export function ToggleTodoButton(props: {
+  task: Task
+  /** 详情页用完整文案(标记完成/重开为待办),行内用短文案(完成/重开) */
+  verbose?: boolean
+}): React.JSX.Element | null {
+  const { task, verbose } = props
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (task.status !== 'todo' && task.status !== 'done') return null
+  const isTodo = task.status === 'todo'
+  const label = isTodo ? (verbose ? '标记完成' : '完成') : verbose ? '重开为待办' : '重开'
+  const toggle = (): void => {
+    setBusy(true)
+    setError(null)
+    void window.dispatchApi
+      .invoke('task:toggle-todo', { id: task.id })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <>
+      <button
+        className="btn"
+        disabled={busy}
+        title={isTodo ? '标记为已完成(与勾选框等效)' : '取消完成,重开为待办'}
+        onClick={toggle}
+      >
+        {label}
+      </button>
+      {error && <span className="form-error">{error}</span>}
+    </>
+  )
+}
+
+/**
  * failed/conflict/awaiting_merge 的操作按钮组,任务行与详情页共用。
  * task:retry-merge 的 handler 由合并线注册,未注册时的报错在此 catch 后原样展示。
  */
