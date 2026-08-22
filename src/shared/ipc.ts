@@ -112,6 +112,8 @@ export interface InvokeMap {
   'task:abandon': { req: { id: string }; res: Task }
   /** failed 任务手动清理遗留 worktree 与分支(归档保留);无 worktree 时为 no-op */
   'task:cleanup-worktree': { req: { id: string }; res: Task }
+  /** 运行中任务用户中断 → failed(user_interrupted),worktree 保留可重跑/追问 */
+  'task:interrupt': { req: { id: string }; res: void }
   /** done/failed 任务开面板会话:创建接力任务并就绪 worktree/传输,返回接力任务 */
   'task:follow-up-start': { req: { parentId: string }; res: Task }
   /** 契约:同步校验后立即返回,轮次进展经 task:session-event 广播 */
@@ -162,6 +164,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:retry-merge',
   'task:abandon',
   'task:cleanup-worktree',
+  'task:interrupt',
   'task:follow-up-start',
   'task:follow-up-send',
   'task:follow-up-finish',

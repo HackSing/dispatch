@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { AgentId, Task } from '@shared/types'
 import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
 import { getPlatformOps } from '@core/platform'
-import { KeyedLock, Semaphore } from '@core/executor/locks'
+import { KeyedLock, Semaphore, TaskCancellations } from '@core/executor/locks'
 import { retryMerge, runTask, type ExecutorDeps } from '@core/executor'
 import type { AppContext } from './context'
 
@@ -14,9 +14,11 @@ import type { AppContext } from './context'
  */
 export class ExecutionService {
   private readonly deps: ExecutorDeps
+  private readonly cancellations = new TaskCancellations()
 
   constructor(ctx: AppContext) {
     this.deps = {
+      cancellations: this.cancellations,
       tasks: ctx.tasks,
       projects: ctx.projects,
       config: ctx.config,
@@ -47,6 +49,11 @@ export class ExecutionService {
 
   maybeRunImmediate(task: Task): void {
     if (task.triggerType === 'immediate' && task.status === 'scheduled') this.enqueue(task.id)
+  }
+
+  /** 用户中断运行中任务;agent 运行窗口之外(如合并中)返回 false */
+  interrupt(taskId: string): boolean {
+    return this.cancellations.interrupt(taskId)
   }
 
   /** 重试合并(fire-and-forget):调度器周期重试与 task:retry-merge 手动触发共用 */

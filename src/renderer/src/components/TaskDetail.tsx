@@ -224,7 +224,8 @@ export function TaskDetail(props: {
           </button>
         </header>
 
-        {(task.status === 'failed' ||
+        {(task.status === 'running' ||
+          task.status === 'failed' ||
           task.status === 'conflict' ||
           task.status === 'awaiting_merge') && (
           <div className="detail-actions">
@@ -333,9 +334,12 @@ export function TaskDetail(props: {
             </Section>
           )}
 
-          {archive?.logTail && (
+          {(archive?.logTail || isActive(task)) && (
             <Section title={isActive(task) ? '执行日志(实时)' : '执行日志(尾部)'}>
-              <pre className="detail-pre log-box">{archive.logTail}</pre>
+              <pre className="detail-pre log-box">
+                {archive?.logTail ||
+                  '(暂无过程输出:agent 尚未产生日志,或该 agent 未配置流式输出)'}
+              </pre>
             </Section>
           )}
 

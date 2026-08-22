@@ -41,7 +41,7 @@ export function ToggleTodoButton(props: {
 }
 
 /**
- * failed/conflict/awaiting_merge 的操作按钮组,任务行与详情页共用。
+ * running(可中断)/failed/conflict/awaiting_merge 的操作按钮组,任务行与详情页共用。
  * task:retry-merge 的 handler 由合并线注册,未注册时的报错在此 catch 后原样展示。
  */
 export function TaskOps(props: {
@@ -62,10 +62,16 @@ export function TaskOps(props: {
 
   const rerun = (): void =>
     run(async () => {
-      const copy = await window.dispatchApi.invoke('task:rerun', { id: task.id })
+      const task2 = await window.dispatchApi.invoke('task:rerun', { id: task.id })
       await useAppStore.getState().refreshTasks()
-      onOpenTask?.(copy.id)
+      onOpenTask?.(task2.id)
     })
+
+  const interrupt = (): void => {
+    if (!window.confirm('中断该任务?进行中的 agent 将被终止,任务标记为失败;之后可重跑或继续对话。'))
+      return
+    run(() => window.dispatchApi.invoke('task:interrupt', { id: task.id }))
+  }
 
   const retryMerge = (): void =>
     run(async () => {
@@ -87,11 +93,28 @@ export function TaskOps(props: {
     })
   }
 
-  if (task.status !== 'failed' && task.status !== 'conflict' && task.status !== 'awaiting_merge') {
+  // running 面板接力任务的终止归面板;其余 running 提供中断
+  const interruptible = task.status === 'running' && task.parentTaskId === null
+  if (
+    !interruptible &&
+    task.status !== 'failed' &&
+    task.status !== 'conflict' &&
+    task.status !== 'awaiting_merge'
+  ) {
     return null
   }
   return (
     <>
+      {interruptible && (
+        <button
+          className="btn danger"
+          disabled={busy}
+          title="终止进行中的 agent,任务转失败(可重跑/继续对话)"
+          onClick={interrupt}
+        >
+          中断
+        </button>
+      )}
       {task.status === 'failed' && (
         <button className="btn" disabled={busy} title="复制任务重新入队执行" onClick={rerun}>
           重跑

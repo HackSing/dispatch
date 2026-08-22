@@ -25,7 +25,7 @@ export interface WorkflowHost {
     prompt: string,
     timeoutMs: number,
     sessionId?: string
-  ): Promise<{ timedOut: boolean; exitCode: number }>
+  ): Promise<{ timedOut: boolean; exitCode: number; interrupted: boolean }>
   /** 主 agent fresh run 前预生成会话 id 并落库;不支持会话的 agent 返回 undefined */
   prepareSessionId(ctx: ExecContext, agentId: AgentId): string | undefined
   judgePlan(archiveDir: string): string | null
@@ -111,7 +111,7 @@ async function runPlanPhase(
   ctx.deps.tasks.setPhase(ctx.task.id, 'plan')
   const prompt = renderPrompt(wfTemplate(ctx, 'plan'), baseVars(ctx))
   const sessionId = host.prepareSessionId(ctx, ctx.task.agent as AgentId)
-  const { timedOut, exitCode } = await host.runAdapterOnce(
+  const { timedOut, exitCode, interrupted } = await host.runAdapterOnce(
     ctx,
     adapter,
     cwd,
@@ -119,6 +119,7 @@ async function runPlanPhase(
     phaseTimeoutMs(ctx, 'plan'),
     sessionId
   )
+  if (interrupted) return 'user_interrupted'
   if (timedOut) return 'timeout_plan'
   if (exitCode !== 0) return `exit_${exitCode}`
   return host.judgePlan(ctx.archiveDir)
@@ -143,13 +144,14 @@ async function runImplementPhase(
     ...baseVars(ctx),
     REVIEW_FEEDBACK: feedback
   })
-  const { timedOut, exitCode } = await host.runAdapterOnce(
+  const { timedOut, exitCode, interrupted } = await host.runAdapterOnce(
     ctx,
     adapter,
     cwd,
     prompt,
     phaseTimeoutMs(ctx, 'implement')
   )
+  if (interrupted) return 'user_interrupted'
   if (timedOut) return 'timeout_implement'
   if (exitCode !== 0) return `exit_${exitCode}`
   return host.judgeResult(ctx.archiveDir)
@@ -178,7 +180,7 @@ async function runReviewPhase(
   })
   // 主 agent 每次 fresh run 各自生成会话,后写覆盖:任务最终留最后一次审查会话(v03 冻结)
   const sessionId = host.prepareSessionId(ctx, ctx.task.agent as AgentId)
-  const { timedOut, exitCode } = await host.runAdapterOnce(
+  const { timedOut, exitCode, interrupted } = await host.runAdapterOnce(
     ctx,
     adapter,
     cwd,
@@ -186,6 +188,7 @@ async function runReviewPhase(
     phaseTimeoutMs(ctx, 'review'),
     sessionId
   )
+  if (interrupted) return { fail: 'user_interrupted' }
   if (timedOut) return { fail: 'timeout_review' }
   if (before) {
     const after = await snapshotWorktree(cwd)

@@ -117,6 +117,16 @@ export function registerIpcHandlers(
     cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)
   )
 
+  handle('task:interrupt', ({ id }) => {
+    const task = ctx.tasks.get(id)
+    if (!task) throw new Error(`任务不存在: ${id}`)
+    if (task.status !== 'running') throw new Error(`任务状态 ${task.status} 不可中断`)
+    if (sessions.workingDirOf(id)) throw new Error('面板会话请在面板内终止或放弃')
+    if (!execution.interrupt(id)) {
+      throw new Error('当前阶段不可中断(可能正在合并),稍候再试')
+    }
+  })
+
   handle('task:follow-up-start', ({ parentId }) => sessions.start(parentId))
 
   handle('task:follow-up-send', ({ id, text }) => sessions.send(id, text))

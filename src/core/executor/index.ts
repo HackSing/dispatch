@@ -18,7 +18,7 @@ import {
   removeWorktree,
   writeConflictReport
 } from '@core/gitops'
-import type { KeyedLock, Semaphore } from './locks'
+import type { KeyedLock, Semaphore, TaskCancellations } from './locks'
 import { runWorkflow, type WorkflowHost } from './workflow'
 
 export interface ExecutorDeps {
@@ -29,6 +29,8 @@ export interface ExecutorDeps {
   adapterFor: (agent: AgentId) => AgentAdapter
   semaphore: Semaphore
   mergeLocks: KeyedLock
+  /** 用户中断登记表(缺省不可中断);面板会话不经此表,由 SessionService 自管 */
+  cancellations?: TaskCancellations
   /** 测试注入假时钟;缺省真实时钟 */
   now?: () => Date
   /** 应用内置模板路径(单文件形态,指向 default.md),shell 层传入;缺省走 prompt 模块兜底 */
@@ -194,13 +196,24 @@ async function runAgent(
   })
   const timeoutMs = ctx.deps.taskTimeoutMs ?? ctx.deps.config.task_timeout_min * 60_000
   const sessionId = prepareSessionId(ctx, ctx.task.agent as AgentId)
-  const { timedOut, exitCode } = await runAdapterOnce(ctx, adapter, cwd, prompt, timeoutMs, sessionId)
+  const { timedOut, exitCode, interrupted } = await runAdapterOnce(
+    ctx,
+    adapter,
+    cwd,
+    prompt,
+    timeoutMs,
+    sessionId
+  )
+  if (interrupted) return 'user_interrupted'
   if (timedOut) return 'timeout'
   if (exitCode !== 0) return `exit_${exitCode}`
   return judgeArtifacts(ctx.archiveDir)
 }
 
-/** 单次 adapter 运行:独立 AbortController + 超时,kill 统一由 adapter 经 platform.killTree 落实 */
+/**
+ * 单次 adapter 运行:独立 AbortController + 超时,kill 统一由 adapter 经 platform.killTree 落实;
+ * 运行期间在中断登记表挂号,用户中断与超时/普通失败在返回值区分。
+ */
 async function runAdapterOnce(
   ctx: ExecContext,
   adapter: AgentAdapter,
@@ -208,13 +221,14 @@ async function runAdapterOnce(
   prompt: string,
   timeoutMs: number,
   sessionId?: string
-): Promise<{ timedOut: boolean; exitCode: number }> {
+): Promise<{ timedOut: boolean; exitCode: number; interrupted: boolean }> {
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
     controller.abort()
   }, timeoutMs)
+  ctx.deps.cancellations?.register(ctx.task.id, controller)
   let exitCode: number
   try {
     ;({ exitCode } = await adapter.run({
@@ -228,8 +242,10 @@ async function runAdapterOnce(
     }))
   } finally {
     clearTimeout(timer)
+    ctx.deps.cancellations?.unregister(ctx.task.id)
   }
-  return { timedOut, exitCode }
+  const interrupted = ctx.deps.cancellations?.consumeInterrupted(ctx.task.id) ?? false
+  return { timedOut, exitCode, interrupted }
 }
 
 /** spec §6.3 完成判定,fail_reason 精确到缺哪环;工作流按阶段分用下方两个判定件 */
