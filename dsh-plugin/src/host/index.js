@@ -45,7 +45,12 @@ export function apply(ctx) {
     logger.error(`Dispatch runtime 装配失败: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
 
-  const invoke = createIpcBridge({ runtime, broadcast: hub.broadcast });
+  const invoke = createIpcBridge({
+    runtime,
+    broadcast: hub.broadcast,
+    // 宿主目录选择服务惰性求值:可能后挂或缺失(缺失时 cordis ctx.get 返回 undefined)
+    getDirectoryPicker: () => ctx.get('directoryPicker'),
+  });
 
   ctx.inject(['webServer'], (routeCtx) => {
     routeCtx.effect(() => registerRoutes(routeCtx, { invoke, hub }), '@aiwaretop/dsh-dispatch: routes');

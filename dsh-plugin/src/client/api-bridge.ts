@@ -1,9 +1,10 @@
 /**
  * DispatchApi 的浏览器实现:与 preload 同形(invoke/on),组件层零感知。
  * invoke → POST /api/dispatch/invoke/<channel>;事件 → EventSource SSE 具名分发。
- * 两个壳专属通道在此本地拦截,不打到 host:
- *   project:pick-directory → window.prompt(浏览器无法枚举本地目录)
- *   capture:hide          → 模态层回调
+ * capture:hide 为壳专属,在此本地拦截为模态层回调,不打到 host。
+ * project:pick-directory 三级串联:先 HTTP 透传(宿主 native 系统对话框,
+ * 仅本机部署形态有),宿主返回 not_supported(browse/缺失)落回面板模态回调
+ * (options.pickDirectory,模态自身已含 browse → 手输串联);其余错误原样抛。
  *
  * @module dsh-dispatch/client/api-bridge
  */
@@ -14,6 +15,27 @@ type Listener = (payload: any) => void
 
 export interface BridgeOptions {
   onCaptureHide?: () => void
+  /** 宿主无 native 目录选择能力时的降级交互,由 panel 提供(模态自身已含 browse → 手输串联) */
+  pickDirectory?: () => Promise<string | null>
+}
+
+/**
+ * 通用 HTTP invoke:POST 透传并解包 {ok} 信封。业务失败抛带 code 的 Error
+ * (message 已是 `${message}(${code})` 展示格式);供通用路径与 pick-directory 串联共用。
+ */
+async function invokeHttp(channel: InvokeChannel, payload: unknown): Promise<unknown> {
+  const res = await fetch(`/api/dispatch/invoke/${encodeURIComponent(channel)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload === undefined || payload === null ? '' : JSON.stringify(payload),
+  })
+  const body = (await res.json()) as { ok: boolean; value?: unknown; error?: { code: string; message: string } }
+  if (!body.ok) {
+    throw body.error
+      ? Object.assign(new Error(`${body.error.message}(${body.error.code})`), { code: body.error.code })
+      : new Error(`invoke ${channel} 失败: HTTP ${res.status}`)
+  }
+  return body.value
 }
 
 export function createApiBridge(options: BridgeOptions = {}): DispatchApi {
@@ -42,18 +64,19 @@ export function createApiBridge(options: BridgeOptions = {}): DispatchApi {
       return undefined as InvokeMap[C]['res']
     }
     if (channel === 'project:pick-directory') {
-      return promptDirectory() as InvokeMap[C]['res']
+      // 三级串联第一级:宿主 native 系统对话框;not_supported(browse/缺失)落回面板模态,其余错误原样抛
+      try {
+        return (await invokeHttp(channel, payload)) as InvokeMap[C]['res']
+      } catch (cause) {
+        if ((cause as { code?: string }).code !== 'not_supported') throw cause
+      }
+      // 不做静默兜底:缺回调直接抛错,由调用方的错误呈现通道暴露
+      if (options.pickDirectory === undefined) {
+        throw new Error('插件形态目录选择需要面板提供 pickDirectory 回调(window.prompt 在 Electron 渲染进程不可用)')
+      }
+      return (await options.pickDirectory()) as InvokeMap[C]['res']
     }
-    const res = await fetch(`/api/dispatch/invoke/${encodeURIComponent(channel)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload === undefined || payload === null ? '' : JSON.stringify(payload),
-    })
-    const body = (await res.json()) as { ok: boolean; value?: unknown; error?: { code: string; message: string } }
-    if (!body.ok) {
-      throw new Error(body.error ? `${body.error.message}(${body.error.code})` : `invoke ${channel} 失败: HTTP ${res.status}`)
-    }
-    return body.value as InvokeMap[C]['res']
+    return (await invokeHttp(channel, payload)) as InvokeMap[C]['res']
   }
 
   function on<C extends EventChannel>(channel: C, listener: (payload: any) => void): () => void {
@@ -67,10 +90,4 @@ export function createApiBridge(options: BridgeOptions = {}): DispatchApi {
   }
 
   return { invoke, on } as DispatchApi
-}
-
-/** 浏览器拿不到目录枚举,prompt 手输绝对路径;取消返回 null(与对话框语义一致) */
-function promptDirectory(): string | null {
-  const input = window.prompt('输入项目文件夹的绝对路径(插件形态不支持系统目录选择):')
-  return input && input.trim() ? input.trim() : null
 }

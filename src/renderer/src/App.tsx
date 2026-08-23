@@ -14,6 +14,9 @@ export function App(): React.JSX.Element {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [filter, setFilter] = useState<TaskFilter>('active')
+  // 「新建项目」操作错误(目录选择/创建失败)。不复用 store.loadError:
+  // 它语义是初始加载失败(呈现为「加载失败:」),混用会误导
+  const [projectError, setProjectError] = useState<string | null>(null)
   const detailTask = detailId ? (store.tasks.find((t) => t.id === detailId) ?? null) : null
   const sessionTask = sessionId ? (store.tasks.find((t) => t.id === sessionId) ?? null) : null
 
@@ -40,8 +43,17 @@ export function App(): React.JSX.Element {
     return counts
   }, [store.tasks])
 
-  const onCreateProject = (): Promise<string | null> =>
-    pickAndCreateProject(() => store.refreshProjects())
+  // 在定义处统一 catch,覆盖该回调的全部调用点(工具栏按钮与编辑表单内的
+  // 「新建项目」入口);错误不再静默吞掉,走顶部横幅呈现
+  const onCreateProject = async (): Promise<string | null> => {
+    setProjectError(null)
+    try {
+      return await pickAndCreateProject(() => store.refreshProjects())
+    } catch (e) {
+      setProjectError((e as Error).message)
+      return null
+    }
+  }
 
   return (
     <div className="app">
@@ -54,6 +66,15 @@ export function App(): React.JSX.Element {
               字段后重启应用(设置页将在后续版本提供)。
             </>
           )}
+        </div>
+      )}
+      {projectError !== null && (
+        // 复用快捷键失败横幅的 .banner 类与 .btn link 按钮,不新造样式
+        <div className="banner" role="alert">
+          新建项目失败:{projectError}
+          <button className="btn link" onClick={() => setProjectError(null)}>
+            关闭
+          </button>
         </div>
       )}
       <header className="app-header">

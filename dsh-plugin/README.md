@@ -7,7 +7,7 @@ dsh-buddy —— 任务捕获、30s 调度、git worktree 隔离执行、会话�
 ## 形态
 
 - **host 半**（`src/host/`）：跑在 dsh 服务进程内（Electron-as-Node）。core 运行时
-  （`vendor/dispatch-core.mjs`，esbuild 产物）+ 28 个 invoke 通道桥 + SSE 事件流。
+  （`vendor/dispatch-core.mjs`，esbuild 产物）+ 32 个 invoke 通道桥 + SSE 事件流。
 - **client 半**（`src/client/` → `lib/client.js`）：dsh 侧栏注入「任务派单」入口，
   点击在中列（centerCol）接管出任务视图（task-board 同款：常驻 DOM、
   `<html data-dispatch-panel-active>` 切显隐、与 task-board/ssh 互相让位），
@@ -44,7 +44,7 @@ dsh-buddy 壳注册系统级 `CommandOrControl+Shift+Space`，按下 → 壳前�
 
 | 通道 | 独立 app | 插件形态 |
 | --- | --- | --- |
-| `project:pick-directory` | 系统目录对话框 | 手输绝对路径（prompt） |
+| `project:pick-directory` | 系统目录对话框 | 三级串联：宿主 native 系统对话框 → 目录浏览器（dsh directoryPicker browse）→ 手动输入兜底 |
 | `task:open-session-terminal` | 交互式终端 | 不支持（会话追问面板为主交互） |
 | `task:open-archive` | 打开归档目录 | 不支持（详情页显示归档路径） |
 
@@ -61,7 +61,7 @@ dsh plugin --profile web remove @aiwaretop/dsh-dispatch
 ```bash
 cd dsh-plugin
 npm run build     # seed-vendor(core bundle + Electron-ABI better-sqlite3 + prompts) + build-client
-npm test          # Electron-as-Node 下 node --test(host 半 6 用例)
+npm test          # Electron-as-Node 下 node --test(host 半 9 用例)
 npm pack          # build + verify + tarball
 ```
 

@@ -1,6 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
 import type { AgentDetection, AgentId, Task } from '@shared/types'
 import type {
   AgentSessionCapability,
@@ -25,6 +24,7 @@ import {
   rerunFailedTask,
   toggleTodo
 } from '@core/task-edit'
+import { createProject } from '@core/project-ops'
 import { cleanupTaskWorkspace } from '@core/executor/cleanup'
 import { readTaskArchive } from '@core/archive/read'
 import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
@@ -205,13 +205,7 @@ export function registerIpcHandlers(
 
   handle('project:list', () => ctx.projects.list())
 
-  handle('project:create', (payload) => {
-    const path = payload.path.trim()
-    if (!path) throw new Error('项目路径不能为空')
-    const existing = ctx.projects.list().find((p) => p.path === path)
-    if (existing) return existing
-    return ctx.projects.create({ name: payload.name?.trim() || basename(path), path })
-  })
+  handle('project:create', (payload) => createProject(ctx.projects, payload))
 
   handle('project:remove', ({ id }) => {
     // default 项目是捕获窗兜底目标且由启动种子维护(core/bootstrap),移除后会话期内悬空
@@ -231,6 +225,11 @@ export function registerIpcHandlers(
         : await dialog.showOpenDialog(options)
       return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
     })
+  })
+
+  // 独立版 pickDirectory 走原生对话框,渲染层不会调用此通道;注册仅为通道契约完整
+  handle('project:browse-dir', () => {
+    throw new Error('独立应用使用原生目录对话框,不提供目录列举')
   })
 
   handle('agent:detections', () => ctx.detections.list())

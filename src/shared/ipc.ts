@@ -44,6 +44,27 @@ export interface CreateProjectPayload {
   name?: string
 }
 
+/** 镜像自 dsh directoryPicker browse 能力的 DirectoryEntry:单条目录行(子目录或面包屑祖先) */
+export interface DirectoryEntryInfo {
+  name: string
+  path: string
+  hidden: boolean
+}
+
+/** 镜像自 dsh directoryPicker browse 能力的 DirectoryListing:一级目录 + 祖先面包屑 */
+export interface DirectoryBrowse {
+  /** 被列举目录的绝对路径 */
+  path: string
+  /** 宿主账户家目录(面包屑根) */
+  home: string
+  /** 自文件系统根至当前目录的祖先链(含当前目录),每项可作跳转目标 */
+  crumbs: DirectoryEntryInfo[]
+  /** 直接子目录,按名排序 */
+  entries: DirectoryEntryInfo[]
+  /** 后端截断:子目录多于报告数,缺失项为按名排序的尾部 */
+  truncated: boolean
+}
+
 /** 界面记忆项(捕获窗默认值 + 主窗折叠态),持久化于 ~/.dispatch/ui-state.json(机器管理,损坏即重建) */
 export interface UiState {
   lastAgent: AgentId | null
@@ -134,6 +155,8 @@ export interface InvokeMap {
   /** 移除项目登记:有非终态任务时拒绝;磁盘目录与归档不动 */
   'project:remove': { req: { id: string }; res: void }
   'project:pick-directory': { req: void; res: string | null }
+  /** 目录浏览(一级 + 面包屑),镜像 dsh directoryPicker browse 能力;独立版走原生对话框,不提供 */
+  'project:browse-dir': { req: { path?: string }; res: DirectoryBrowse }
   'agent:detections': { req: void; res: AgentDetection[] }
   'agent:refresh': { req: void; res: AgentDetection[] }
   'ui-state:get': { req: void; res: UiState }
@@ -182,6 +205,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'project:create',
   'project:remove',
   'project:pick-directory',
+  'project:browse-dir',
   'agent:detections',
   'agent:refresh',
   'ui-state:get',

@@ -1,34 +1,37 @@
 /**
- * The 28-channel invoke bridge: the plugin's port of src/shell/ipc-handlers.ts.
- * 通道语义与独立 app 逐一对齐;仅 Electron 专属通道在此降级(not_supported/no-op),
+ * The 32-channel invoke bridge: the plugin's port of src/shell/ipc-handlers.ts.
+ * 通道语义与独立 app 逐一对齐;Electron 专属通道在此降级(not_supported/no-op),
+ * 个别通道按宿主能力条件支持(如 project:pick-directory 仅 native 形态);
  * client 半对降级通道有对应的替代交互。通道白名单来自 core 的 INVOKE_CHANNELS。
  *
  * @module dsh-dispatch/host/ipc-bridge
  */
-import { basename } from 'node:path';
 import * as core from '../../vendor/dispatch-core.mjs';
 
-const NOT_SUPPORTED = ['task:open-session-terminal', 'task:open-archive', 'project:pick-directory'];
+const NOT_SUPPORTED = ['task:open-session-terminal', 'task:open-archive'];
 
 /**
  * @param {{
  *   runtime: { ctx: object, execution: object, sessions: object, refreshDetections: () => Promise<unknown> } | null,
  *   broadcast: (channel: string, payload: unknown) => void,
+ *   getDirectoryPicker?: () => object | undefined,
  * }} parts
  * @returns {(channel: string, payload: unknown) => Promise<unknown>} the invoke entry.
  */
-export function createIpcBridge({ runtime, broadcast }) {
+export function createIpcBridge({ runtime, broadcast, getDirectoryPicker }) {
+  // handle 的 deps:runtime 面 + 宿主服务获取面;runtime 缺失时整桥仍不可用
+  const deps = runtime ? { ...runtime, getDirectoryPicker } : null;
   return async function invoke(channel, payload) {
     if (!core.INVOKE_CHANNELS.includes(channel)) {
       throw httpError('unknown-channel', `未知通道: ${channel}`);
     }
-    if (!runtime) {
+    if (!deps) {
       throw httpError('runtime-unavailable', 'Dispatch runtime 未启动(见 dsh 日志)');
     }
     if (NOT_SUPPORTED.includes(channel)) {
       throw httpError('not_supported', `通道 ${channel} 依赖桌面壳能力,插件形态不支持`);
     }
-    return handle(runtime, broadcast, channel, payload);
+    return handle(deps, broadcast, channel, payload);
   };
 }
 
@@ -141,18 +144,34 @@ async function handle(rt, broadcast, channel, p) {
     }
     case 'project:list':
       return ctx.projects.list();
-    case 'project:create': {
-      const path = p.path.trim();
-      if (!path) throw new Error('项目路径不能为空');
-      const existing = ctx.projects.list().find((item) => item.path === path);
-      if (existing) return existing;
-      return ctx.projects.create({ name: p.name?.trim() || basename(path), path });
-    }
+    case 'project:create':
+      // 校验与幂等在 core 唯一入口(project-ops.createProject),两壳不再各持一份
+      return core.createProject(ctx.projects, p);
     case 'project:remove': {
       // default 项目是捕获窗兜底目标且由启动种子维护(core/bootstrap),移除后会话期内悬空
       if (p.id === core.DEFAULT_PROJECT_ID) throw new Error('默认项目不可移除');
       ctx.projects.delete(p.id);
       return undefined;
+    }
+    case 'project:pick-directory': {
+      // native = osascript/系统对话框开在宿主显示器,仅本机部署形态有意义;
+      // AbortSignal 传新建控制器的空信号(无取消源,浏览器关页由用户在系统对话框自行取消)
+      const picker = rt.getDirectoryPicker?.();
+      const capability = picker?.capability();
+      if (capability?.kind !== 'native') throw httpError('not_supported', '宿主无 native 目录选择能力(browse/缺失走面板内交互)');
+      return capability.pick(new AbortController().signal);
+    }
+    case 'project:browse-dir': {
+      // 服务可能后挂或缺失(缺失时 getDirectoryPicker 返回 undefined)
+      const picker = rt.getDirectoryPicker?.();
+      const capability = picker?.capability();
+      // native 形态的 pick() 是一次性系统对话框,与逐级目录列举语义不符,同样降级
+      if (!capability || capability.kind !== 'browse') {
+        throw httpError('not_supported', '目录浏览不可用(宿主 directoryPicker 缺失或非 browse 形态)');
+      }
+      // 不接 AbortSignal:本地目录扫描短促,HTTP 断连场景由上层请求超时兜底
+      // DirectoryPickerError(带 code)原样上抛,routes 层统一包 {ok:false,error}
+      return capability.list(p.path);
     }
     case 'agent:detections':
       return ctx.detections.list();

@@ -20,8 +20,8 @@ const { apply } = await import('../src/host/index.js');
 const { fakeContext } = await import('./fake-context.js');
 const { fakeReq, fakeRes, drive } = await import('./fake-http.js');
 
-function mountedPlugin() {
-  const fake = fakeContext();
+function mountedPlugin(contextOptions) {
+  const fake = fakeContext(contextOptions);
   apply(fake.ctx);
   fake.runInjects();
   return fake;
@@ -112,10 +112,94 @@ test('project:remove:default 拒删,普通项目可删', async () => {
   assert.equal(refuse.body().ok, false);
   assert.match(refuse.body().error.message, /默认项目不可移除/);
 
-  const created = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:create', body: { path: '/tmp/dsh-dispatch-proj-x' } }), fakeRes());
+  // createProject 校验路径存在且为目录(core/project-ops),用例必须给真实临时目录
+  const projDir = mkdtempSync(join(tmpdir(), 'dsh-dispatch-proj-'));
+  const created = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:create', body: { path: projDir } }), fakeRes());
   const pid = created.body().value.id;
   const removed = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:remove', body: { id: pid } }), fakeRes());
   assert.equal(removed.body().ok, true);
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
+test('project:browse-dir:browse 能力在时返回 listing', async () => {
+  const listing = {
+    path: '/tmp',
+    home: '/home/u',
+    crumbs: [
+      { name: '/', path: '/', hidden: false },
+      { name: 'tmp', path: '/tmp', hidden: false },
+    ],
+    entries: [{ name: 'demo', path: '/tmp/demo', hidden: false }],
+    truncated: false,
+  };
+  const listCalls = [];
+  const fake = mountedPlugin({
+    services: {
+      directoryPicker: {
+        capability: () => ({
+          kind: 'browse',
+          list: async (path) => {
+            listCalls.push(path);
+            return listing;
+          },
+        }),
+      },
+    },
+  });
+  const handler = fake.registrations[0].handler;
+
+  const res = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:browse-dir', body: { path: '/tmp' } }), fakeRes());
+  assert.equal(res.body().ok, true);
+  assert.deepEqual(res.body().value, listing);
+  assert.deepEqual(listCalls, ['/tmp']);
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
+test('project:browse-dir:无 directoryPicker 时返回 not_supported', async () => {
+  const fake = mountedPlugin();
+  const handler = fake.registrations[0].handler;
+
+  const res = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:browse-dir', body: {} }), fakeRes());
+  assert.equal(res.body().ok, false);
+  assert.equal(res.body().error.code, 'not_supported');
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
+test('project:pick-directory:native 能力在时返回选中路径', async () => {
+  const pickSignals = [];
+  const fake = mountedPlugin({
+    services: {
+      directoryPicker: {
+        capability: () => ({
+          kind: 'native',
+          pick: async (signal) => {
+            pickSignals.push(signal instanceof AbortSignal);
+            return '/picked/dir';
+          },
+        }),
+      },
+    },
+  });
+  const handler = fake.registrations[0].handler;
+
+  const res = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:pick-directory' }), fakeRes());
+  assert.equal(res.body().ok, true);
+  assert.equal(res.body().value, '/picked/dir');
+  assert.deepEqual(pickSignals, [true]);
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
+test('project:pick-directory:无 directoryPicker 时返回 not_supported', async () => {
+  const fake = mountedPlugin();
+  const handler = fake.registrations[0].handler;
+
+  const res = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:pick-directory' }), fakeRes());
+  assert.equal(res.body().ok, false);
+  assert.equal(res.body().error.code, 'not_supported');
 
   for (const d of fake.runDisposers()) await d?.();
 });

@@ -14,6 +14,7 @@ export * from '@core/agents/detection';
 export * from '@core/agents/session';
 export * from '@core/platform';
 export * from '@core/task-edit';
+export * from '@core/project-ops';
 export * from '@core/archive/read';
 export * from '@core/ui-state';
 export { INVOKE_CHANNELS, EVENT_CHANNELS } from '@shared/ipc';

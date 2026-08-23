@@ -1,10 +1,12 @@
 /**
  * Minimal cordis context double: records effects and optional injects so a
- * test can drive them deterministically.
+ * test can drive them deterministically. `services` fakes lazily provided
+ * services read through `ctx.get` (cordis reflect.get 语义:缺失返回
+ * undefined,不抛错)。
  *
  * @module dsh-dispatch/tests/fake-context
  */
-export function fakeContext({ webServer = true } = {}) {
+export function fakeContext({ webServer = true, services = {} } = {}) {
   const effects = [];
   const injects = [];
   const registrations = [];
@@ -17,6 +19,9 @@ export function fakeContext({ webServer = true } = {}) {
     },
     inject(deps, cb) {
       injects.push({ deps, cb });
+    },
+    get(name) {
+      return services[name];
     },
   };
   if (webServer) {
