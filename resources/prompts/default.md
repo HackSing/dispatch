@@ -44,7 +44,23 @@ BASE_BRANCH: {BASE_BRANCH}
 
 ## 3. Phase 1 — 方案(强制,先于任何代码改动)
 
-按顺序执行,完成第 6 步之前不得修改任何代码:
+先定档(一票定档,不斟酌):按下表从上往下匹配,首个命中行即为档位。
+
+| 条件 | 档位 | reason |
+|---|---|---|
+| 任务原文显式要求方案/验证/审计 | work | user_explicit |
+| 需要创建或修改工作区内任何文件,或含不可逆动作 | work | effect_requires_work |
+| 其余(纯信息查询/计算/总结/问答) | answer | simple_direct_answer |
+
+answer 档与下文流程的差异仅此三处,其余纪律与 work 档完全相同:
+
+1. plan.md 用薄骨架:仅「任务理解」与「路由判定」两节,模板见 §6.1A;下方第 5 步的五小节要求仅适用 work 档。
+2. 验证允许单一可靠来源,但须在 result.json 注明来源与获取命令(命令实际执行、退出码 0);免多源交叉核验、免回归测试。
+3. result.json 照写不减(§6.2 全字段),summary 即答案本身。
+
+升档单向纪律:answer 档严禁创建或修改工作区文件;执行中发现需要改文件,必须先按 work 档补写完整五小节 plan.md(§6.1,含变更记录),再继续。
+
+然后按顺序执行,完成第 6 步之前不得修改任何代码:
 
 1. 通读 §1 任务原文。
 2. 探索仓库:目录结构、README、docs/、与任务相关的模块源码。若项目根有 AGENTS.md / CLAUDE.md 等规约文件,一并阅读并遵守;它们与本工单的产物协议(§6)冲突时,以本工单为准。
@@ -126,6 +142,20 @@ BASE_BRANCH: {BASE_BRANCH}
 
 执行中偏离方案时,在文件末尾追加 `## 变更记录` 小节(每条:时间、偏离点、原因)。
 
+### 6.1A plan.md 薄骨架(仅 answer 档使用)
+
+```markdown
+# 方案:<一句话任务名>
+
+## 任务理解
+<对任务真实意图的转述>
+
+## 路由判定
+- 档位:answer
+- reason:simple_direct_answer
+- 依据:<命中 §3 判定表哪一行>
+```
+
 ### 6.2 result.json schema(Phase 2 最后一步产出)
 
 ```json
@@ -148,7 +178,7 @@ BASE_BRANCH: {BASE_BRANCH}
 | summary | string | 是 | 一段话:做了什么、结论是什么、以哪条验证命令及退出结果为据。这段话会直接进入日报,写给人看 |
 | files_changed | string[] | 是 | 改动文件相对工作目录的路径列表;无改动填 [] |
 | follow_up | string | 否 | 建议的后续任务;需要新依赖时在此写明依赖名、用途与理由 |
-| notes | string | 否 | 重要说明:需人工复核的假设、未覆盖的风险、发现但未修的既有问题、无法复用已有实现的搜索记录 |
+| notes | string | 否 | 重要说明:需人工复核的假设、未覆盖的风险、发现但未修的既有问题、无法复用已有实现的搜索记录。首行固定写路由判定:`routing: answer — simple_direct_answer` 或 `routing: work — <reason>`(reason 取 §3 判定表命中行) |
 | started_at | string | 是 | 开始执行(进入 Phase 1)的时刻,ISO8601;可用 `date -u +%Y-%m-%dT%H:%M:%SZ` 获取 |
 | finished_at | string | 是 | 写 result.json 的时刻,ISO8601 |
 
