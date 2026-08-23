@@ -1,25 +1,25 @@
 {
   "schema_version": "docs-harness/project-config/v11",
-  "version": "2.9.1",
-  "installed_script_fingerprint": "sha256:a4308af296b1129aac6b600e9ba8201d312122c38aa5a4a971e9136c83fb4422",
+  "version": "2.10.1",
+  "installed_script_fingerprint": "sha256:c409de773bf1690c44cde86dd184906cd6e14e691efb4236527b243cbc9e2f7d",
   "installed_module_fingerprints": {
     "managed_assets.py": "sha256:298c73562c7a93442c592aa342a19572f88c7c0150d496ef8c944c6bb268157e",
     "asset_checks.py": "sha256:2de0cacd269a6936e5a91be4fdfce92b81acfcead0f1ee81ee423ff5bb1cb5ee",
-    "plan_governance.py": "sha256:853a01f60e67ad87c734e2e0094b977208879f65c3d552a5adbbe9e72562d4e0",
+    "plan_governance.py": "sha256:f7b4cd8fdf031fcbce2cf11f3913ae332731e59980bc9a6270b9058bfea7d1be",
     "knowledge_assets.py": "sha256:35007eff1a9a8d3f181b65ebfeb04441ffe9772f5e390fea7a9b914122ef8e12",
-    "acceptance_assets.py": "sha256:40be472d9012c6820c479043ec12427e11753bb69709a651b77df83b111a911c",
+    "acceptance_assets.py": "sha256:bd59f2e39e4196f09a9086a895dc1e2bab27128244099ab7b3fb4d5ff3a18f78",
     "adr_assets.py": "sha256:8a4c7ccdfe6be892315502d1dc6b5df0c66e52180b44f8755cca07f0bbd0de73",
     "script_hygiene.py": "sha256:1db484e0ac9e2f033fa779b07c112cf614ab63877f03c7f046a99adc10bde9c8"
   },
   "installed_plan_template_fingerprints": {
-    "levels/brief.json": "sha256:e8705d1cd2511b50163587de299a334840882e5ef811de0a5964447d849e45c6",
-    "levels/full.json": "sha256:dd6912deeb6049a99c76cb2d7fdc0e969ddb36f9783d5b7cf5baa1899d6e599b",
-    "profiles/general.json": "sha256:4bb2f3dd2ea25a1cf6476b4cdaf1373cac8f5dcbe3f504773fa934e7d975a0eb",
-    "profiles/frontend-ui.json": "sha256:6bff1c5e863e33c3b161e8aebd1d78cd49c6f3cc1fa2d543e1fdbf5d4ad61955",
-    "profiles/backend-service.json": "sha256:29ed5556cf6f018fb48f7abb2d41fb85f5c9628a0a1d588bf114cd8f49e5a85b",
-    "profiles/bugfix.json": "sha256:e002e161e09471eba42fcf55adc443c7ded477677ccaf11def795fe78360d828",
-    "profiles/architecture.json": "sha256:f414cdb475baa1eef00a687014278714f5df8a779bcbd4bcc741c42bece8456c",
-    "profiles/migration-release.json": "sha256:73e81d428b3ce370b70d1451cdd98ed7e28927c47ac9d11403418ff95a8a7aa9"
+    "levels/brief.json": "sha256:4927d3d41a1a502b2838df9bb880f1b65984a8079c715c7d3fe57018d599bc96",
+    "levels/full.json": "sha256:f9a52fc17df9788fb33d54c057d8a2b18d3ce2467b63a6ee08e1695de1d2fb5b",
+    "profiles/general.json": "sha256:3ceb460db0b30159a847ba150b1a7a0809fb0bc94ea5dcd1addd705c915dd945",
+    "profiles/frontend-ui.json": "sha256:afd440853d0e7cbfa491bc7e5a7210237af7c20aebec233572cec598b086ccf9",
+    "profiles/backend-service.json": "sha256:de2d662a4dbaa1e00db5a7adc693005a0239e6d4ab7045a021cc979d19defc56",
+    "profiles/bugfix.json": "sha256:3b3283afec2a539f13fea0a20002813f8f028a00b1b73bfd04e244db62a9768c",
+    "profiles/architecture.json": "sha256:45f1217c1735b2cfef5f4c3f7d9a923d6affd6fa84d3a30ef8264eca7cec36a5",
+    "profiles/migration-release.json": "sha256:d09385dbd49125ff44316e278b238af10423fcdf17c2fc8f8e38e4b69fd536b6"
   },
   "installed_githook_fingerprints": {
     "pre-commit": "sha256:1a36d24d939ae0608164e9239b67154c7f0849f6c97555ea7a2d892b24fec3e5",
