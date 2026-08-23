@@ -115,6 +115,24 @@ export function FolderIcon(): React.JSX.Element {
   )
 }
 
+export function ChevronLeftIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="7"
+      height="11"
+      viewBox="0 0 7 11"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5.3 1.5 1.5 5.5 5.3 9.5" />
+    </svg>
+  )
+}
+
 export function ChevronRightIcon(): React.JSX.Element {
   return (
     <svg

@@ -13,7 +13,11 @@ export function usePopoverDismiss(
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent): void => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) close()
+      // Shadow DOM 渲染(dsh 插件形态)下,document 层看到的 target 已被重定向为
+      // shadow host,contains 恒假会误关弹层;composedPath 携带 shadow 内部节点,
+      // light DOM 与 shadow DOM 下判定一致。
+      const path = e.composedPath()
+      if (wrapRef.current && !path.includes(wrapRef.current)) close()
     }
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {

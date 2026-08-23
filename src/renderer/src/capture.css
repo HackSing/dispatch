@@ -114,12 +114,14 @@
   left: 0;
   display: flex;
   align-items: flex-start;
-  gap: 17px;
   z-index: 30;
+  /* 弹层会向上盖住顶部拖拽条(-webkit-app-region: drag),Electron 按矩形计算
+     拖拽区并吞掉重叠处的真实点击,必须显式声明 no-drag 才能点中面板内容 */
+  -webkit-app-region: no-drag;
 }
 
 .picker-panel {
-  width: 205px;
+  width: 230px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -130,11 +132,52 @@
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.26);
 }
 
+/* 分步级联第二步:子智能体面板在原位从左侧滑入 */
+.picker-panel.slide-in {
+  animation: picker-slide-in 0.16s ease;
+}
+
+@keyframes picker-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .picker-head {
   font-size: 10.5px;
   font-weight: 600;
   color: #8e8e93;
   padding: 2px 9px 4px;
+}
+
+/* 子面板头部返回行:「‹ 主智能体名」+ 右侧灰字标注当前步骤 */
+.picker-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 9px 4px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 11px;
+  color: #1d1d1f;
+}
+
+.picker-back:hover {
+  color: #007aff;
+}
+
+.picker-back-tail {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #8e8e93;
 }
 
 .picker-row {
@@ -149,6 +192,12 @@
   background: none;
   width: 100%;
   text-align: left;
+  /* 行强制单行:名称不折行,过长的版本/失败原因由 .picker-ver 截断出省略号 */
+  white-space: nowrap;
+}
+
+.picker-row svg {
+  flex-shrink: 0;
 }
 
 .picker-row:hover:not(:disabled) {
@@ -181,5 +230,8 @@
   padding-left: 10px;
   font-size: 10px;
   color: #8e8e93;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 

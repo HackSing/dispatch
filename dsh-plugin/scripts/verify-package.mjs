@@ -20,8 +20,8 @@ const required = [
   pkg.exports['./client'] ?? null,
   pkg.dsh?.bundle?.patch ?? null,
   'vendor/dispatch-core.mjs',
-  'vendor/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
-  'vendor/node_modules/bindings/bindings.js',
+  'vendor/node_modules/better-sqlite3/build/Release/darwin-arm64/better_sqlite3.node',
+  'vendor/node_modules/better-sqlite3/build/Release/win32-x64/better_sqlite3.node',
   ...promptFiles(),
 ]
   .filter(Boolean)
@@ -41,6 +41,21 @@ if (missing.length > 0) {
 }
 if (promptFiles().length === 0) {
   console.error('[verify-package] vendor/prompts is empty — seed-vendor must run before pack');
+  process.exit(1);
+}
+
+// seed-vendor 的锚点补丁把 addon 加载点改为按运行时平台直拼路径,
+// bindings 已不再引用;两处静态断言防止补丁随上游升级悄悄失效。
+const databaseJs = fs.readFileSync(
+  path.join(ROOT, 'vendor', 'node_modules', 'better-sqlite3', 'lib', 'database.js'),
+  'utf-8',
+);
+if (!databaseJs.includes(`process.platform + '-' + process.arch`)) {
+  console.error('[verify-package] vendor database.js missing the platform-arch addon path — seed-vendor patch did not apply');
+  process.exit(1);
+}
+if (databaseJs.includes(`require('bindings')`)) {
+  console.error('[verify-package] vendor database.js still requires bindings — bindings is no longer shipped');
   process.exit(1);
 }
 
