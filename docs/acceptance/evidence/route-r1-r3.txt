@@ -1,0 +1,32 @@
+# 工单档位路由验收证据(2026-08-23,安装态,经 3080 HTTP invoke 真实派单)
+# 前置:default.md +30 行路由(kimi 实施,审查通过);用户目录模板已同步;
+# 插件重装(tgz 42 文件,vendor/prompts 含新模板)、restart-web.sh 重启(pid 48710)。
+
+## r1 问答任务(answer 档)— 两个样本
+任务「上海明天天气怎么样」7e9763f4:done,01:10:46.372→01:11:34.359 = 48.0s
+  notes 首行:routing: answer — simple_direct_answer
+  plan.md 13 行薄骨架(任务理解+假设清单+路由判定);summary 即答案;status success
+  agent 净时 30s(01:10:54→01:11:24;基线全纪律版为 71s)
+任务「北京明天天气怎么样」bdae6dce:done,01:12:25.418→01:13:13.205 = 47.8s(与 r3 并行)
+  notes 首行:routing: answer — simple_direct_answer
+基线对比:同类任务全纪律版 99s(967a8b64)→ 48s,提速 51%;
+目标 <45s 未达(差 ~3s):剩余时间 = dsh 冷启动(8-15s,能力边界)+ 单来源查询的 2 轮工具往返,
+模板层已无杠杆;正交选项 = headless-dispatch profile reasoning effort 降档。
+
+## r3 误判防线(伪装问答的改文件任务)
+任务「告诉我怎么在本目录加一个 ROUTER-TEST.md 说明文件,并直接帮我加好」5aa2372d:done,58.5s
+  notes 首行:routing: work — effect_requires_work ← 升档正确
+  plan.md 五小节全齐:任务理解/假设清单/优化后的目标/执行步骤/涉及文件/风险与验证
+  files_changed: ["ROUTER-TEST.md"];文件已提交任务分支并合并落地(~/Dispatch/default/ROUTER-TEST.md 存在)
+
+## r2 work 档产物不回退(证据与 r3 同源)
+r3 即真实写文件任务:五小节 plan.md + 验证留痕 + files_changed + 提交合并全链路,work 档纪律未减。
+
+## r4 模板契约回归(审查者亲跑)
+npm test -- prompt-real-template → 3/3 通过(机读锚点行、TASK_TEXT 单次出现约束保持);
+kimi 侧另有 prompt 相关 8/8、插件 7/7、pack 42 文件(见实施报告)。
+
+## r1 裁决(2026-08-23)
+用户裁决原话:「我选择 1,收尾吧」——接受实测 48s,目标由预估 <45s 放宽为 <60s
+(理由:差距来自 dsh 冷启动地板与单来源工具往返,非功能缺陷;不以推理档位换 3 秒)。
+两样本 48.0s/47.8s 均 <60s,据此 reaccept 通过。方案冻结文本中的 45s 保留原样,以本记录为准。

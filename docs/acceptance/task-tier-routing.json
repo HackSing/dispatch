@@ -1,0 +1,186 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "工单档位路由验收",
+  "key_symbols": [
+    "simple_direct_answer",
+    "effect_requires_work",
+    "prompt-real-template",
+    "judgeArtifacts"
+  ],
+  "objective": "answer/work 双档路由生效:问答任务提速且可审计,工单任务纪律不减,模板契约回归全绿",
+  "plan_ref": "docs/plans/task-tier-routing.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "r1",
+      "title": "问答任务:answer 档 done、端到端 <45s、notes 首行 routing 可审计",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T011459-a5d64afdee",
+          "objective_fingerprint": "sha256:05407f936f90da8f069728195adb52fee185289cb6aeb1863902fb6c67c4c234",
+          "acceptance_type": "behavior_acceptance",
+          "status": "failed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": null,
+          "evidence_refs": [],
+          "reason": "目标 <45s 未达:两样本 48.0s/47.8s(基线 99s,提速 51%,routing/薄骨架/summary 全合规)",
+          "next_action": "用户裁决:按实测放宽 criterion 至 <60s 后 reaccept,或先做 profile reasoning effort 降档(方案外正交项)再测",
+          "failure_attributions": [
+            {
+              "category": "change_related",
+              "summary": "45s 预估偏紧:核验省半后剩余为 dsh 冷启动与单来源 2 轮工具往返,模板层无进一步杠杆",
+              "blocking": false,
+              "evidence_refs": [
+                "docs/acceptance/evidence/route-r1-r3.txt"
+              ]
+            }
+          ],
+          "recorded_at": "2026-08-23T01:14:59+00:00"
+        },
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T012927-d6fb392348",
+          "objective_fingerprint": "sha256:05407f936f90da8f069728195adb52fee185289cb6aeb1863902fb6c67c4c234",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "用户裁决放宽目标至 <60s(原话「我选择 1,收尾吧」,见证据文件裁决节):两样本 48.0s/47.8s 达标;routing 落盘、薄骨架、summary 即答案、基线 99s 提速 51% 均已实测",
+          "evidence_refs": [
+            "docs/acceptance/evidence/route-r1-r3.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T01:29:27+00:00"
+        }
+      ]
+    },
+    {
+      "id": "r2",
+      "title": "写文件任务:work 档产物齐全(五小节 plan.md + 验证留痕)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T011443-53bec28238",
+          "objective_fingerprint": "sha256:05407f936f90da8f069728195adb52fee185289cb6aeb1863902fb6c67c4c234",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "以 r3 的真实写文件任务为样本:五小节 plan.md 全齐、验证留痕、files_changed、提交合并全链路(证据与 r3 同源,已注明)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/route-r1-r3.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T01:14:43+00:00"
+        }
+      ]
+    },
+    {
+      "id": "r3",
+      "title": "误判防线:伪装问答的改文件任务被路由 work 档",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T011443-d74b556e1b",
+          "objective_fingerprint": "sha256:05407f936f90da8f069728195adb52fee185289cb6aeb1863902fb6c67c4c234",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "伪装问答的改文件任务经 HTTP 派单实测:notes 落 routing: work — effect_requires_work,文件真实写出并合并",
+          "evidence_refs": [
+            "docs/acceptance/evidence/route-r1-r3.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T01:14:43+00:00"
+        }
+      ]
+    },
+    {
+      "id": "r4",
+      "title": "模板契约回归:prompt-real-template 全绿(锚点行/TASK_TEXT 约束保持)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T011443-73a3129d93",
+          "objective_fingerprint": "sha256:05407f936f90da8f069728195adb52fee185289cb6aeb1863902fb6c67c4c234",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "审查者亲跑 npm test -- prompt-real-template 3/3(kimi 侧另有 prompt 8/8、插件 7/7)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/route-r1-r3.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T01:14:43+00:00"
+        }
+      ]
+    }
+  ],
+  "status": "passed",
+  "revision": 7,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:05f4842bd0cc70c868cd709ee4bf657616f63aac897c3d35e014da5928efc964",
+      "updated_at": "2026-08-23T01:06:09+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:51c1c29eca50eee122b93fa370be84b501b17d0e1359b1fe045b0451884d251a",
+      "updated_at": "2026-08-23T01:14:43+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:b4ef2c211490214404eec7c7c507c0559d02ee0559459e8a92866696d5928437",
+      "updated_at": "2026-08-23T01:14:43+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:a73e926cb15c5343dbb1c44b7de353722ad1ff1e8e8075e3a3396d3436046493",
+      "updated_at": "2026-08-23T01:14:43+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:1e4c5baf8ba5f26aaad249ce3a3ae0f6b2e655b763578e16ff97bacf7c81c88c",
+      "updated_at": "2026-08-23T01:14:59+00:00"
+    },
+    {
+      "revision": 6,
+      "asset_fingerprint": "sha256:73c03e70a34a95838c87322a0f8e02d530b68e81eddcc7336106b9ee30be3a31",
+      "updated_at": "2026-08-23T01:29:27+00:00"
+    }
+  ],
+  "created_at": "2026-08-23T01:06:09+00:00",
+  "updated_at": "2026-08-23T01:29:41+00:00",
+  "settled_at": "2026-08-23T01:29:41+00:00",
+  "asset_fingerprint": "sha256:7af409e6ea2fa08c99ae851c27b5f6a5c6dcd22aded5681696fac5a51b739bae",
+  "replacement": null
+}
