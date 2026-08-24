@@ -1,9 +1,9 @@
 # CLAUDE.md
 
 <!-- docs-harness:claude-bridge:start -->
-## Docs Harness 2.10.2：默认直跑，能力按需
+## Docs Harness 2.10.3：默认直跑，能力按需
 
-Docs Harness 当前版本：2.10.2
+Docs Harness 当前版本：2.10.3
 
 - 普通问答、只读检查、代码修改、构建和测试默认由 agent 直接完成；Harness 不作为任务入口，也不创建任务控制状态。
 - 用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
@@ -16,6 +16,7 @@ Docs Harness 当前版本：2.10.2
 - 需要项目架构或历史事实时，先查当前源码与符号；仍缺关键事实再显式运行 knowledge query，不得全量加载 docs/。
 - pre-2.0 项目只通过 project upgrade 单向迁移；迁移后不保留旧运行能力。
 - 不在没有证据或没有明确维护任务时自动更新 Knowledge、Changelog、TODO 或质量账本。架构决策由主 agent 通过 adr create 登记（定稿不可改，复杂决策可选只读子智能体复审）；决策失效时用 adr settle 废弃或标记被替代。
+- 改动涉及用户可见行为、对外接口或命令契约、版本发布时同步更新 CHANGELOG；任务产生待跟进事项时登记 TODO；不满足触发条件则不更新。
 
 ## 工作流规则
 
