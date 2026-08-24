@@ -1,5 +1,5 @@
 /**
- * The 32-channel invoke bridge: the plugin's port of src/shell/ipc-handlers.ts.
+ * The 33-channel invoke bridge: the plugin's port of src/shell/ipc-handlers.ts.
  * 通道语义与独立 app 逐一对齐;Electron 专属通道在此降级(not_supported/no-op),
  * 个别通道按宿主能力条件支持(如 project:pick-directory 仅 native 形态);
  * client 半对降级通道有对应的替代交互。通道白名单来自 core 的 INVOKE_CHANNELS。
@@ -153,6 +153,9 @@ async function handle(rt, broadcast, channel, p) {
       ctx.projects.delete(p.id);
       return undefined;
     }
+    case 'project:reorder':
+      ctx.projects.reorder(p.ids);
+      return undefined;
     case 'project:pick-directory': {
       // native = osascript/系统对话框开在宿主显示器,仅本机部署形态有意义;
       // AbortSignal 传新建控制器的空信号(无取消源,浏览器关页由用户在系统对话框自行取消)

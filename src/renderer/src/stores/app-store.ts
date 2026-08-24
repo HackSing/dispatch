@@ -15,6 +15,7 @@ interface AppState {
   loadAll: () => Promise<void>
   refreshTasks: () => Promise<void>
   refreshProjects: () => Promise<void>
+  reorderProjects: (ids: string[]) => Promise<void>
   /** 订阅主进程事件,返回退订函数 */
   subscribe: () => () => void
 }
@@ -50,6 +51,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async refreshProjects() {
     set({ projects: await window.dispatchApi.invoke('project:list', undefined) })
+  },
+
+  /** 看板列拖拽排序:先乐观重排,失败由调用方 refreshProjects 回滚到主进程事实 */
+  async reorderProjects(ids: string[]) {
+    const byId = new Map(get().projects.map((p) => [p.id, p]))
+    const ordered = ids.map((id) => byId.get(id)).filter((p): p is Project => p !== undefined)
+    set({ projects: ordered })
+    await window.dispatchApi.invoke('project:reorder', { ids })
   },
 
   subscribe() {

@@ -13,6 +13,7 @@ interface ProjectRow {
   prepare_cmd: string | null
   base_branch: string | null
   created_at: string
+  sort_order: number | null
 }
 
 function toProject(row: ProjectRow): Project {
@@ -51,12 +52,15 @@ export class ProjectStore {
       baseBranch: input.baseBranch ?? null,
       createdAt: new Date().toISOString()
     }
+    const { next } = this.db
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM projects')
+      .get() as { next: number }
     this.db
       .prepare(
-        `INSERT INTO projects (id, name, path, prepare_cmd, base_branch, created_at)
-         VALUES (@id, @name, @path, @prepareCmd, @baseBranch, @createdAt)`
+        `INSERT INTO projects (id, name, path, prepare_cmd, base_branch, created_at, sort_order)
+         VALUES (@id, @name, @path, @prepareCmd, @baseBranch, @createdAt, @sortOrder)`
       )
-      .run({ ...project })
+      .run({ ...project, sortOrder: next })
     this.onChange?.(project.id)
     return project
   }
@@ -69,8 +73,24 @@ export class ProjectStore {
   }
 
   list(): Project[] {
-    const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at').all() as ProjectRow[]
+    const rows = this.db
+      .prepare('SELECT * FROM projects ORDER BY sort_order, created_at')
+      .all() as ProjectRow[]
     return rows.map(toProject)
+  }
+
+  /** 按给定 id 序列重排看板顺序(全量名单);未知 id 拒绝,空列表为合法 no-op */
+  reorder(ids: string[]): void {
+    const exists = this.db.prepare('SELECT 1 FROM projects WHERE id = ?')
+    const setOrder = this.db.prepare('UPDATE projects SET sort_order = ? WHERE id = ?')
+    const run = this.db.transaction(() => {
+      ids.forEach((id, index) => {
+        if (!exists.get(id)) throw new Error(`project not found: ${id}`)
+        setOrder.run(index, id)
+      })
+    })
+    run()
+    if (ids.length > 0) this.onChange?.(ids[0])
   }
 
   update(id: string, patch: UpdateProjectInput): Project {

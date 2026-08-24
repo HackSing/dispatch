@@ -1,0 +1,18 @@
+== shared/ipc.ts 注册 ==
+158:  'project:reorder': { req: { ids: string[] }; res: void }
+209:  'project:reorder',
+
+== 桌面端 handler (src/shell/ipc-handlers.ts) ==
+216:  handle('project:reorder', ({ ids }) => {
+217-    ctx.projects.reorder(ids)
+218-  })
+
+== 插件 host 实现 (dsh-plugin/src/host/ipc-bridge.js) ==
+156:    case 'project:reorder':
+157-      ctx.projects.reorder(p.ids);
+158-      return undefined;
+
+== 插件 host 全链测试(含 project:reorder 用例,经 vendor 重打包白名单) ==
+125:test('project:reorder:重排后 project:list 按新顺序返回;未知 id 拒绝', async () => {
+134:  const reordered = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:reorder', body: { ids: rotated } }), fakeRes());
+139:  const unknown = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:reorder', body: { ids: ['not-there'] } }), fakeRes());

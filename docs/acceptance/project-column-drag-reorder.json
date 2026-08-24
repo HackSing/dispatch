@@ -1,0 +1,146 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "项目看板列拖拽排序(桌面端 + dsh 插件)",
+  "key_symbols": [
+    "project:reorder",
+    "ProjectStore.reorder",
+    "sort_order",
+    "ProjectColumn"
+  ],
+  "objective": "看板项目列支持拖拽排序并持久化,桌面端与 dsh 插件同一份 renderer 实现同时生效;插件 host 的 ipc-bridge 同步新增通道。",
+  "plan_ref": "docs/plans/project-column-drag-reorder.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "ProjectStore.reorder 持久化顺序:list 按 sort_order 返回,reorder 后顺序与重启后一致",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T140159-e4f4da04c6",
+          "objective_fingerprint": "sha256:c1b69177905d9679ad7e6332dc02325625732ce82df72506ac040a57d25e8b6e",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "ELECTRON_RUN_AS_NODE=1 electron vitest run tests/project-ops.test.ts tests/db.test.ts:19/19 通过,含 reorder 重排/未知 id 拒绝/跨重开持久三用例",
+          "evidence_refs": [
+            "docs/acceptance/evidence/project-column-drag-reorder/c1-focused-test.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T14:01:59+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "project:reorder 通道契约:桌面端 ipc-handlers 与插件 ipc-bridge 均实现且注册进 INVOKE_CHANNELS",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T140238-36c30e5db6",
+          "objective_fingerprint": "sha256:c1b69177905d9679ad7e6332dc02325625732ce82df72506ac040a57d25e8b6e",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "静态核对三处契约面:shared/ipc.ts InvokeMap+INVOKE_CHANNELS 注册、shell ipc-handlers case、插件 ipc-bridge case;另经插件 host 全链测试 12/12(vendor 重打包后白名单含新通道)与 npm run typecheck 佐证",
+          "evidence_refs": [
+            "docs/acceptance/evidence/project-column-drag-reorder/c2-contract.txt",
+            "docs/acceptance/evidence/project-column-drag-reorder/c2-plugin-host-test.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T14:02:38+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "看板列拖拽交互:从 grip 手柄拖动列到目标位置,松手后顺序立即更新(桌面端与插件共用 renderer)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T140306-0aa3fcb52b",
+          "objective_fingerprint": "sha256:c1b69177905d9679ad7e6332dc02325625732ce82df72506ac040a57d25e8b6e",
+          "acceptance_type": "behavior_acceptance",
+          "status": "unverified",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": null,
+          "evidence_refs": [],
+          "reason": "拖拽手势需 GUI 实机操作,agent 无法在当前环境自动驱动 Electron HTML5 DnD;实现侧已经 npm run build 与插件 build-client 编译验证,排序持久化链路已经 L2 聚焦测试覆盖",
+          "next_action": "用户 npm run dev(或 dsh buddy 面板)按住项目列 grip 手柄拖到目标列,松手换序并重启确认持久,回执后 reaccept",
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T14:03:06+00:00"
+        },
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260823T141406-fcf61d0e46",
+          "objective_fingerprint": "sha256:c1b69177905d9679ad7e6332dc02325625732ce82df72506ac040a57d25e8b6e",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "用户在本机 dev 实例(npm run dev, home=/Users/aiware/.dispatch)实机拖拽确认「拖拽成功」;同窗口顺带验证列头高度对齐修复(min-height 32px)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/project-column-drag-reorder/c1-focused-test.txt"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-23T14:14:06+00:00"
+        }
+      ]
+    }
+  ],
+  "status": "passed",
+  "revision": 6,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:64fcfd522bc9e08b85e2f3cb446c829b5f6c69515daa24ebfa46bf6059b6c99c",
+      "updated_at": "2026-08-23T13:53:44+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:74fb4c1818e520a74213a2a846e119a2e64c620889135d1512e47c0c0808edb7",
+      "updated_at": "2026-08-23T14:01:59+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:3f05d7e8e73d31653ca8d0c733b1343d0a32e148cf9ac258a8821aca3a7d03c8",
+      "updated_at": "2026-08-23T14:02:38+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:b65e06f7fb0fcc8b3aa6198584391cf8b69f9b7b69f9f6ef0acad1f1cbc21631",
+      "updated_at": "2026-08-23T14:03:06+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:147d570b2eb7dbcee70ff768a1a117d33c1e45634c3dd70fcd91b81fb75b89c3",
+      "updated_at": "2026-08-23T14:14:06+00:00"
+    }
+  ],
+  "created_at": "2026-08-23T13:53:44+00:00",
+  "updated_at": "2026-08-23T14:14:14+00:00",
+  "settled_at": "2026-08-23T14:14:14+00:00",
+  "asset_fingerprint": "sha256:23d8a2ebd63a80d0af53f283d743854c94a201ea807ab1bd64dbec8631c5724f",
+  "replacement": null
+}

@@ -52,3 +52,35 @@ describe('createProject(两壳共用唯一入口)', () => {
     expect(projects.list()).toHaveLength(1)
   })
 })
+
+describe('ProjectStore.reorder(看板列拖拽排序持久化)', () => {
+  it('list 默认按创建顺序;新项目排末尾', () => {
+    const a = projects.create({ name: 'a', path: dir })
+    const b = projects.create({ name: 'b', path: dir })
+    expect(projects.list().map((p) => p.id)).toEqual([a.id, b.id])
+  })
+
+  it('reorder 后 list 按新顺序返回', () => {
+    const a = projects.create({ name: 'a', path: dir })
+    const b = projects.create({ name: 'b', path: dir })
+    const c = projects.create({ name: 'c', path: dir })
+    projects.reorder([c.id, a.id, b.id])
+    expect(projects.list().map((p) => p.id)).toEqual([c.id, a.id, b.id])
+  })
+
+  it('未知 id:拒绝且不改动既有顺序', () => {
+    const a = projects.create({ name: 'a', path: dir })
+    expect(() => projects.reorder(['not-there', a.id])).toThrow(/project not found: not-there/)
+    expect(projects.list().map((p) => p.id)).toEqual([a.id])
+  })
+
+  it('顺序跨重开持久(同一库文件新 store)', () => {
+    const a = projects.create({ name: 'a', path: dir })
+    const b = projects.create({ name: 'b', path: dir })
+    projects.reorder([b.id, a.id])
+    db.close()
+    db = openDatabase(join(dir, 'test.db'))
+    projects = new ProjectStore(db)
+    expect(projects.list().map((p) => p.id)).toEqual([b.id, a.id])
+  })
+})

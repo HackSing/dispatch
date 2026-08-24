@@ -68,6 +68,16 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE tasks ADD COLUMN session_id TEXT;
       ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id);
     `
+  },
+  {
+    version: 4,
+    name: 'project-sort-order',
+    sql: `
+      ALTER TABLE projects ADD COLUMN sort_order INTEGER;
+      UPDATE projects SET sort_order = (
+        SELECT COUNT(*) FROM projects AS p2 WHERE p2.created_at < projects.created_at
+      );
+    `
   }
 ]
 

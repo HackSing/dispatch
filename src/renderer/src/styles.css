@@ -161,12 +161,22 @@ button {
   gap: 7px;
   padding: 2px 4px 4px;
   flex-shrink: 0;
+  /* default 项目无 ⋯ 菜单按钮(26px),min-height 对齐所有列头高度(26+padding 6) */
+  min-height: 32px;
+  box-sizing: border-box;
 }
 
 .board-col-head .grip {
   color: #b0b0b5;
   flex-shrink: 0;
   display: inline-flex;
+  cursor: grab;
+}
+
+/* 列排序拖拽:drop 目标高亮(拖动中列的占位指示) */
+.board-col.drop-target {
+  outline: 2px solid rgba(10, 132, 255, 0.65);
+  outline-offset: -2px;
 }
 
 .board-col-head .name {

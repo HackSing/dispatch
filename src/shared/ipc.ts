@@ -154,6 +154,8 @@ export interface InvokeMap {
   'project:create': { req: CreateProjectPayload; res: Project }
   /** 移除项目登记:有非终态任务时拒绝;磁盘目录与归档不动 */
   'project:remove': { req: { id: string }; res: void }
+  /** 看板列拖拽排序:req 为重排后的项目 id 全量名单 */
+  'project:reorder': { req: { ids: string[] }; res: void }
   'project:pick-directory': { req: void; res: string | null }
   /** 目录浏览(一级 + 面包屑),镜像 dsh directoryPicker browse 能力;独立版走原生对话框,不提供 */
   'project:browse-dir': { req: { path?: string }; res: DirectoryBrowse }
@@ -204,6 +206,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'project:list',
   'project:create',
   'project:remove',
+  'project:reorder',
   'project:pick-directory',
   'project:browse-dir',
   'agent:detections',

@@ -213,6 +213,10 @@ export function registerIpcHandlers(
     ctx.projects.delete(id)
   })
 
+  handle('project:reorder', ({ ids }) => {
+    ctx.projects.reorder(ids)
+  })
+
   handle('project:pick-directory', () => {
     return withCaptureAutoHideSuspended(async () => {
       const options: Electron.OpenDialogOptions = {

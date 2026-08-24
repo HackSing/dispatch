@@ -1,0 +1,95 @@
+
+> @aiwaretop/dsh-dispatch@0.1.2 pretest
+> npm run seed-vendor
+
+
+> @aiwaretop/dsh-dispatch@0.1.2 seed-vendor
+> node scripts/seed-vendor.mjs
+
+[seed-vendor] materialized dsh-plugin/vendor
+
+> @aiwaretop/dsh-dispatch@0.1.2 test
+> node scripts/run-tests.mjs
+
+TAP version 13
+# Subtest: apply 注册 /api/dispatch prefix 路由
+ok 1 - apply 注册 /api/dispatch prefix 路由
+  ---
+  duration_ms: 4282.837292
+  type: 'test'
+  ...
+# Subtest: invoke 全链:建任务→列表→状态
+ok 2 - invoke 全链:建任务→列表→状态
+  ---
+  duration_ms: 519.032167
+  type: 'test'
+  ...
+# Subtest: 降级与未知通道:错误码协议
+ok 3 - 降级与未知通道:错误码协议
+  ---
+  duration_ms: 556.140333
+  type: 'test'
+  ...
+# Subtest: project:remove:default 拒删,普通项目可删
+ok 4 - project:remove:default 拒删,普通项目可删
+  ---
+  duration_ms: 520.246333
+  type: 'test'
+  ...
+# Subtest: project:reorder:重排后 project:list 按新顺序返回;未知 id 拒绝
+ok 5 - project:reorder:重排后 project:list 按新顺序返回;未知 id 拒绝
+  ---
+  duration_ms: 520.175958
+  type: 'test'
+  ...
+# Subtest: project:browse-dir:browse 能力在时返回 listing
+ok 6 - project:browse-dir:browse 能力在时返回 listing
+  ---
+  duration_ms: 519.259208
+  type: 'test'
+  ...
+# Subtest: project:browse-dir:无 directoryPicker 时返回 not_supported
+ok 7 - project:browse-dir:无 directoryPicker 时返回 not_supported
+  ---
+  duration_ms: 508.222042
+  type: 'test'
+  ...
+# Subtest: project:pick-directory:native 能力在时返回选中路径
+ok 8 - project:pick-directory:native 能力在时返回选中路径
+  ---
+  duration_ms: 486.819834
+  type: 'test'
+  ...
+# Subtest: project:pick-directory:无 directoryPicker 时返回 not_supported
+ok 9 - project:pick-directory:无 directoryPicker 时返回 not_supported
+  ---
+  duration_ms: 478.5
+  type: 'test'
+  ...
+# Subtest: 非 loopback 来源被 403 拒绝
+ok 10 - 非 loopback 来源被 403 拒绝
+  ---
+  duration_ms: 475.094417
+  type: 'test'
+  ...
+# Subtest: SSE 流:事件以具名 event 帧下发
+ok 11 - SSE 流:事件以具名 event 帧下发
+  ---
+  duration_ms: 472.907958
+  type: 'test'
+  ...
+# Subtest: dispose 幂等:重复收口不抛错
+ok 12 - dispose 幂等:重复收口不抛错
+  ---
+  duration_ms: 463.389584
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12469.957125

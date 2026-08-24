@@ -11,6 +11,7 @@
 - [dispatch 插件化为 dsh 双半插件（@aiwaretop/dsh-dispatch）](plans/dispatch-dsh-plugin.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`DispatchApi`、`INVOKE_CHANNELS`、`ipc-bridge`、`event-bridge`
 - [dsh 追问面板与沙箱放行:headless-dispatch 专用 profile 与会话续接](plans/dsh-headless-session-panel.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 - [工单档位路由:default.md 移植 docs harness 触发条件分档](plans/task-tier-routing.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-23 核对）；关键符号：`simple_direct_answer`、`effect_requires_work`、`prompt-real-template`、`judgeArtifacts`
+- [项目看板列拖拽排序(桌面端 + dsh 插件)](plans/project-column-drag-reorder.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-23 核对）；关键符号：`project:reorder`、`ProjectStore.reorder`、`sort_order`、`ProjectColumn`
 <!-- docs-harness:plans-index:end -->
 
 <!-- docs-harness:knowledge-index:start -->
@@ -29,6 +30,7 @@
 - [dispatch 双半插件（@aiwaretop/dsh-dispatch）验收](acceptance/dispatch-dsh-plugin-v2.md) — 状态：已验收-仅追溯；关键符号：`DispatchApi`、`ipc-bridge`、`api-bridge`、`event-bridge`
 - [dsh 追问面板与沙箱放行验收](acceptance/dsh-headless-session-panel.md) — 状态：已验收-仅追溯；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 - [工单档位路由验收](acceptance/task-tier-routing.md) — 状态：已验收-仅追溯；关键符号：`simple_direct_answer`、`effect_requires_work`、`prompt-real-template`、`judgeArtifacts`
+- [项目看板列拖拽排序(桌面端 + dsh 插件)](acceptance/project-column-drag-reorder.md) — 状态：已验收-仅追溯；关键符号：`project:reorder`、`ProjectStore.reorder`、`sort_order`、`ProjectColumn`
 <!-- docs-harness:acceptance-index:end -->
 
 <!-- docs-harness:adr-index:start -->

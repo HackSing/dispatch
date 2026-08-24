@@ -144,7 +144,9 @@ function ProjectMenu(props: { project: Project }): React.JSX.Element | null {
   )
 }
 
-/** 看板单列:列头(手柄/名称/进行中计数/⋯)+ 过滤后的任务卡;空列与被过滤清空各给提示 */
+/** 看板单列:列头(手柄/名称/进行中计数/⋯)+ 过滤后的任务卡;空列与被过滤清空各给提示。
+ *  列排序拖拽:仅 grip 手柄可拖(draggable 限定在手柄,避免与任务文本选择冲突),
+ *  drop 落在整列;视觉反馈由 App 经 isDropTarget 下发 */
 export function ProjectColumn(props: {
   project: Project
   tasks: Task[]
@@ -154,6 +156,11 @@ export function ProjectColumn(props: {
   setDetailId: (id: string | null) => void
   onOpenSession: (taskId: string) => void
   onCreateProject: () => Promise<string | null>
+  isDropTarget: boolean
+  onGripDragStart: (e: React.DragEvent) => void
+  onGripDragEnd: () => void
+  onColumnDragOver: (e: React.DragEvent) => void
+  onColumnDrop: () => void
 }): React.JSX.Element {
   const { project, tasks, filter } = props
   const store = useAppStore()
@@ -163,9 +170,20 @@ export function ProjectColumn(props: {
     tasks.length === 0 ? '该项目暂无任务' : `无${FILTER_LABELS[filter]}任务(共 ${tasks.length} 条)`
 
   return (
-    <section className="board-col" aria-label={project.name}>
+    <section
+      className={`board-col${props.isDropTarget ? ' drop-target' : ''}`}
+      aria-label={project.name}
+      onDragOver={props.onColumnDragOver}
+      onDrop={props.onColumnDrop}
+    >
       <div className="board-col-head" title={project.path}>
-        <span className="grip">
+        <span
+          className="grip"
+          draggable
+          title="拖动排序"
+          onDragStart={props.onGripDragStart}
+          onDragEnd={props.onGripDragEnd}
+        >
           <GripIcon />
         </span>
         <span className="name">{project.name}</span>

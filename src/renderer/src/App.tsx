@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from './stores/app-store'
 import { TaskDetail } from './components/TaskDetail'
 import { SessionPanel } from './components/SessionPanel'
@@ -17,6 +17,11 @@ export function App(): React.JSX.Element {
   // 「新建项目」操作错误(目录选择/创建失败)。不复用 store.loadError:
   // 它语义是初始加载失败(呈现为「加载失败:」),混用会误导
   const [projectError, setProjectError] = useState<string | null>(null)
+  // 列排序拖拽:dragId 用 ref(drop 同步读取),dropTarget 用 state(驱动高亮);
+  // 排序持久化失败时回滚到主进程顺序并给横幅
+  const dragIdRef = useRef<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const [reorderError, setReorderError] = useState<string | null>(null)
   const detailTask = detailId ? (store.tasks.find((t) => t.id === detailId) ?? null) : null
   const sessionTask = sessionId ? (store.tasks.find((t) => t.id === sessionId) ?? null) : null
 
@@ -55,6 +60,20 @@ export function App(): React.JSX.Element {
     }
   }
 
+  /** 列 drop:把拖拽列插到目标列前;持久化失败回滚重拉 */
+  const onColumnDrop = (targetId: string): void => {
+    const fromId = dragIdRef.current
+    dragIdRef.current = null
+    setDropTargetId(null)
+    if (!fromId || fromId === targetId) return
+    const ids = store.projects.map((p) => p.id)
+    ids.splice(ids.indexOf(targetId), 0, ...ids.splice(ids.indexOf(fromId), 1))
+    void store.reorderProjects(ids).catch((e: Error) => {
+      setReorderError(e.message)
+      void store.refreshProjects()
+    })
+  }
+
   return (
     <div className="app">
       {store.hotkey && !store.hotkey.registered && (
@@ -73,6 +92,14 @@ export function App(): React.JSX.Element {
         <div className="banner" role="alert">
           新建项目失败:{projectError}
           <button className="btn link" onClick={() => setProjectError(null)}>
+            关闭
+          </button>
+        </div>
+      )}
+      {reorderError !== null && (
+        <div className="banner" role="alert">
+          项目排序失败:{reorderError}
+          <button className="btn link" onClick={() => setReorderError(null)}>
             关闭
           </button>
         </div>
@@ -130,6 +157,23 @@ export function App(): React.JSX.Element {
                   setDetailId={setDetailId}
                   onOpenSession={openSessionPanel}
                   onCreateProject={onCreateProject}
+                  isDropTarget={dropTargetId === project.id && dragIdRef.current !== project.id}
+                  onGripDragStart={(e) => {
+                    dragIdRef.current = project.id
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', project.id)
+                  }}
+                  onGripDragEnd={() => {
+                    dragIdRef.current = null
+                    setDropTargetId(null)
+                  }}
+                  onColumnDragOver={(e) => {
+                    if (!dragIdRef.current) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    setDropTargetId(project.id)
+                  }}
+                  onColumnDrop={() => onColumnDrop(project.id)}
                 />
               ))}
             </div>

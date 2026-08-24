@@ -122,6 +122,26 @@ test('project:remove:default 拒删,普通项目可删', async () => {
   for (const d of fake.runDisposers()) await d?.();
 });
 
+test('project:reorder:重排后 project:list 按新顺序返回;未知 id 拒绝', async () => {
+  const fake = mountedPlugin();
+  const handler = fake.registrations[0].handler;
+
+  // 不假设库内只有 default(同进程测试可能共享临时 DISPATCH_HOME):基于现状轮转首位
+  const before = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:list' }), fakeRes());
+  const current = before.body().value.map((p) => p.id);
+  const rotated = [...current.slice(1), current[0]];
+
+  const reordered = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:reorder', body: { ids: rotated } }), fakeRes());
+  assert.equal(reordered.body().ok, true);
+  const after = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:list' }), fakeRes());
+  assert.deepEqual(after.body().value.map((p) => p.id), rotated);
+
+  const unknown = await drive(handler, fakeReq({ url: '/api/dispatch/invoke/project:reorder', body: { ids: ['not-there'] } }), fakeRes());
+  assert.equal(unknown.body().ok, false);
+
+  for (const d of fake.runDisposers()) await d?.();
+});
+
 test('project:browse-dir:browse 能力在时返回 listing', async () => {
   const listing = {
     path: '/tmp',
