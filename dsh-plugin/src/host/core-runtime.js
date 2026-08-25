@@ -54,8 +54,10 @@ export function createDispatchRuntime({ broadcast, logger, version }) {
 
   let detectionInFlight = null;
   const refreshDetections = () => {
-    detectionInFlight ??= core
-      .runDetections(config.agents, core.getPlatformOps(), detections)
+    // getPlatformOps 等同步抛错必须进 Promise 链:startup 项的 .catch 只接得住 rejection,
+    // 同步逃逸会炸穿整个 createDispatchRuntime(win32 未支持时代的实际事故形态,B5 批4 修复)
+    detectionInFlight ??= Promise.resolve()
+      .then(() => core.runDetections(config.agents, core.getPlatformOps(), detections))
       .then((list) => {
         broadcast('agent:detections-changed', { detections: list });
         return list;

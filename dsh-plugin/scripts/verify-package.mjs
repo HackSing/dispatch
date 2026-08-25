@@ -62,11 +62,14 @@ if (databaseJs.includes(`require('bindings')`)) {
 // 磁盘存在 ≠ 会被打进 tgz:package.json files 的排除项才是分发边界(vendor/prompts/*.md
 // 曾被 !vendor/**/*.md 误杀而磁盘检查全绿)。dry-run 清单是打包器自己的判定,直接对表。
 // --ignore-scripts 防止 prepack 再次触发本脚本造成递归。
+// win32 的 npm 是 .cmd shim,Node(CVE-2024-27980 修复后)不带 shell 无法直接执行 → 经 shell 调用;
+// 参数均为固定字面量,无注入面
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const packReport = JSON.parse(
   execFileSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
     cwd: ROOT,
-    encoding: 'utf-8'
+    encoding: 'utf-8',
+    shell: process.platform === 'win32'
   })
 );
 const packed = new Set(packReport[0].files.map((f) => f.path));

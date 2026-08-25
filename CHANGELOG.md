@@ -2,6 +2,15 @@
 
 本项目所有显著变更记录于此;版本号遵循语义化版本,新条目置顶。
 
+## [Unreleased]
+
+### B5 Windows 适配(2026-08-25,方案 docs/plans/b5-windows-adaptation.md)
+- platform 层 win32 实现:taskkill 进程树强杀、where 二进制探测(可执行扩展名筛选,兼容 npm 全局安装的 .cmd shim 布局)、cmd 终端拉起
+- PlatformOps 新增 buildSpawn 收敛点:.cmd/.bat 经 cmd.exe 执行(CVE-2024-27980 后 Node 限制),转义移植 cross-spawn;含换行参数在 .cmd shim 场景显式报错并提示改用原生 exe 或 stdin 传参
+- 测试跨平台:npm test 经零依赖启动器在 Windows 全绿(221 用例);worktree 清理对 win32 目录锁形态(进程 cwd 占用)有限重试+残留补删
+- CI 双平台矩阵(macos + windows);electron-builder 新增 NSIS 打包(pack:win)
+- dsh-dispatch 插件 0.1.4:vendor 重打包含 win32 支持的 core;修复 agent 检测同步抛错炸穿 runtime 装配的缺陷(此前 Windows 上面板恒报 runtime-unavailable 的直接原因)
+
 ## [0.1.0-dev] - 2026-08-22
 
 首个功能完整的开发版本,单日内按批次交付(细节见 docs/dev-plan.md 与 git 历史):
