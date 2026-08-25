@@ -77,17 +77,21 @@ export class StreamTransport implements SessionTransport {
 
   constructor(private readonly opts: StreamTransportOptions) {}
 
-  open(): Promise<void> {
+  async open(): Promise<void> {
     if (this.child) throw new Error('传输已打开')
     const { config, sessionId } = this.opts
+    const bin = await this.opts.platform.findBinary(config.bin)
+    if (!bin) throw new Error(`会话进程启动失败: ${config.bin}: 未找到可执行文件`)
     const argv = [
       ...renderSessionArgs(config.resume_stream_args, sessionId),
       ...config.auto_approve_args
     ]
-    const child = spawn(config.bin, argv, {
+    const plan = this.opts.platform.buildSpawn(bin, argv)
+    const child = spawn(plan.file, plan.args, {
       cwd: this.opts.cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsVerbatimArguments: plan.windowsVerbatimArguments
     })
     this.child = child
     child.stdout?.on('data', (c: Buffer) => this.consume(c.toString()))

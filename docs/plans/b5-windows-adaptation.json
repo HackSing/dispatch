@@ -1,0 +1,50 @@
+{
+  "schema_version": "docs-harness/plan/v3",
+  "plan_level": "full",
+  "plan_profile": "migration_release",
+  "secondary_profiles": [],
+  "template_versions": [
+    "level/full@2.10.3",
+    "profile/migration_release@2.10.3"
+  ],
+  "selection_fingerprint": "sha256:054048c32bd9cfd1706e54c810bf57468b2fd2a3ec48fa046c2e95822c982567",
+  "content": {
+    "title": "B5 Windows 适配:platform 层 win32 实现与全链路 Windows 可用",
+    "key_symbols": [
+      "win32Ops",
+      "PlatformOps",
+      "spawnShellDetached",
+      "getPlatformOps"
+    ],
+    "background": "dispatch core 的 platform 抽象层仅实现 darwin,win32 下 getPlatformOps() 直接抛错。已实测复现:dsh-dispatch 插件 0.1.3 在 DSH Buddy(Electron 38.8.6, win32-x64)下 runtime 装配失败,dsh web 面板恒为 runtime-unavailable;独立 app 在 Windows 同样无法运行。dev-plan §4 已规划 B5 批次(B2~B4 已稳定),平台差异自 B0 起收敛在 src/core/platform,B5 只需补 Windows 实现并打通脚本/CI/打包链路。",
+    "objective": "win32-x64 上 dispatch core 全功能可用:进程树 kill、二进制探测(含 .cmd/.exe shim 解析)、终端拉起、shell 执行全部有 Windows 实现;core 单测在 Windows 本机与 CI 全绿;electron-builder 产出 NSIS 安装包;下游 dsh-dispatch 插件重新 vendor 后 dsh web 面板正常加载。darwin 行为零回归。",
+    "non_goals": "WSL 桥接(明确推迟到 v0.2);Windows/macOS 代码签名与公证;darwin 行为变更;各 agent CLI 自身在 Windows 的安装问题(仅在检测中如实标注不可用);Windows arm64;沙箱。",
+    "success_criteria": "1) win32 上 getPlatformOps() 返回可用实现,killTree/findBinary/openTerminal 三个操作在真实 Windows 上实测通过;2) npm run lint/typecheck/test 在 Windows 本机全绿,CI windows job 全绿且 macOS job 不回归;3) Windows 实机跑通 B2 全链路:真实小仓库+真实 agent,捕获→立即执行→自动合并→详情页可见 plan/result/日志;4) NSIS 安装包装出的应用可启动可用;5) dsh-dispatch 0.1.4 装入 web profile 后面板加载,不再 runtime-unavailable。",
+    "execution_scope": "src/core/platform/(新增 win32.ts,index.ts 加分支,接口按需扩展 spawn 收敛点)、src/core/proc/shell.ts、src/core/agents/generic-cli-adapter.ts 与 session-transport.ts 的进程拉起调用面、package.json(test 脚本跨平台化、build.win NSIS、pack:win)、.github/workflows/ci.yml、tests/ 平台单测、dsh-plugin/(vendor 重打包、src/host/core-runtime.js fail-soft 修复、版本 0.1.4)。不动 renderer 业务逻辑、gitops 合并策略、数据库 schema。",
+    "implementation": "分 4 批,每批改完→验证→锁定再进下一批。批1 platform 层(kimi CLI 执行):新增 src/core/platform/win32.ts 实现 PlatformOps——killTree 用 taskkill /PID <pid> /T /F 并对已退出进程按退出码容错;findBinary 用 where 解析完整路径,多行取首个,覆盖 .exe/.cmd/.bat;openTerminal 用 cmd /c start 在 cwd 拉起持久终端;因 Node CVE-2024-27980 修复后 spawn/execFile 无法直接执行 .cmd/.bat,在 PlatformOps 增加统一的进程调用收敛点(如 buildSpawn(bin,args)→{file,args}),darwin 直通、win32 对 .cmd/.bat 包 cmd.exe /c,GenericCliAdapter.detect/run 与 session-transport 改经此收敛点;index.ts 加 case 'win32';proc/shell.ts 按平台选 /bin/sh 或 cmd.exe(/d /s /c + windowsVerbatimArguments),spawnShellDetached 补 windowsHide 防弹窗;快捷键默认值 CommandOrControl+Shift+Space 已覆盖 Windows,审计确认即可;新增 win32 平台单测(describe.runIf(process.platform==='win32')),darwin 机器自动跳过。批2 跨平台脚本与审计(kimi CLI 执行):package.json test 脚本去 POSIX env 前缀语法,改为零依赖 node 启动器脚本;全仓审计硬编码路径分隔符、/bin/sh、HOME 假设并修正;Windows 实测进程未死时 git worktree remove 的文件锁表现,仅在复现失败后为 removeWorktree 增加有限重试/进入既有清理重入链路(证据准入)。批3 CI 与打包(kimi CLI 执行):ci.yml 增加 windows-latest job(npm ci+lint+typecheck+test);package.json build 增加 win.target=nsis 与 pack:win 脚本。批4 下游 dsh-plugin(主 agent 执行,涉及发布面):npm run build 重新 seed-vendor 打包含 win32 支持的 dispatch-core.mjs;修复 core-runtime.js refreshDetections 内 getPlatformOps() 同步抛错逃逸 .catch 导致整机装配失败的 fail-soft 缺陷(已有复现证据);版本升至 0.1.4 并装回 web profile 实测。批1~3 由 kimi CLI 无头执行,主 agent 逐批审查代码、逐段核对 spawn 调用面消费链并在 Windows 本机实测。",
+    "acceptance_plan": "L1 契约:npm run lint + typecheck Windows 本机通过。L2 聚焦测试:npm test 全绿(Windows 本机+CI windows job),其中平台单测覆盖 killTree 真杀进程树、findBinary 解析 git/真实 agent shim、shell 执行;darwin CI job 不回归。L3 本地运行:Windows 实机 B2 全链路(真实小仓库+真实 agent 捕获→执行→合并→详情页);dsh web 面板装入 0.1.4 后正常加载;五个 agent 逐个 detect 实测并如实标注。L4 安装:NSIS 安装包实装启动。各层不互替,逐条 acceptance record 留证。",
+    "acceptance_required": true,
+    "knowledge_impact": "unchanged",
+    "constraints": "不新增第三方依赖(跨平台 env 用 node 内置能力);业务代码不感知平台,平台分支仅存在于 src/core/platform 与 src/core/proc;GenericCliAdapter 内禁止 agent 特有分支;dsh-plugin vendor 的 better-sqlite3 必须保持 Electron ABI 纪律;体量红线(函数≤60 行,文件≤500 行)。",
+    "risks_and_rollback": "风险:1) .cmd shim 执行面横跨 detect/run/session-transport/proc,漏改一处即隐性回归——审查按消费链逐段核对;2) Windows 文件锁使 worktree remove 偶发失败——宁可保留 worktree 走重入清理,不误删用户数据;3) taskkill 对已退出进程返回非零——按退出码容错,不误报;4) CI windows job 可能暴露既有测试的平台假设——单独归因报告,不借机改无关代码;5) kimi CLI 产出质量不确定——每批人工审查+实测后才 commit 锁定。回滚:四批各自独立 commit,git revert 单批即回滚;darwin 零回归是每批验收项。",
+    "source_target": "源:仅支持 darwin 的 dispatch core(app 0.1.0 / dsh-dispatch 插件 0.1.3),win32 上 runtime 装配必然失败。目标:win32-x64 全功能可用,darwin 行为不变,双平台共用同一套业务代码,平台差异全部收敛在 platform/ 与 proc/。",
+    "versions_artifacts": "dispatch app:package.json 版本按发布节奏推进,新增 NSIS 安装包产物(dist/);dsh-dispatch 插件:0.1.3→0.1.4,npm 包 vendor 内含新 core bundle;CHANGELOG 按用户可见行为变化同步更新;CI 产物:GitHub Actions windows job。",
+    "compatibility_rollout": "darwin 行为零变化(darwinOps 代码不动,由既有单测回归);win32 为纯新增路径;插件 0.1.4 与 0.1.3 共用 ~/.dispatch 数据目录且 schema 不变,升级无迁移;灰度顺序:先本机验证(批1~4 逐批),再 CI,再 NSIS 产物,最后插件发布。",
+    "data_safety": "不改 dispatch.db schema,不迁移数据;worktree 清理仅作用于任务工作区目录,失败保留现场不强删;路径审计只改代码不触碰用户数据;实测统一使用隔离的 DISPATCH_HOME,不污染 ~/.dispatch。",
+    "monitoring_stop": "停止条件:任一批验收不过则不进下一批;CI windows job 红停;L3 全链路跑不通停在批 3 前修复;发现需要改动 gitops 合并策略、数据库 schema 或超出执行范围的问题立即停下回报用户;kimi 产出经审查发现系统性质量问题时收回自改。",
+    "rollback": "逐批独立 commit,git revert 单批回滚;NSIS 配置回滚不影响 pack:mac;插件侧回滚=web profile package.json 降回 0.1.3(恢复原状);无数据迁移故无数据回滚需求。",
+    "delivery_layers": "L1 契约(lint/typecheck)、L2 聚焦测试(vitest 单测+CI)、L3 本地运行(B2 全链路实机+dsh 面板)、L4 安装产物(NSIS 实装)分层交付,互不替代;插件用户可见层(dsh web 面板加载)单独验收。"
+  },
+  "acceptance_refs": [
+    "docs/acceptance/b5-windows-adaptation.json"
+  ],
+  "governance": {
+    "acceptance_required": true,
+    "knowledge_impact": "unchanged",
+    "updated_knowledge_refs": [],
+    "unchanged_reason": null,
+    "governance_settled_at": null
+  },
+  "frozen_at": "2026-08-25T07:13:17+00:00",
+  "plan_fingerprint": "sha256:347356255c2a0f7e4f8fb210476730cb98d6e3285a961933146cba6bf5ad05ef"
+}

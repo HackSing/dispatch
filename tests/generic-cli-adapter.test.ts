@@ -88,16 +88,23 @@ describe('run', () => {
 })
 
 describe('ensureReady', () => {
+  // ready_check/start_cmd 走平台 shell:B5 批1 后 win32 为 cmd.exe,用例命令按平台各写一份
+  const IS_WIN32 = process.platform === 'win32'
+
   it('无 ready_check_cmd 直接就绪', async () => {
     await expect(makeAdapter().ensureReady()).resolves.toBeUndefined()
   })
 
   it('ready_check 失败时执行 start_cmd 并轮询至就绪', async () => {
     const flag = join(dir, 'daemon-flag')
-    const adapter = makeAdapter({
-      ready_check_cmd: `test -f ${flag}`,
-      start_cmd: `sleep 0.1 && touch ${flag}`
-    })
+    const adapter = makeAdapter(
+      IS_WIN32
+        ? {
+            ready_check_cmd: `if exist "${flag}" (exit 0) else (exit 1)`,
+            start_cmd: `echo.>"${flag}"`
+          }
+        : { ready_check_cmd: `test -f ${flag}`, start_cmd: `sleep 0.1 && touch ${flag}` }
+    )
     await expect(adapter.ensureReady()).resolves.toBeUndefined()
     expect(existsSync(flag)).toBe(true)
   })

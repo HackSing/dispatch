@@ -6,21 +6,29 @@ import type { Database } from 'better-sqlite3'
 import { openDatabase, DetectionStore } from '@core/db'
 import { AgentConfigSchema } from '@core/config'
 import { detectAgent, runDetections } from '@core/agents/detection'
-import type { PlatformOps } from '@core/platform'
+import { getPlatformOps, type PlatformOps } from '@core/platform'
+
+const IS_WIN32 = process.platform === 'win32'
 
 let dir: string
 let db: Database
 
-/** findBinary 以脚本文件模拟,不依赖本机 PATH 上装了什么 */
+/** findBinary 以脚本文件模拟,不依赖本机 PATH 上装了什么;buildSpawn 委托真实平台实现(.cmd 需 cmd 包装) */
 function fakeOps(bins: Record<string, string>): PlatformOps {
   return {
     killTree: () => Promise.resolve(),
     findBinary: (name) => Promise.resolve(bins[name] ?? null),
-    openTerminal: () => Promise.resolve()
+    openTerminal: () => Promise.resolve(),
+    buildSpawn: (binPath, args) => getPlatformOps().buildSpawn(binPath, args)
   }
 }
 
 function makeScript(name: string, body: string): string {
+  if (IS_WIN32) {
+    const file = join(dir, `${name}.cmd`)
+    writeFileSync(file, `@echo off\r\n${body.replaceAll('\n', '\r\n')}\r\n`)
+    return file
+  }
   const file = join(dir, name)
   writeFileSync(file, `#!/bin/sh\n${body}\n`)
   chmodSync(file, 0o755)
@@ -61,7 +69,7 @@ describe('detectAgent 两级检测', () => {
   })
 
   it('version 超时:失败并注明超时', async () => {
-    const bin = makeScript('slow-agent', 'sleep 5')
+    const bin = makeScript('slow-agent', IS_WIN32 ? 'ping -n 6 127.0.0.1 >nul' : 'sleep 5')
     const config = AgentConfigSchema.parse({ bin: 'slow-agent' })
     const result = await detectAgent(config, fakeOps({ 'slow-agent': bin }), 300)
     expect(result.ok).toBe(false)

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { PlatformOps } from './index'
+import type { PlatformOps, SpawnPlan } from './index'
 
 const KILL_GRACE_MS = 5000
 const KILL_POLL_MS = 200
@@ -62,6 +62,11 @@ export const darwinOps: PlatformOps = {
         }
       )
     })
+  },
+
+  /** POSIX 无 .cmd shim 问题,恒等透传 */
+  buildSpawn(binPath: string, args: string[]): SpawnPlan {
+    return { file: binPath, args }
   }
 }
 

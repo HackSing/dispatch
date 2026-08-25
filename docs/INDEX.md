@@ -12,6 +12,7 @@
 - [dsh 追问面板与沙箱放行:headless-dispatch 专用 profile 与会话续接](plans/dsh-headless-session-panel.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-22 核对）；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 - [工单档位路由:default.md 移植 docs harness 触发条件分档](plans/task-tier-routing.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-23 核对）；关键符号：`simple_direct_answer`、`effect_requires_work`、`prompt-real-template`、`judgeArtifacts`
 - [项目看板列拖拽排序(桌面端 + dsh 插件)](plans/project-column-drag-reorder.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-23 核对）；关键符号：`project:reorder`、`ProjectStore.reorder`、`sort_order`、`ProjectColumn`
+- [B5 Windows 适配:platform 层 win32 实现与全链路 Windows 可用](plans/b5-windows-adaptation.md) — 状态：有效（实施中）；关键符号：`win32Ops`、`PlatformOps`、`spawnShellDetached`、`getPlatformOps`
 <!-- docs-harness:plans-index:end -->
 
 <!-- docs-harness:knowledge-index:start -->
@@ -31,6 +32,7 @@
 - [dsh 追问面板与沙箱放行验收](acceptance/dsh-headless-session-panel.md) — 状态：已验收-仅追溯；关键符号：`dsh-headless-session`、`headless-dispatch`、`agents.resume`、`sandbox-policy`
 - [工单档位路由验收](acceptance/task-tier-routing.md) — 状态：已验收-仅追溯；关键符号：`simple_direct_answer`、`effect_requires_work`、`prompt-real-template`、`judgeArtifacts`
 - [项目看板列拖拽排序(桌面端 + dsh 插件)](acceptance/project-column-drag-reorder.md) — 状态：已验收-仅追溯；关键符号：`project:reorder`、`ProjectStore.reorder`、`sort_order`、`ProjectColumn`
+- [B5 Windows 适配验收](acceptance/b5-windows-adaptation.md) — 状态：有效（待验收）；关键符号：`win32Ops`、`PlatformOps`、`spawnShellDetached`、`getPlatformOps`
 <!-- docs-harness:acceptance-index:end -->
 
 <!-- docs-harness:adr-index:start -->

@@ -17,17 +17,22 @@ export async function detectAgent(
   if (!binPath) {
     return { ok: false, failReason: `未找到二进制 ${config.bin}(PATH 中不存在)` }
   }
-  return probeVersion(binPath, config, timeoutMs)
+  return probeVersion(binPath, config, ops, timeoutMs)
 }
 
 function probeVersion(
   binPath: string,
   config: AgentConfig,
+  ops: PlatformOps,
   timeoutMs: number
 ): Promise<DetectResult> {
   const cmd = `${config.bin} ${config.version_args.join(' ')}`.trim()
+  const plan = ops.buildSpawn(binPath, config.version_args)
   return new Promise((resolve) => {
-    const child = spawn(binPath, config.version_args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(plan.file, plan.args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsVerbatimArguments: plan.windowsVerbatimArguments
+    })
     let output = ''
     let settled = false
     const done = (result: DetectResult): void => {
@@ -45,7 +50,7 @@ function probeVersion(
     child.on('error', (err) => done({ ok: false, failReason: `无法执行 ${cmd}: ${err.message}` }))
     child.on('close', (code) => {
       if (code === 0) {
-        done({ ok: true, version: output.trim().split('\n')[0] ?? '' })
+        done({ ok: true, version: output.trim().split(/\r?\n/)[0] ?? '' })
       } else {
         done({ ok: false, failReason: `${cmd} 退出码 ${code}` })
       }

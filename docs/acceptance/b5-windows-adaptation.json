@@ -1,0 +1,76 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "B5 Windows 适配验收",
+  "key_symbols": [
+    "win32Ops",
+    "PlatformOps",
+    "spawnShellDetached",
+    "getPlatformOps"
+  ],
+  "objective": "win32-x64 上 dispatch core 全功能可用且 darwin 零回归:platform 层三操作实测通过、core 单测双平台全绿、B2 全链路 Windows 实机跑通、NSIS 装包可用、dsh-dispatch 0.1.4 面板正常加载。",
+  "plan_ref": "docs/plans/b5-windows-adaptation.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "L1 契约:npm run lint 与 typecheck 在 Windows 本机通过",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c2",
+      "title": "L2 聚焦测试:npm test 在 Windows 本机全绿,含 win32 平台单测(killTree 真杀进程树、findBinary 解析真实 shim、shell 执行)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c3",
+      "title": "L2 CI:GitHub Actions windows job 全绿且 macOS job 不回归",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "repository_full_test",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c4",
+      "title": "L3 全链路:Windows 实机真实小仓库+真实 agent 跑通捕获→立即执行→自动合并→详情页(B2 链路)",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c5",
+      "title": "L3 插件:dsh-dispatch 0.1.4 装入 web profile 后 Dispatch 面板加载,不再 runtime-unavailable,五个 agent detect 实测并如实标注",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L3",
+      "evidence_layer": "local_runtime",
+      "status": "pending",
+      "records": []
+    },
+    {
+      "id": "c6",
+      "title": "L4 安装:electron-builder NSIS 安装包在 Windows 实装且应用可启动可用",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L4",
+      "evidence_layer": "package_or_install",
+      "status": "pending",
+      "records": []
+    }
+  ],
+  "status": "pending",
+  "revision": 1,
+  "revision_history": [],
+  "created_at": "2026-08-25T07:13:48+00:00",
+  "updated_at": "2026-08-25T07:13:48+00:00",
+  "settled_at": null,
+  "asset_fingerprint": "sha256:272c2806f894118d0e23613f18a8f7e1c4bc8cb6c257b7a6c8cfa25e7a6e7591"
+}

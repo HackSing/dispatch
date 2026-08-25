@@ -36,14 +36,20 @@ export class GenericCliAdapter implements AgentAdapter {
   async detect(): Promise<DetectResult> {
     const bin = await this.platform.findBinary(this.config.bin)
     if (!bin) return { ok: false, failReason: `未找到可执行文件 ${this.config.bin}` }
+    const plan = this.platform.buildSpawn(bin, this.config.version_args)
     return new Promise((resolve) => {
-      execFile(this.config.bin, this.config.version_args, (err, stdout, stderr) => {
-        if (err) {
-          resolve({ ok: false, failReason: `版本检测失败: ${stderr.trim() || err.message}` })
-        } else {
-          resolve({ ok: true, version: stdout.trim().split('\n')[0] })
+      execFile(
+        plan.file,
+        plan.args,
+        { windowsVerbatimArguments: plan.windowsVerbatimArguments },
+        (err, stdout, stderr) => {
+          if (err) {
+            resolve({ ok: false, failReason: `版本检测失败: ${stderr.trim() || err.message}` })
+          } else {
+            resolve({ ok: true, version: stdout.trim().split(/\r?\n/)[0] })
+          }
         }
-      })
+      )
     })
   }
 
@@ -65,13 +71,19 @@ export class GenericCliAdapter implements AgentAdapter {
 
   async run(opts: AgentRunOptions): Promise<{ exitCode: number }> {
     if (opts.signal?.aborted) return { exitCode: -1 }
+    const bin = await this.platform.findBinary(this.config.bin)
+    if (!bin) {
+      throw new Error(`agent 进程启动失败: ${this.config.bin}: 未找到可执行文件`)
+    }
     const base = buildBaseArgs(this.id, this.config, opts)
     const argv = [...base, ...this.config.auto_approve_args]
     if (this.config.prompt_via === 'arg') argv.push(opts.prompt)
-    const child = spawn(this.config.bin, argv, {
+    const plan = this.platform.buildSpawn(bin, argv)
+    const child = spawn(plan.file, plan.args, {
       cwd: opts.cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsVerbatimArguments: plan.windowsVerbatimArguments
     })
     // stdout 经配置指定的过滤器转人可读;stderr 原样保留
     const filter = createLogFilter(this.config.log_filter)
