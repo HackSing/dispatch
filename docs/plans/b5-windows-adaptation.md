@@ -1,9 +1,9 @@
-> 状态：有效（实施中）
+> 状态：已实施-仅追溯（代码已是真源，2026-08-25 核对）
 <!-- docs-harness:plan-document/v1 -->
 
 # B5 Windows 适配:platform 层 win32 实现与全链路 Windows 可用
 
-- 冻结合同：`sha256:347356255c2a0f7e4f8fb210476730cb98d6e3285a961933146cba6bf5ad05ef`
+- 冻结合同：`sha256:bfb9e9c5f366772c427562b36f505568b9b89d0cd64622e388ce8bbad54be389`
 - 关键符号：`win32Ops`、`PlatformOps`、`spawnShellDetached`、`getPlatformOps`
 
 ## 背景

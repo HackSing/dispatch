@@ -17,8 +17,27 @@
       "acceptance_type": "contract_check",
       "layer": "L1",
       "evidence_layer": null,
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-3586c6f6cf",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "Windows 本机独立复跑:npm run typecheck exit 0(批2 审查);npm run lint 在既有 82 红经用户授权单独修复(d2bdc3c)后 exit 0(批3 审查记录)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/b2-reviewer-verification.md",
+            "docs/acceptance/evidence/b5-windows-adaptation/b3-reviewer-verification.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     },
     {
       "id": "c2",
@@ -26,8 +45,27 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L2",
       "evidence_layer": "focused_test",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-5e383f608e",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "npm test 经零依赖启动器 scripts/run-vitest.mjs 于 Windows 本机全量执行:Tests 221 passed | 9 skipped;含 platform-win32 单测 12 例(killTree 真杀进程树、findBinary 解析真实 npm shim 布局、cmd 转义)与 gitops worktree 锁回归 2 例,审查者独立复跑",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/b1-reviewer-verification.md",
+            "docs/acceptance/evidence/b5-windows-adaptation/b2-reviewer-verification.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     },
     {
       "id": "c3",
@@ -35,8 +73,26 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L2",
       "evidence_layer": "repository_full_test",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-73bdc5a4e3",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "repository_full_test",
+          "method": "GitHub API check-runs 实查推送 head fb9550f:check (macos-latest) completed success 与 check (windows-latest) completed success,双平台 lint/typecheck/test 全绿",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/c3-ci-matrix.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     },
     {
       "id": "c4",
@@ -44,8 +100,27 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-1d20b3ded1",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "独立探测脚本以隔离 DISPATCH_HOME 加载 0.1.4 vendor core,真实小仓库+真实 kimi 任务终态 done,hello-from-b5 经自动合并进入 main,归档四件套(output.log/plan.md/result.json/task.md)齐全",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/c4-b2-chain-live.md",
+            "docs/acceptance/evidence/b5-windows-adaptation/c4-probe-b2-chain.mjs"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     },
     {
       "id": "c5",
@@ -53,8 +128,27 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L3",
       "evidence_layer": "local_runtime",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-064c4216b8",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L3",
+          "evidence_layer": "local_runtime",
+          "method": "0.1.4 tgz 实装 web profile、DSH Buddy 重启后实机验证:POST /api/dispatch/invoke/app:status 返回 ok=true/version=0.1.4/platform=win32;面板 shadow DOM 渲染含 v0.1.4 徽标与快捷新建、无加载失败横幅;五 agent detect 实测 claude/codex/kimi/qwen 成功、dsh 如实失败且不炸 runtime",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/c5-dsh-plugin-live.md",
+            "docs/acceptance/evidence/b5-windows-adaptation/c5-probe-detections.mjs"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     },
     {
       "id": "c6",
@@ -62,15 +156,40 @@
       "acceptance_type": "behavior_acceptance",
       "layer": "L4",
       "evidence_layer": "package_or_install",
-      "status": "pending",
-      "records": []
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260825T092419-07e4aac278",
+          "objective_fingerprint": "sha256:bbe7ee827b63a9197f6e2131871b6243d262ad8cb7f9d0945db9279a37a085f7",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L4",
+          "evidence_layer": "package_or_install",
+          "method": "NSIS 安装包 /S 静默安装 exit 0(per-user 安装至 %LOCALAPPDATA%/Programs/Dispatch);安装版以隔离 DISPATCH_HOME 启动,12s 后进程存活,home 完整初始化(SQLite WAL 活跃、main.log 记录启动与崩溃恢复);冒烟进程树清理,应用按用户要求保留安装",
+          "evidence_refs": [
+            "docs/acceptance/evidence/b5-windows-adaptation/c6-nsis-install.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-25T09:24:19+00:00"
+        }
+      ]
     }
   ],
-  "status": "pending",
-  "revision": 1,
-  "revision_history": [],
+  "status": "passed",
+  "revision": 2,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:272c2806f894118d0e23613f18a8f7e1c4bc8cb6c257b7a6c8cfa25e7a6e7591",
+      "updated_at": "2026-08-25T07:13:48+00:00"
+    }
+  ],
   "created_at": "2026-08-25T07:13:48+00:00",
-  "updated_at": "2026-08-25T07:13:48+00:00",
-  "settled_at": null,
-  "asset_fingerprint": "sha256:272c2806f894118d0e23613f18a8f7e1c4bc8cb6c257b7a6c8cfa25e7a6e7591"
+  "updated_at": "2026-08-25T09:24:19+00:00",
+  "settled_at": "2026-08-25T09:24:19+00:00",
+  "asset_fingerprint": "sha256:8e65023bdd652a1e919b6cf61d3bf9f34212be9453ec3ef4bad123a9a80cda44",
+  "replacement": null
 }

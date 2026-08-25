@@ -42,9 +42,9 @@
     "acceptance_required": true,
     "knowledge_impact": "unchanged",
     "updated_knowledge_refs": [],
-    "unchanged_reason": null,
-    "governance_settled_at": null
+    "unchanged_reason": "B5 全部事实(win32 platform 层实现、CVE-2024-27980 约束、worktree 锁形态、CI 矩阵、NSIS 打包)已由源码、tests/、CHANGELOG 与 docs/plans/b5-windows-adaptation.md + docs/acceptance/evidence/ 承载,均可从当前仓库直接推导,无需新增独立 Knowledge 资产;既有 Knowledge 无一被本次改动否定。",
+    "governance_settled_at": "2026-08-25T09:24:33+00:00"
   },
   "frozen_at": "2026-08-25T07:13:17+00:00",
-  "plan_fingerprint": "sha256:347356255c2a0f7e4f8fb210476730cb98d6e3285a961933146cba6bf5ad05ef"
+  "plan_fingerprint": "sha256:bfb9e9c5f366772c427562b36f505568b9b89d0cd64622e388ce8bbad54be389"
 }
