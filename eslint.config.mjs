@@ -11,7 +11,9 @@ export default tseslint.config(
       'coverage/',
       '.harness-tmp/',
       'dsh-plugin/vendor/',
-      'dsh-plugin/lib/'
+      'dsh-plugin/lib/',
+      // 验收证据归档(含探测脚本快照),是文档产物不是维护代码
+      'docs/acceptance/evidence/'
     ]
   },
   js.configs.recommended,
