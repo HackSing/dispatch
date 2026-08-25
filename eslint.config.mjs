@@ -3,7 +3,17 @@ import tseslint from 'typescript-eslint'
 import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'node_modules/', 'coverage/'] },
+  {
+    ignores: [
+      'out/',
+      'dist/',
+      'node_modules/',
+      'coverage/',
+      '.harness-tmp/',
+      'dsh-plugin/vendor/',
+      'dsh-plugin/lib/'
+    ]
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
@@ -36,6 +46,34 @@ export default tseslint.config(
       globals: {
         process: 'readonly',
         console: 'readonly'
+      }
+    }
+  },
+  {
+    // dsh 插件与无头会话包:Node 环境纯 JS(host/脚本/测试),声明 Node 运行时全局
+    files: ['dsh-plugin/**/*.{js,mjs}', 'dsh-headless-session/**/*.js'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        Buffer: 'readonly',
+        AbortSignal: 'readonly',
+        AbortController: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
+        fetch: 'readonly',
+        queueMicrotask: 'readonly',
+        setImmediate: 'readonly',
+        structuredClone: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        __dirname: 'readonly'
       }
     }
   }

@@ -9,9 +9,10 @@
  * @module dsh-dispatch/client/api-bridge
  */
 import { EVENT_CHANNELS } from '@shared/ipc'
-import type { DispatchApi, EventChannel, InvokeChannel, InvokeMap } from '@shared/ipc'
+import type { DispatchApi, EventChannel, EventMap, InvokeChannel, InvokeMap } from '@shared/ipc'
 
-type Listener = (payload: any) => void
+/** SSE 载荷在 JSON.parse 边界即为 unknown,存储侧统一 unknown 形状(投递断言与 preload 同款) */
+type Listener = (payload: unknown) => void
 
 export interface BridgeOptions {
   onCaptureHide?: () => void
@@ -27,12 +28,18 @@ async function invokeHttp(channel: InvokeChannel, payload: unknown): Promise<unk
   const res = await fetch(`/api/dispatch/invoke/${encodeURIComponent(channel)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: payload === undefined || payload === null ? '' : JSON.stringify(payload),
+    body: payload === undefined || payload === null ? '' : JSON.stringify(payload)
   })
-  const body = (await res.json()) as { ok: boolean; value?: unknown; error?: { code: string; message: string } }
+  const body = (await res.json()) as {
+    ok: boolean
+    value?: unknown
+    error?: { code: string; message: string }
+  }
   if (!body.ok) {
     throw body.error
-      ? Object.assign(new Error(`${body.error.message}(${body.error.code})`), { code: body.error.code })
+      ? Object.assign(new Error(`${body.error.message}(${body.error.code})`), {
+          code: body.error.code
+        })
       : new Error(`invoke ${channel} 失败: HTTP ${res.status}`)
   }
   return body.value
@@ -58,7 +65,10 @@ export function createApiBridge(options: BridgeOptions = {}): DispatchApi {
     }
   }
 
-  async function invoke<C extends InvokeChannel>(channel: C, payload: InvokeMap[C]['req']): Promise<InvokeMap[C]['res']> {
+  async function invoke<C extends InvokeChannel>(
+    channel: C,
+    payload: InvokeMap[C]['req']
+  ): Promise<InvokeMap[C]['res']> {
     if (channel === 'capture:hide') {
       options.onCaptureHide?.()
       return undefined as InvokeMap[C]['res']
@@ -72,20 +82,25 @@ export function createApiBridge(options: BridgeOptions = {}): DispatchApi {
       }
       // 不做静默兜底:缺回调直接抛错,由调用方的错误呈现通道暴露
       if (options.pickDirectory === undefined) {
-        throw new Error('插件形态目录选择需要面板提供 pickDirectory 回调(window.prompt 在 Electron 渲染进程不可用)')
+        throw new Error(
+          '插件形态目录选择需要面板提供 pickDirectory 回调(window.prompt 在 Electron 渲染进程不可用)'
+        )
       }
       return (await options.pickDirectory()) as InvokeMap[C]['res']
     }
     return (await invokeHttp(channel, payload)) as InvokeMap[C]['res']
   }
 
-  function on<C extends EventChannel>(channel: C, listener: (payload: any) => void): () => void {
+  function on<C extends EventChannel>(
+    channel: C,
+    listener: (payload: EventMap[C]) => void
+  ): () => void {
     ensureSource()
-    const set = listeners.get(channel) ?? new Set()
-    set.add(listener)
+    const set = listeners.get(channel) ?? new Set<Listener>()
+    set.add(listener as Listener)
     listeners.set(channel, set)
     return () => {
-      set.delete(listener)
+      set.delete(listener as Listener)
     }
   }
 
