@@ -28,5 +28,15 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-require-imports': 'off'
     }
+  },
+  {
+    // 零依赖 node 启动器脚本(B5 批2,如 run-vitest.mjs):plain JS,声明用到的 Node 全局
+    files: ['scripts/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly'
+      }
+    }
   }
 )

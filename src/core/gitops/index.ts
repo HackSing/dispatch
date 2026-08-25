@@ -1,9 +1,19 @@
 import { execFile } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { sanitizeName, taskBranchName } from '@core/naming'
 
 const GIT_MAX_BUFFER = 10 * 1024 * 1024
+
+/** removeWorktree 有限重试参数(win32 目录句柄锁实测形态,见函数注释) */
+const REMOVE_MAX_ATTEMPTS = 3
+const REMOVE_RETRY_INTERVAL_MS = 500
+/** win32 实测(B5 批2):进程 cwd/句柄占用 worktree 目录时 git 的失败原文(exit 255) */
+const WT_LOCK_DENIED = /failed to delete '.*': Permission denied/
+/** 上述锁失败后 git 已注销登记、目录残留的后续形态(exit 128) */
+const WT_NOT_REGISTERED = /is not a working tree/
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export class GitError extends Error {
   constructor(
@@ -176,13 +186,39 @@ async function advanceBase(o: MergeFlowOptions): Promise<MergeOutcome> {
   return { kind: 'merged', mode: 'ff_forward' }
 }
 
-/** prepare_cmd 会在 worktree 留下未跟踪产物(如 node_modules),必须 --force */
+/**
+ * prepare_cmd 会在 worktree 留下未跟踪产物(如 node_modules),必须 --force。
+ * win32 实测(B5 批2):进程占用 worktree 目录句柄时,git 报 "failed to delete ... Permission
+ * denied"(exit 255)且已注销登记——目录残留但重试原命令只得 "is not a working tree"。
+ * 故对锁形态有限重试;遇到登记已注销而目录残留(锁中间态/既往残留)时补删目录,
+ * 完成 --force 的既定语义,保证 cleanupTaskWorkspace 重入可用。超过次数原样上抛,不吞错。
+ */
 export async function removeWorktree(
   projectPath: string,
   worktreePath: string,
   branch: string
 ): Promise<void> {
-  await git(['worktree', 'remove', '--force', worktreePath], projectPath)
+  const args = ['worktree', 'remove', '--force', worktreePath]
+  let firstFailure: Error | null = null
+  for (let attempt = 1; ; attempt++) {
+    if (attempt > 1) await sleep(REMOVE_RETRY_INTERVAL_MS)
+    const r = await gitRaw(args, projectPath)
+    if (r.code === 0) break
+    if (WT_LOCK_DENIED.test(r.stderr)) {
+      firstFailure ??= new GitError(args, projectPath, r.stderr, r.code)
+    } else if (WT_NOT_REGISTERED.test(r.stderr) && existsSync(worktreePath)) {
+      // 锁中间态/既往残留:登记已注销,补删目录完成 --force 语义;删不动(锁未放)走重试
+      try {
+        rmSync(worktreePath, { recursive: true, force: true })
+        break
+      } catch (err) {
+        firstFailure ??= err as Error
+      }
+    } else {
+      throw new GitError(args, projectPath, r.stderr, r.code)
+    }
+    if (attempt >= REMOVE_MAX_ATTEMPTS) throw firstFailure
+  }
   await git(['branch', '-D', branch], projectPath)
 }
 

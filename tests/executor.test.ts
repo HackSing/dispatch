@@ -213,7 +213,12 @@ describe('runTask 八条路径', () => {
 
   it('⑥ prepare_cmd 失败 → failed: prepare_failed', async () => {
     process.env.MOCK_MODE = 'success'
-    const project = createProject({ prepareCmd: 'echo prepare-boom >&2; exit 7' })
+    // prepare_cmd 走系统 shell,分隔符语法按平台各写一份(POSIX `;` / cmd `&`,参照批1 detection.test.ts)
+    const prepareCmd =
+      process.platform === 'win32'
+        ? 'echo prepare-boom 1>&2 & exit 7'
+        : 'echo prepare-boom >&2; exit 7'
+    const project = createProject({ prepareCmd })
     const task = createTask(project.id)
 
     const result = await runTask(deps, task.id)

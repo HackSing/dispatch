@@ -15,6 +15,8 @@ export function makeGitRepo(prefix = 'dispatch-repo-'): string {
   git(dir, ['config', 'user.name', 'Dispatch Test'])
   git(dir, ['config', 'user.email', 'test@dispatch.local'])
   git(dir, ['config', 'commit.gpgsign', 'false'])
+  // 行尾钉死 LF:Windows 全局 core.autocrlf=true 会让合并后 checkout 出 CRLF,与机器配置无关化
+  git(dir, ['config', 'core.autocrlf', 'false'])
   commitFile(dir, 'file.txt', 'base', 'init')
   return dir
 }

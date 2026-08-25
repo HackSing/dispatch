@@ -9,9 +9,17 @@ import { AgentConfigSchema, loadConfig } from '@core/config'
 import { ensureDispatchDirs, resolvePaths, type DispatchPaths } from '@core/paths'
 import { getPlatformOps } from '@core/platform'
 import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
-import { RoundTimeoutError, SessionExitError, type RoundResult } from '@core/agents/session-transport'
+import {
+  RoundTimeoutError,
+  SessionExitError,
+  type RoundResult
+} from '@core/agents/session-transport'
 import { runTask, Semaphore, KeyedLock, type ExecutorDeps } from '@core/executor'
-import { FollowUpSession, type FollowUpEvents, type SessionCloseReason } from '@core/executor/follow-up'
+import {
+  FollowUpSession,
+  type FollowUpEvents,
+  type SessionCloseReason
+} from '@core/executor/follow-up'
 import { shortId } from '@core/naming'
 import type { Project, Task } from '@shared/types'
 import { branchExists, makeGitRepo } from './fixtures/git-repo'
@@ -90,7 +98,12 @@ function createProject(): Project {
 
 /** 人工搭一个带 sessionId 的 done 父任务(不经真实执行,轻量守卫/传输用) */
 function makeDoneParent(projectId: string, sessionId: string | null = 'sid-parent'): Task {
-  const t = tasks.create({ text: '原任务', projectId, agent: 'claude-code', triggerType: 'immediate' })
+  const t = tasks.create({
+    text: '原任务',
+    projectId,
+    agent: 'claude-code',
+    triggerType: 'immediate'
+  })
   tasks.transition(t.id, 'running')
   if (sessionId) tasks.setSessionId(t.id, sessionId)
   return tasks.transition(t.id, 'done', { finishedAt: new Date().toISOString() })
@@ -211,7 +224,8 @@ describe('stream 传输全链路', () => {
     expect(rounds).toHaveLength(2)
     expect(JSON.parse(rounds[0])).toMatchObject({ round: 1, is_error: false, cost_usd: 0.01 })
     expect(r.closed).toEqual(['finished'])
-  })
+    // win32 进程拉起开销大,默认 5s 超时不够,与 executor 重测试一致显式放宽
+  }, 15_000)
 
   it('轮次只改文件未提交 → finish 自动入一笔并合并(不丢改动)', async () => {
     const project = createProject()

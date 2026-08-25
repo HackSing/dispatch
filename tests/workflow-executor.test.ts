@@ -215,7 +215,11 @@ describe('runWorkflow 工作流路径', () => {
     expect(readJson(join(archive, 'review-r2.json')).verdict).toBe('pass')
     expect(readJson(join(archive, 'result-r1.json')).status).toBe('success')
     // REVIEW_FEEDBACK 注入:首轮为「无」,返工轮含上轮审查 issues 原文
-    const prompts = readFileSync(join(archive, 'mock-prompts.log'), 'utf-8')
+    // 模板文件行尾随本机 git checkout(autocrlf)而定,断言前统一归一为 LF
+    const prompts = readFileSync(join(archive, 'mock-prompts.log'), 'utf-8').replaceAll(
+      '\r\n',
+      '\n'
+    )
     expect(prompts).toContain('<review_feedback>\n无\n</review_feedback>')
     expect(prompts).toContain('mock-issue-r1: 实现与方案不符')
     expect(prompts).toContain('请修复标记 r1')
@@ -356,22 +360,26 @@ describe('runWorkflow 工作流路径', () => {
       phase: 'review',
       reviewRound: 1
     }
-  ])('⑤ $name,phase 留在末阶段', async ({ mainMode, subMode, timeouts, failReason, phase, reviewRound }) => {
-    wireAdapters(mainMode, subMode)
-    if (timeouts) {
-      deps.workflowPhaseTimeoutsMs = { ...deps.workflowPhaseTimeoutsMs, ...timeouts }
-    }
-    const project = createProject()
-    const task = createWorkflowTask(project.id)
+  ])(
+    '⑤ $name,phase 留在末阶段',
+    async ({ mainMode, subMode, timeouts, failReason, phase, reviewRound }) => {
+      wireAdapters(mainMode, subMode)
+      if (timeouts) {
+        deps.workflowPhaseTimeoutsMs = { ...deps.workflowPhaseTimeoutsMs, ...timeouts }
+      }
+      const project = createProject()
+      const task = createWorkflowTask(project.id)
 
-    const result = await runTask(deps, task.id)
+      const result = await runTask(deps, task.id)
 
-    expect(result.status).toBe('failed')
-    expect(result.failReason).toBe(failReason)
-    expect(result.phase).toBe(phase)
-    expect(result.reviewRound).toBe(reviewRound)
-    expect(result.finishedAt).toBeTruthy()
-  }, 20_000)
+      expect(result.status).toBe('failed')
+      expect(result.failReason).toBe(failReason)
+      expect(result.phase).toBe(phase)
+      expect(result.reviewRound).toBe(reviewRound)
+      expect(result.finishedAt).toBeTruthy()
+    },
+    20_000
+  )
 
   it('非 git 项目:跳过审查越权修改检测(日志注明),pass → done(no_vcs)', async () => {
     // review_modify 在非 git 项目下不构成 review_modified——检测按约定跳过
