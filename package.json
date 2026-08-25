@@ -14,7 +14,8 @@
     "format": "prettier --write .",
     "test": "node scripts/run-vitest.mjs",
     "postinstall": "electron-builder install-app-deps",
-    "pack:mac": "electron-vite build && electron-builder --mac"
+    "pack:mac": "electron-vite build && electron-builder --mac",
+    "pack:win": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
@@ -55,6 +56,11 @@
     ],
     "mac": {
       "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
     }
   }
 }
