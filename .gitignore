@@ -7,3 +7,5 @@ coverage/
 .env
 .harness-tmp/
 .zcode/
+__pycache__/
+*.py[cod]
