@@ -1,0 +1,46 @@
+{
+  "schema_version": "docs-harness/plan/v3",
+  "plan_level": "full",
+  "plan_profile": "general",
+  "secondary_profiles": [],
+  "template_versions": [
+    "level/full@2.11.1",
+    "profile/general@2.11.1"
+  ],
+  "selection_fingerprint": "sha256:b08959b8e148e32a82605792b39f9efb0782f6b8d9b65eb9c680cf3dd3f23517",
+  "content": {
+    "title": "方案确认闸:任务执行前的用户确认与多轮方案讨论",
+    "key_symbols": [
+      "awaiting_confirm",
+      "PlanDiscussionSession",
+      "task:confirm-plan",
+      "runPlanPhase"
+    ],
+    "background": "现状:任务到点后主智能体一次性跑完「方案+执行」(单点模式同一进程连跑 default.md 的 Phase1/Phase2;工作流模式 plan 阶段判过后立即进入 implement),用户无任何介入点。需求:在「方案产出」与「开始执行」之间插入用户确认环节——方案完成即暂停、系统通知用户、任务进入待确认状态;用户在任务详情页(参考追写面板 SessionPanel 的设计)查看方案、可与主智能体多轮讨论修订方案、或一键确认放行执行。该确认环节对所有可执行任务(immediate/at,单点与工作流两种模式)默认开启。关键事实:工作流模式在 workflow.ts runPlanPhase 判过后有干净断点;单点模式无断点,必须把 default.md 拆成 plan/exec 两跑;通知点击定位任务机制(notifications.ts → ui:open-task)与流式会话传输(SessionTransport 双实现 + task:session-event 广播)均已存在,可直接复用。",
+    "objective": "任务状态机新增 awaiting_confirm(待确认)状态:方案阶段判过后任务由 running 迁入并暂停(释放执行信号量、保留 worktree/归档/会话 id),触发系统通知;用户在详情页查看 plan.md、经会话传输与主智能体多轮讨论修订 plan.md;点确认后任务重新入队,执行器跳过方案阶段直接执行;放弃则落 failed(abandoned) 并清理 worktree。单点与工作流两种模式行为一致。",
+    "non_goals": "1) 不做确认环节的全局/单任务开关(本期默认强制开启);2) 不改变追写面板(执行后沟通)的任何行为;3) 不引入新第三方依赖;4) 不处理 awaiting_confirm 长挂 worktree 的超期回收策略(沿用现有手动清理口径);5) 不支持编辑 awaiting_confirm 任务的原文(用讨论代替);6) 无会话能力(resume)的 agent 不提供讨论输入框,仅保留查看方案+确认/放弃(能力门禁复用 followUpTransport 判定)。",
+    "success_criteria": "1) 单点模式:agent 写出 plan.md 后任务进入 awaiting_confirm、收到系统通知、详情页可见方案与讨论区;确认后才产生实际代码改动并最终 done;2) 工作流模式:runPlanPhase 判过后停在 awaiting_confirm,确认后跳过 plan 直接 implement/review;3) 讨论轮次可让 agent 修订 plan.md,修订内容在详情页可见;4) 应用重启后 awaiting_confirm 任务原样保留,可继续讨论或确认;5) 放弃 → failed(abandoned) 且 worktree 被清理;6) 全部受影响模块测试通过、npm run build 通过、assets-check 通过。",
+    "execution_scope": "主进程:src/shared/state-machine.ts、src/shared/types.ts、src/core/executor/index.ts、src/core/executor/workflow.ts、新增 src/core/executor/plan-discussion.ts、src/core/archive/index.ts(OutputLog 支持文件名参数)、src/core/archive/read.ts(读 discussion.log)、src/core/scheduler/recovery.ts(恢复定论注释/测试)、src/shell/{execution.ts,ipc-handlers.ts,session-service.ts,notifications.ts}、src/shared/ipc.ts(契约三处)。提示词:新增 resources/prompts/{default-plan.md,default-exec.md,plan-discussion.md},default.md 标注被取代。渲染层:src/renderer/src/components/TaskDetail.tsx(方案确认区+讨论区+确认按钮)、src/renderer/src/lib/{task-labels.ts,task-filters.ts}、样式。文档:docs/dispatch-spec.md §3.2/§4.2/§6、docs/flows.md 状态机图与新流程节、docs/CODEMAP.md、CHANGELOG.md、docs/INDEX.md(由 harness 维护)。测试:state-machine/executor/workflow/recovery/ipc/session/archive 相关测试与 fixtures mock agent。",
+    "implementation": "批次 1(状态机与消费方面面):TASK_STATUSES 增加 awaiting_confirm;TRANSITIONS 新增 running→awaiting_confirm(方案判过暂停)、awaiting_confirm→scheduled(用户确认)、awaiting_confirm→failed(放弃, fail_reason=abandoned);SETTLED_STATUSES 不变。同步穷举消费面:task-labels.ts 加「待确认」、task-filters.ts active 组收录、notifications.ts NOTIFY_TITLES 加「方案待确认」(点击定位走既有 ui:open-task 机制)、styles.css 徽章。recovery.ts 明确不动 awaiting_confirm(无在跑进程、产物已落盘,重启后原样保留)。批次 2(执行器两跑拆分):新模板 default-plan.md(原 default.md 的 Phase1 纪律+写完 plan.md 即退出+禁止改工作区文件)与 default-exec.md(方案已确认且可能经讨论修订,按 plan.md 执行+Phase2 纪律+result.json 契约);runAgent 拆分:首跑用 default-plan.md 并 setPhase('plan'),判 plan.md 后 ①若 result.json 已存在(用户自改模板恢复连跑)→ 走原判定与合并链路;②否则 transition running→awaiting_confirm(TransitionPatch 带 archiveDir/worktreePath/branch,phase 冻结为 plan)直接返回。execute() 顶部新增恢复分支:task.phase==='plan' 且 archiveDir 非空 → 跳过 detectGitInfo/createArchive,复用 task 上的 archiveDir/worktreePath/branch/baseBranch,prepare_cmd 跳过;若 plan.md 已被用户删除 → 回退完整首跑。runPhases 恢复分支跳过 createTaskWorktree/prepare,单点路径改用 default-exec.md 并 setPhase('implement'),离开 running 前 setPhase(null) 清场;workflow.ts runWorkflow 检测同一标记跳过 runPlanPhase 直入 implement 循环。default.md 头部标注已被 default-plan/default-exec 取代(用户目录旧拷贝自然失活,不迁移)。批次 3(讨论引擎+IPC):新增 plan-discussion.ts 的 PlanDiscussionSession(start 守卫 status===awaiting_confirm+sessionId+agent+followUpTransport 非空;首轮渲染 plan-discussion.md 模板注入四变量,后续轮原文;轮次追加 <archiveDir>/discussion.log;轮级失败只关会话广播 closed,不动任务状态;close 幂等不迁移状态),复用 SessionTransport 与 session-transport 双实现;OutputLog 增加可选文件名参数供讨论日志复用;SessionService 增加讨论会话表(task 维度去重)与 open/send/close 方法,事件沿用 task:session-event;shared/ipc.ts 契约三处新增 task:confirm-plan、task:plan-discuss-open/send/close;execution.ts 增加 confirmPlan(transition→scheduled→enqueue,先关讨论会话);task:abandon 守卫扩展至 awaiting_confirm;archive/read.ts 归档读取追加 discussion.log 尾部。批次 4(渲染层):TaskDetail 对 awaiting_confirm 渲染方案确认区(plan.md 已有展示)+讨论区(discussion.log 回填+session-event 订阅+textarea ⌘+Enter,布局参照 SessionPanel)+主按钮「确认,开始执行」;挂载时按需 plan-discuss-open(幂等)、卸载 close;capabilities.followUp 为假时隐藏讨论输入仅留确认/放弃;TaskMenu 放弃入口扩展至 awaiting_confirm。批次 5(文档收尾):spec/flows/CODEMAP/CHANGELOG 同步,plan settle 前跑 plan check 与 assets-check。每批跑聚焦 vitest+tsc 验证后锁定再进下一批。",
+    "module_interfaces": "新增 src/core/executor/plan-discussion.ts — 职责:awaiting_confirm 任务执行前的方案讨论会话引擎(无接力任务/无合并链路);公开接口:class PlanDiscussionSession(static start(deps, taskId, events): Promise<会话>;sendTurn(text): Promise<void>;close(reason?): Promise<void>;readonly open/busy/taskId),复用 @core/agents/session-transport 的 SessionTransport、@core/agents/session 的 followUpTransport、@core/prompt 的 loadPromptTemplate/renderPrompt。修改 src/core/executor/index.ts — execute() 增恢复分支签名不变;新增导出任一内部函数不扩散。修改 src/core/executor/workflow.ts — runWorkflow 内部跳过逻辑,接口不变。修改 src/shell/session-service.ts — 新增 openPlanDiscussion/sendPlanDiscussion/closePlanDiscussion(taskId)。修改 src/shared/ipc.ts — InvokeMap+INVOKE_CHANNELS 新增 task:confirm-plan {id:string}->Task、task:plan-discuss-open {id:string}->void、task:plan-discuss-send {id:string,text:string}->void、task:plan-discuss-close {id:string}->void;EventMap 复用 task:session-event 不新增。修改 src/core/archive/index.ts — OutputLog 构造签名 (archiveDir, fileName='output.log')。修改 src/core/archive/read.ts — 归档读取结果追加 discussionLog 字段。提示词契约:default-plan.md 产物=plan.md;default-exec.md 产物=result.json(plan.md 已存在);plan-discussion.md 首轮模板变量同四变量+对话规则。",
+    "acceptance_plan": "创建 Acceptance 资产逐条记录:1) 状态机单测:三条新迁移合法、非法迁移抛错、SETTLED_STATUSES 不含新状态;2) executor 测试:单点模式 mock agent 首跑停 awaiting_confirm、确认后重入跳过 plan 完成执行并 done;工作流模式确认后跳过 runPlanPhase;result.json 已存在时的连跑兼容分支;3) recovery 测试:awaiting_confirm 重启原样保留;4) session 测试:讨论守卫(非 awaiting_confirm/无 sessionId/无 resume 能力拒绝)、轮次串行闸门、失败不动任务状态;5) ipc 契约测试:新频道三处注册一致;6) npm run build(typecheck)通过;7) 真实流程验收:本地起应用用真实 agent CLI 跑一个任务走「方案→通知→讨论一轮→确认→执行完成」全链路,若环境不具备则准备最低成本环境交用户做最短确认,以 --user-confirmed 记录。",
+    "acceptance_required": true,
+    "knowledge_impact": "updated",
+    "constraints": "状态机一切写入仍必须经 TaskStore.transition 校验;IPC 频道只从 src/shared/ipc.ts 派生(契约三处同改);提示词与代码流程同步(拆模板后 default.md 的弃用说明、wf-plan.md 的「下一阶段实现」措辞需核对);core 层不触 Electron;不新增依赖;setPhase 仅 running 可调用的不变量不破(awaiting_confirm 期间 phase 冻结为 plan,不调用 setPhase);change 最小化——追写面板、合并链路、调度器扫描逻辑零改动。",
+    "risks_and_rollback": "风险 1:用户目录残留旧版 default.md(两阶段连跑),若被误引用会绕过确认——缓解:执行器只引用新文件名,旧文件自然失活;首跑后 result.json 已存在则按已完成处理不暂停(连跑兼容分支,有磁盘证据)。风险 2:确认后重入 runTask 的 worktree/归档复用出错——缓解:恢复分支所有字段均来自 running→awaiting_confirm 迁移时持久化的任务字段,plan.md 缺失回退完整首跑;executor 测试覆盖重入。风险 3:讨论会话与确认动作竞态(讨论进行中点确认)——缓解:confirmPlan 先关讨论会话再迁移状态,SessionService 按 task 去重。风险 4:既有 executor/workflow 测试大量依赖单跑模型,需成批更新 fixtures——按批次 2 内一并更新并跑聚焦测试。回滚:新状态与迁移集中在 state-machine.ts 与新文件,回退 git 提交即可;已入库的 awaiting_confirm 任务在回滚后状态值非法,提供一次性 SQL 指引 UPDATE tasks SET status='scheduled' WHERE status='awaiting_confirm'(仅回滚场景人工执行)。"
+  },
+  "acceptance_refs": [
+    "docs/acceptance/plan-confirmation.json"
+  ],
+  "governance": {
+    "acceptance_required": true,
+    "knowledge_impact": "updated",
+    "updated_knowledge_refs": [
+      "docs/knowledge/plan-confirmation-gate.json"
+    ],
+    "unchanged_reason": null,
+    "governance_settled_at": "2026-08-29T02:48:55+00:00"
+  },
+  "frozen_at": "2026-08-28T14:07:49+00:00",
+  "plan_fingerprint": "sha256:89c26dd29696251de455e82bad95439844afd123f188884ade636b2b7bfd6b31"
+}

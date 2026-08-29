@@ -196,6 +196,25 @@
   white-space: nowrap;
 }
 
+/* ── 方案确认闸(awaiting_confirm 详情内嵌:确认区 + 讨论区) ── */
+
+/* 醒目确认卡:蓝色描边区别于普通 .scard,提示这是待用户动作的放行入口 */
+.plan-confirm-card {
+  border-color: rgba(0, 122, 255, 0.28);
+  background: #f2f8ff;
+}
+
+.plan-confirm-card p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 讨论输入复用 .session-input 布局,去掉面板级横向内边距以贴合详情区块宽度 */
+.plan-discuss-input {
+  padding: 0;
+}
+
 /* ── 会话面板 ── */
 
 .session-panel {

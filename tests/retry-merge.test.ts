@@ -10,11 +10,11 @@ import { ensureDispatchDirs, resolvePaths, type DispatchPaths } from '@core/path
 import { getPlatformOps } from '@core/platform'
 import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
 import { retryMerge, runTask, Semaphore, KeyedLock, type ExecutorDeps } from '@core/executor'
-import { sanitizeName, shortId } from '@core/naming'
 import type { Project, Task } from '@shared/types'
 import { branchExists, commitFile, git, headOf, makeDirty, makeGitRepo } from './fixtures/git-repo'
 
 const MOCK_SCRIPT = fileURLToPath(new URL('./fixtures/mock-agent.cjs', import.meta.url))
+const BUILTIN_PROMPTS_DIR = fileURLToPath(new URL('../resources/prompts', import.meta.url))
 const MOCK_ENV_KEYS = ['MOCK_MODE', 'MOCK_FILE', 'MOCK_CONTENT', 'MOCK_WAIT_FILE']
 
 let home: string
@@ -48,7 +48,8 @@ beforeEach(() => {
     adapterFor: () => adapter,
     semaphore: new Semaphore(2),
     mergeLocks: new KeyedLock(),
-    taskTimeoutMs: 60_000
+    taskTimeoutMs: 60_000,
+    builtinPromptsDir: BUILTIN_PROMPTS_DIR
   }
 })
 
@@ -67,19 +68,17 @@ function createTask(projectId: string, text = 'retry merge task'): Task {
   return tasks.create({ text, projectId, agent: 'claude-code', triggerType: 'immediate' })
 }
 
-function archiveDirOf(project: Project, task: Task): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  const d = new Date()
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  return join(paths.archivesDir, sanitizeName(project.name), `${date}-${shortId(task.id)}`)
+/** 模拟批次3 confirmPlan:awaiting_confirm→scheduled(暂停时字段已持久化) */
+function confirm(taskId: string): void {
+  tasks.transition(taskId, 'scheduled', {})
 }
 
-async function waitFor(cond: () => boolean, timeoutMs = 10_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (!cond()) {
-    if (Date.now() > deadline) throw new Error('waitFor 超时')
-    await new Promise((r) => setTimeout(r, 25))
-  }
+/** 单点完整两跑:首跑停 awaiting_confirm → 确认 → 执行跑到终态 */
+async function planConfirmRun(task: Task): Promise<Task> {
+  const paused = await runTask(deps, task.id)
+  expect(paused.status).toBe('awaiting_confirm')
+  confirm(task.id)
+  return runTask(deps, task.id)
 }
 
 /** 造 awaiting_merge:主工作区脏 → 执行成功但不可安全合并 */
@@ -87,28 +86,24 @@ async function makeAwaitingMerge(project: Project): Promise<Task> {
   process.env.MOCK_MODE = 'success'
   makeDirty(repo)
   const task = createTask(project.id)
-  const result = await runTask(deps, task.id)
+  const result = await planConfirmRun(task)
   expect(result.status).toBe('awaiting_merge')
   expect(result.failReason).toBe('base_dirty')
   return result
 }
 
-/** 造 conflict:任务 B 建完 worktree 后在 main 插入同文件冲突提交 */
+/** 造 conflict:方案跑建好 worktree 停在 awaiting_confirm 后,在 main 插入同文件冲突提交再确认放行 */
 async function makeConflict(project: Project): Promise<Task> {
   process.env.MOCK_MODE = 'success'
   process.env.MOCK_FILE = 'file.txt'
   process.env.MOCK_CONTENT = 'from-task'
-  const gate = join(home, 'gate')
-  process.env.MOCK_WAIT_FILE = gate
   const task = createTask(project.id, 'conflicting change task')
-  const pending = runTask(deps, task.id)
-  const plan = join(archiveDirOf(project, task), 'plan.md')
-  await waitFor(() => existsSync(plan))
+  const paused = await runTask(deps, task.id)
+  expect(paused.status).toBe('awaiting_confirm')
   commitFile(repo, 'file.txt', 'from-main', 'conflicting change on main')
-  writeFileSync(gate, '')
-  const result = await pending
+  confirm(task.id)
+  const result = await runTask(deps, task.id)
   expect(result.status).toBe('conflict')
-  delete process.env.MOCK_WAIT_FILE
   return result
 }
 

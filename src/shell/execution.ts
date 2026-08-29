@@ -5,8 +5,9 @@ import type { AgentId, Task } from '@shared/types'
 import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
 import { getPlatformOps } from '@core/platform'
 import { KeyedLock, Semaphore, TaskCancellations } from '@core/executor/locks'
-import { retryMerge, runTask, type ExecutorDeps } from '@core/executor'
+import { confirmPlan, retryMerge, runTask, type ExecutorDeps } from '@core/executor'
 import type { AppContext } from './context'
+import type { SessionService } from './session-service'
 
 /**
  * executor 的壳层装配:B2 只接 immediate 与手动「立即执行」;
@@ -15,6 +16,8 @@ import type { AppContext } from './context'
 export class ExecutionService {
   private readonly deps: ExecutorDeps
   private readonly cancellations = new TaskCancellations()
+  /** 讨论会话表归 SessionService;confirmPlan 需先关讨论会话,构造序上 sessions 晚于 execution,故后置注入 */
+  private sessions: SessionService | null = null
 
   constructor(ctx: AppContext) {
     this.deps = {
@@ -38,6 +41,21 @@ export class ExecutionService {
   /** 面板会话服务等壳层同侪复用同一份 deps(adapter 工厂/锁/路径单一装配点) */
   get executorDeps(): ExecutorDeps {
     return this.deps
+  }
+
+  /** 装配收口:confirmPlan 关讨论会话需 SessionService,后者构造晚于 ExecutionService,启动时回填一次 */
+  attachSessions(sessions: SessionService): void {
+    this.sessions = sessions
+  }
+
+  /**
+   * 用户确认方案(壳层薄壳):core confirmPlan 完成「关讨论会话 → awaiting_confirm→scheduled」,
+   * 再 fire-and-forget 入队(executor 恢复分支跳过方案阶段直接执行)。返回迁移后的最新任务。
+   */
+  confirmPlan(taskId: string): Task {
+    const task = confirmPlan(this.deps, taskId, (id) => this.sessions?.closePlanDiscussion(id))
+    this.enqueue(taskId)
+    return task
   }
 
   /** 入队执行(fire-and-forget):任务级失败由 executor 转 failed,这里只兜底编排异常 */

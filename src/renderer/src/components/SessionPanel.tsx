@@ -4,6 +4,7 @@ import type { SessionEventPayload } from '@shared/ipc'
 import { statusBadgeLabel } from '../lib/task-labels'
 import { DotsIcon } from './icons'
 import { usePopoverDismiss } from '../lib/use-popover'
+import { useConfirmDialog } from './ConfirmDialog'
 
 /** 会话级操作(完成并合并 / 放弃)收敛在头部 ⋯ 菜单,输入区只留发送(交互定稿) */
 function SessionMenu(props: {
@@ -85,6 +86,7 @@ export function SessionPanel(props: { task: Task; onClose: () => void }): React.
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const logRef = useRef<HTMLPreElement | null>(null)
+  const { ask, confirmNode } = useConfirmDialog()
 
   const active = task.status === 'running' && closedReason === null
 
@@ -148,8 +150,8 @@ export function SessionPanel(props: { task: Task; onClose: () => void }): React.
       .catch((e: Error) => setError(e.message))
   }
 
-  const finish = (): void => {
-    if (!window.confirm('完成本次会话并合并改动?')) return
+  const finish = async (): Promise<void> => {
+    if (!(await ask('完成本次会话并合并改动?'))) return
     setError(null)
     window.dispatchApi
       .invoke('task:follow-up-finish', { id: task.id })
@@ -157,8 +159,12 @@ export function SessionPanel(props: { task: Task; onClose: () => void }): React.
       .catch((e: Error) => setError(e.message))
   }
 
-  const abandon = (): void => {
-    if (!window.confirm('放弃本次会话?将标记为失败,并删除其 worktree 与任务分支(归档保留)。'))
+  const abandon = async (): Promise<void> => {
+    if (
+      !(await ask('放弃本次会话?将标记为失败,并删除其 worktree 与任务分支(归档保留)。', {
+        danger: true
+      }))
+    )
       return
     setError(null)
     window.dispatchApi
@@ -215,6 +221,7 @@ export function SessionPanel(props: { task: Task; onClose: () => void }): React.
             </button>
           </div>
         </div>
+        {confirmNode}
       </div>
     </div>
   )

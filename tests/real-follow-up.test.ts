@@ -57,6 +57,10 @@ describe.skipIf(!enabled)('真实 Claude Code 会话面板门控', () => {
         agent: 'claude-code',
         triggerType: 'immediate'
       })
+      // 方案确认闸两跑:方案跑停 awaiting_confirm → 确认放行 → 执行跑合并 done
+      const paused = await runTask(deps, seed.id)
+      expect(paused.status).toBe('awaiting_confirm')
+      tasks.transition(seed.id, 'scheduled', {})
       const parent = await runTask(deps, seed.id)
       expect(parent.status).toBe('done')
       expect(parent.sessionId).toMatch(/^[0-9a-f-]{36}$/)

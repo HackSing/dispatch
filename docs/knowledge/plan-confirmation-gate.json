@@ -1,0 +1,58 @@
+{
+  "schema_version": "docs-harness/knowledge-asset/v1",
+  "title": "方案确认闸协议:awaiting_confirm 状态与两跑拆分",
+  "key_symbols": [
+    "awaiting_confirm",
+    "runPlanPhaseSingle",
+    "PlanDiscussionSession",
+    "task:confirm-plan"
+  ],
+  "summary": "任务方案产出后暂停在 awaiting_confirm 等用户确认,确认后重入跳过方案阶段直接执行;单点靠模板两跑拆分,工作流靠 phase 冻结标记。",
+  "facts": [
+    {
+      "id": "state-machine",
+      "statement": "状态机新增 awaiting_confirm(待确认):合法边仅 running→awaiting_confirm(方案判过暂停)、awaiting_confirm→scheduled(用户确认)、awaiting_confirm→failed(放弃 abandoned);它不是终态(SETTLED_STATUSES 不变),调度器不扫描它,崩溃恢复原样保留。",
+      "source_refs": [
+        "src/shared/state-machine.ts",
+        "src/core/scheduler/recovery.ts"
+      ]
+    },
+    {
+      "id": "two-run-split",
+      "statement": "单点模式拆为方案跑(default-plan.md,只产 plan.md 即退出)与执行跑(default-exec.md,按已确认 plan.md 执行产 result.json);重入标记=任务 phase 冻结为 plan 且 archiveDir 非空,确认重入复用暂停时持久化的 archiveDir/worktreePath/branch/baseBranch 并跳过 prepare_cmd;首跑后 result.json 已存在(用户自改连跑模板)则按已完成收尾不进确认闸。",
+      "source_refs": [
+        "src/core/executor/index.ts",
+        "resources/prompts/default-plan.md",
+        "resources/prompts/default-exec.md"
+      ]
+    },
+    {
+      "id": "workflow-pause",
+      "statement": "工作流模式 runPlanPhase 判过后同样 transition 到 awaiting_confirm;确认重入经 resuming 标记(phase==='plan' 且 plan.md 存在)跳过方案阶段直入 implement 循环。",
+      "source_refs": [
+        "src/core/executor/workflow.ts"
+      ]
+    },
+    {
+      "id": "plan-discussion",
+      "statement": "awaiting_confirm 期间的方案讨论由 PlanDiscussionSession 承载:复用 SessionTransport 续接方案会话,首轮渲染 plan-discussion.md(只许修订 plan.md、严禁执行),轮级失败只关会话不动任务状态;记录落归档 discussion.log;无 resume 能力的 agent 无讨论入口(只确认/放弃)。",
+      "source_refs": [
+        "src/core/executor/plan-discussion.ts",
+        "resources/prompts/plan-discussion.md"
+      ]
+    },
+    {
+      "id": "notification",
+      "statement": "系统通知事件为 done/failed/conflict/awaiting_merge/awaiting_confirm 五类;awaiting_confirm 通知点击经 showMainWindow + ui:open-task 直达任务详情确认区。",
+      "source_refs": [
+        "src/shell/notifications.ts"
+      ]
+    }
+  ],
+  "status": "active",
+  "revision": 1,
+  "revision_history": [],
+  "created_at": "2026-08-28T15:44:39+00:00",
+  "updated_at": "2026-08-28T15:44:39+00:00",
+  "asset_fingerprint": "sha256:150b0b752a37732e0a8775af29dc2037818f844de86b203c0e40abc50d34d9e3"
+}

@@ -110,6 +110,8 @@ export interface TaskArchive {
   planMd: string | null
   resultRaw: string | null
   logTail: string | null
+  /** 方案确认前的多轮讨论记录尾部(discussion.log);未开过讨论为 null */
+  discussionLog: string | null
   conflictReport: string | null
   /** 归档目录全部文件(agent 可能产出协议之外的交付物,如生成的文档) */
   files: ArchiveFileInfo[]
@@ -131,8 +133,16 @@ export interface InvokeMap {
   'task:rerun': { req: { id: string }; res: Task }
   /** awaiting_merge/conflict 手动重试合并(spec「已解决,重试合并」) */
   'task:retry-merge': { req: { id: string }; res: Task }
-  /** conflict/awaiting_merge 放弃 → failed(abandoned),并同步清理 worktree 与任务分支 */
+  /** conflict/awaiting_merge/awaiting_confirm 放弃 → failed(abandoned),并同步清理 worktree 与任务分支 */
   'task:abandon': { req: { id: string }; res: Task }
+  /** awaiting_confirm 确认放行:关讨论会话 → scheduled → 入队(执行器跳过方案阶段);返回最新任务 */
+  'task:confirm-plan': { req: { id: string }; res: Task }
+  /** awaiting_confirm 开启方案讨论会话(幂等);进展经 task:session-event 广播;返回当前轮次忙碌态供重开详情恢复输入闸门 */
+  'task:plan-discuss-open': { req: { id: string }; res: { busy: boolean } }
+  /** 方案讨论送话:同步校验后立即返回,轮次进展经 task:session-event 广播 */
+  'task:plan-discuss-send': { req: { id: string; text: string }; res: void }
+  /** 关闭方案讨论会话(幂等);不迁移任务状态 */
+  'task:plan-discuss-close': { req: { id: string }; res: void }
   /** failed 任务手动清理遗留 worktree 与分支(归档保留);无 worktree 时为 no-op */
   'task:cleanup-worktree': { req: { id: string }; res: Task }
   /** 运行中任务用户中断 → failed(user_interrupted),worktree 保留可重跑/追问 */
@@ -197,6 +207,10 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'task:cleanup-worktree',
   'task:interrupt',
   'task:delete',
+  'task:confirm-plan',
+  'task:plan-discuss-open',
+  'task:plan-discuss-send',
+  'task:plan-discuss-close',
   'task:follow-up-start',
   'task:follow-up-send',
   'task:follow-up-finish',

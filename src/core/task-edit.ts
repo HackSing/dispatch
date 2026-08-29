@@ -123,12 +123,22 @@ export async function deleteTask(
   }
 }
 
-/** 放弃 conflict/awaiting_merge → failed(abandoned);worktree 保留,由清理策略延后回收 */
+/**
+ * 放弃 conflict/awaiting_merge/awaiting_confirm → failed(abandoned)。
+ * conflict/awaiting_merge 的 worktree 保留由清理策略延后回收;awaiting_confirm(方案确认闸)放弃时,
+ * 调用方(ipc task:abandon)随后 cleanupTaskWorkspace 清 worktree,并先关讨论会话。
+ */
 export function abandonTask(store: TaskStore, id: string): Task {
   const current = store.get(id)
   if (!current) throw new Error(`task not found: ${id}`)
-  if (current.status !== 'conflict' && current.status !== 'awaiting_merge') {
-    throw new Error(`仅 conflict/awaiting_merge 任务可放弃,当前状态 ${current.status}`)
+  if (
+    current.status !== 'conflict' &&
+    current.status !== 'awaiting_merge' &&
+    current.status !== 'awaiting_confirm'
+  ) {
+    throw new Error(
+      `仅 conflict/awaiting_merge/awaiting_confirm 任务可放弃,当前状态 ${current.status}`
+    )
   }
   return store.transition(id, 'failed', {
     failReason: 'abandoned',

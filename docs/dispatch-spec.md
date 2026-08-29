@@ -46,9 +46,9 @@
 ### 3.2 主界面(任务清单)
 
 - 常驻系统托盘,主窗口按项目分组展示任务列表,显示状态、触发时间、智能体。
-- 单任务详情页:任务原文、方案(plan.md 渲染)、结果(result.json 渲染)、执行日志尾部、冲突报告(如有)。
-- 操作:编辑(未执行前)、取消、立即执行、失败重跑(复制任务重新入队)、普通 todo 手动勾选完成。
-- 系统通知:done / failed / conflict / awaiting_merge 四类事件触发。
+- 单任务详情页:任务原文、方案(plan.md 渲染)、结果(result.json 渲染)、执行日志尾部、冲突报告(如有);任务处于 `awaiting_confirm` 时额外渲染方案确认区(见 §6)。
+- 操作:编辑(未执行前)、取消、立即执行、失败重跑(复制任务重新入队)、普通 todo 手动勾选完成;`awaiting_confirm` 任务提供「确认方案(开始执行)」「方案讨论(与主智能体多轮修订)」「放弃」。
+- 系统通知:done / failed / conflict / awaiting_merge / awaiting_confirm 五类事件触发,`awaiting_confirm` 提示「方案待确认」,点击通知直达详情页确认区。
 
 ---
 
@@ -78,16 +78,17 @@ Task {
 ```
 todo ──────────────(补充执行时间+智能体)──────────┐
                                                   ▼
-scheduled ──到点──▶ running ──▶ merging ──▶ done
-                      │            │
-                      │            ├─▶ awaiting_merge ──(条件满足后重试)──▶ merging
-                      │            └─▶ conflict(保留 worktree,出冲突报告,等用户处理)
+scheduled ──到点──▶ running ──▶ awaiting_confirm ──(确认)──▶ scheduled ──▶ running ──▶ merging ──▶ done
+                      │              │                                        │            │
+                      │              └─▶ failed(放弃 abandoned)              │            ├─▶ awaiting_merge ──(条件满足后重试)──▶ merging
+                      │                                                       │            └─▶ conflict(保留 worktree,出冲突报告,等用户处理)
                       └─▶ failed(可一键重跑 = 复制新任务入队)
 ```
 
 - `todo`:无执行时间的普通待办,仅手动勾选完成;后续可编辑升级为可执行任务。
 - `scheduled`:等待触发(`immediate` 视为立刻到点)。
 - `running`:含方案阶段与执行阶段(详见 §6)。
+- `awaiting_confirm`:方案阶段判过后暂停,释放执行信号量、保留 worktree/归档/会话 id,发系统通知等用户裁决。三条迁移边:`running → awaiting_confirm`(方案产出后暂停)、`awaiting_confirm → scheduled`(用户确认放行,重新入队后执行器跳过方案阶段)、`awaiting_confirm → failed`(用户放弃,fail_reason=abandoned,清理 worktree)。用户可在此状态下经会话与主智能体多轮讨论修订 plan.md;应用重启后原样保留(见 §9)。
 - `merging`:执行成功,正在合并回 base 分支。
 - `awaiting_merge`:执行成功但暂不能安全合并(如用户主工作区脏),保留 worktree,通知用户;调度器周期性重试,用户也可手动触发。
 - `conflict`:合并冲突,保留 worktree 与分支,生成冲突报告,等用户决定(在 worktree 手动解决后点「已解决,重试合并」,或放弃该任务)。
@@ -135,9 +136,11 @@ interface AgentAdapter {
 
 ---
 
-## 6. 执行流程(两阶段工单协议)
+## 6. 执行流程(方案阶段 → 用户确认闸 → 执行阶段)
 
-> ⚠️ 本节的任务流程规范需与 **docs/harness 中已有的任务流程文档**合并。下述为骨架,构建时以 harness 文档为准注入/覆盖具体流程步骤。提示词模板单独存为可编辑文件(`~/.dispatch/prompts/default.md`),不写死在代码里。
+> ⚠️ 本节的任务流程规范需与 **docs/harness 中已有的任务流程文档**合并。下述为骨架,构建时以 harness 文档为准注入/覆盖具体流程步骤。提示词模板单独存为可编辑文件,不写死在代码里:单点执行拆为方案跑 `~/.dispatch/prompts/default-plan.md` 与执行跑 `default-exec.md`,方案讨论用 `plan-discussion.md`(旧 `default.md` 已被这三者取代、自然失活)。
+>
+> **确认闸(§6.1.5)**:方案阶段(Phase 1)与执行阶段(Phase 2)之间插入一道用户确认闸——方案产出即暂停、通知用户、进入 `awaiting_confirm`;用户查看/讨论修订方案后确认才放行执行,确认重入时执行器**跳过方案阶段**直接执行。单点与工作流两种模式行为一致,该闸默认对所有可执行任务开启。
 
 ### 6.0 Phase 0 — 环境准备(调度器执行)
 
@@ -154,7 +157,20 @@ interface AgentAdapter {
 2. **方案先行**:动手前将方案写入 `{OUT_DIR}/plan.md`,包含:任务理解(含假设清单)、优化后的目标描述/提示词、执行步骤、涉及文件、风险点。
 3. 执行中如需偏离方案,须先在 plan.md 追加「变更记录」段落再继续。
 
+- **单点模式**:Phase 1 拆为独立一跑(模板 `default-plan.md`,只写方案、禁止改工作区文件),写出 plan.md 即退出。
+- **工作流模式**:主智能体在 plan 阶段产出 plan.md(见 §7 工作流),判过后同样暂停。
+
+### 6.1.5 用户确认闸(方案阶段与执行阶段之间)
+
+1. 方案阶段判过后,任务由 `running` 迁入 `awaiting_confirm` 并暂停:释放执行信号量,保留 worktree/归档目录/会话 id,`phase` 冻结为 `plan`;触发系统通知「方案待确认」。
+2. 用户在详情页查看 plan.md,可经会话传输与主智能体多轮讨论修订 plan.md(讨论轮次追加写入归档 `discussion.log`;讨论只改方案、不迁移任务状态,轮级失败仅关会话不落 failed;无会话续接能力的 agent 只提供查看 + 确认/放弃)。
+3. **确认**:任务重新入队(`awaiting_confirm → scheduled`),执行器复用暂停时持久化的归档/worktree/base,跳过方案阶段直接进入执行(单点用 `default-exec.md` 跑执行,工作流跳过 plan 段直入 implement)。
+4. **放弃**:`awaiting_confirm → failed`(fail_reason=abandoned),清理 worktree 与任务分支。
+5. 若用户把模板改回单跑连做(单点归档中方案跑后 result.json 已同时存在),则按已完成处理不暂停(连跑兼容分支)。
+
 ### 6.2 Phase 2 — 执行与交付
+
+> 执行阶段在**用户确认放行后**才开始(见 §6.1.5);确认重入时执行器跳过方案阶段,不重跑 Phase 1。单点模式此跑用 `default-exec.md`(按已确认的 plan.md 执行)。
 
 结束前 agent 必须写 `{OUT_DIR}/result.json`:
 

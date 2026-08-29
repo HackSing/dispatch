@@ -275,6 +275,21 @@ describe('abandonTask 放弃', () => {
     expect(abandoned.finishedAt).not.toBeNull()
   })
 
+  it('awaiting_confirm → failed(fail_reason=abandoned)(方案确认闸放弃)', () => {
+    const t = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    store.transition(t.id, 'running', { startedAt: new Date().toISOString() })
+    store.setPhase(t.id, 'plan')
+    store.transition(t.id, 'awaiting_confirm', {
+      archiveDir: '/tmp/archive',
+      worktreePath: null,
+      branch: null
+    })
+    const abandoned = abandonTask(store, t.id)
+    expect(abandoned.status).toBe('failed')
+    expect(abandoned.failReason).toBe('abandoned')
+    expect(abandoned.finishedAt).not.toBeNull()
+  })
+
   it('其余状态拒绝放弃', () => {
     const failed = makeFailed()
     expect(() => abandonTask(store, failed.id)).toThrow(/可放弃/)

@@ -214,6 +214,30 @@ describe('recoverOnStartup — 孤儿 worktree 回填', () => {
     expect(report.awaitingMerge).toEqual([task.id])
     expect((tasks.get(task.id) as Task).status).toBe('awaiting_merge')
   })
+
+  it('awaiting_confirm 无在跑进程、产物已落盘,重启后原样保留且不进任何恢复桶', async () => {
+    const task = createImmediate()
+    tasks.transition(task.id, 'running', { startedAt: NOW.toISOString(), baseBranch: 'main' })
+    // 方案判过暂停:archiveDir/worktreePath/branch 随迁移落库,phase 冻结为 plan
+    tasks.transition(task.id, 'awaiting_confirm', {
+      worktreePath: '/tmp/some-worktree',
+      branch: 'task/abc',
+      archiveDir: '/tmp/some-archive'
+    })
+
+    const report = await recover()
+    const after = tasks.get(task.id) as Task
+    expect(after.status).toBe('awaiting_confirm')
+    expect(after.worktreePath).toBe('/tmp/some-worktree')
+    expect(after.branch).toBe('task/abc')
+    expect(after.archiveDir).toBe('/tmp/some-archive')
+    // 不被中断、不回填、不登记 awaiting_merge、不入队
+    expect(report.interrupted).toEqual([])
+    expect(report.reattached).toEqual([])
+    expect(report.awaitingMerge).toEqual([])
+    expect(enqueued).toEqual([])
+    expect(report.errors).toEqual([])
+  })
 })
 
 describe('TaskStore.attachRuntimePaths 约束', () => {

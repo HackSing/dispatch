@@ -40,6 +40,7 @@ export function readTaskArchive(archiveDir: string | null): TaskArchive {
       planMd: null,
       resultRaw: null,
       logTail: null,
+      discussionLog: null,
       conflictReport: null,
       files: []
     }
@@ -49,6 +50,8 @@ export function readTaskArchive(archiveDir: string | null): TaskArchive {
     planMd: readIfExists(archiveDir, 'plan.md'),
     resultRaw: readIfExists(archiveDir, 'result.json'),
     logTail: readTail(archiveDir, 'output.log'),
+    // 方案讨论会话尾部,与 output.log 同一尾读口径;未开过讨论则文件不存在,返回 null
+    discussionLog: readTail(archiveDir, 'discussion.log'),
     conflictReport: readIfExists(archiveDir, 'conflict-report.md'),
     files: listFiles(archiveDir)
   }

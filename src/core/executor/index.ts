@@ -33,13 +33,16 @@ export interface ExecutorDeps {
   cancellations?: TaskCancellations
   /** 测试注入假时钟;缺省真实时钟 */
   now?: () => Date
-  /** 应用内置模板路径(单文件形态,指向 default.md),shell 层传入;缺省走 prompt 模块兜底 */
+  /**
+   * 应用内置模板路径(单文件形态,指向 default.md),shell 层传入;缺省走 prompt 模块兜底。
+   * 方案确认闸上线后 default.md 已被 default-plan.md/default-exec.md 取代,执行器不再消费本字段;
+   * 保留仅为维持 builtinPromptFile === join(builtinPromptsDir, 'default.md') 的装配约定与兼容位。
+   */
   builtinPromptFile?: string
   /**
-   * W1b 追加:内置模板目录(含 default.md 与三个 wf-*.md),工作流路径按 wf-<phase>.md 从中解析。
-   * 与 builtinPromptFile 的关系:builtinPromptFile 是既有单文件形态,继续被单点路径独占消费
-   * (保持零语义变更);本字段是其目录化扩展,仅工作流路径消费。shell 层两者都传时必须指向
-   * 同一份内置资源,即 builtinPromptFile === join(builtinPromptsDir, 'default.md')。
+   * W1b 追加:内置模板目录,工作流路径按 wf-<phase>.md 从中解析;方案确认闸起单点两跑的
+   * default-plan.md/default-exec.md 也从中按文件名解析(与 wf-*.md 同一路径约定)。
+   * shell 层与 builtinPromptFile 都传时必须指向同一份内置资源目录。
    */
   builtinPromptsDir?: string
   /** 测试用超时覆盖;缺省 config.task_timeout_min */
@@ -105,6 +108,12 @@ export async function runTask(deps: ExecutorDeps, taskId: string): Promise<Task>
 
 async function execute(deps: ExecutorDeps, task: Task, project: Project): Promise<Task> {
   const now = deps.now ?? (() => new Date())
+  // 方案确认闸恢复分支:确认后重入(scheduled 但 phase 冻结为 plan 且已有归档)→ 复用暂停时字段跳过方案跑。
+  // plan.md 已被用户删除时无从执行,回退完整首跑(下方 confirmedRerun 日志说明)。
+  const confirmedRerun = task.phase === 'plan' && task.archiveDir !== null
+  if (confirmedRerun && existsSync(join(task.archiveDir as string, 'plan.md'))) {
+    return resumeAfterConfirm(deps, task, project, now)
+  }
   const info = await detectGitInfo(project)
   const running = deps.tasks.transition(task.id, 'running', {
     startedAt: now().toISOString(),
@@ -127,6 +136,11 @@ async function execute(deps: ExecutorDeps, task: Task, project: Project): Promis
     now
   }
   try {
+    if (confirmedRerun) {
+      ctx.log.append(
+        `[dispatch] 确认重入但归档 plan.md 已缺失,回退完整首跑(原归档: ${task.archiveDir})\n`
+      )
+    }
     if (info.error) return failTask(ctx, info.error)
     return await runPhases(ctx)
   } catch (e) {
@@ -136,22 +150,64 @@ async function execute(deps: ExecutorDeps, task: Task, project: Project): Promis
   }
 }
 
-async function runPhases(ctx: ExecContext): Promise<Task> {
+/**
+ * 用户确认后重入执行:复用 running→awaiting_confirm 暂停时持久化的归档/worktree/base,
+ * 不跑 detectGitInfo(沿用 task.baseBranch,避免主工作区分支切换污染合并目标)、
+ * 不跑 createArchive(复用 task.archiveDir,firstFreeDir 会另开 -N 目录丢失 plan.md 上下文)。
+ * git 与否以 task.worktreePath 是否非空判定(首跑 git 项目已建 worktree)。
+ */
+async function resumeAfterConfirm(
+  deps: ExecutorDeps,
+  task: Task,
+  project: Project,
+  now: () => Date
+): Promise<Task> {
+  const running = deps.tasks.transition(task.id, 'running', {})
+  const archiveDir = running.archiveDir as string
+  const ctx: ExecContext = {
+    deps,
+    task: running,
+    project,
+    git: running.worktreePath !== null,
+    baseBranch: running.baseBranch,
+    archiveDir,
+    log: new OutputLog(archiveDir),
+    worktreePath: running.worktreePath,
+    branch: running.branch,
+    now
+  }
+  try {
+    ctx.log.append('[dispatch] 用户已确认方案,重入执行(跳过方案阶段)\n')
+    return await runPhases(ctx, true)
+  } catch (e) {
+    return failCurrent(ctx, e as Error)
+  } finally {
+    await ctx.log.close()
+  }
+}
+
+async function runPhases(ctx: ExecContext, resume = false): Promise<Task> {
   let cwd = ctx.project.path
   if (ctx.git) {
-    const wt = await createTaskWorktree({
-      projectPath: ctx.project.path,
-      worktreesDir: ctx.deps.paths.worktreesDir,
-      projectName: ctx.project.name,
-      taskId: ctx.task.id,
-      taskText: ctx.task.text,
-      baseBranch: ctx.baseBranch as string
-    })
-    ctx.worktreePath = wt.worktreePath
-    ctx.branch = wt.branch
-    cwd = wt.worktreePath
+    if (resume) {
+      // 复用首跑 worktree(ctx.worktreePath/branch 已由 resumeAfterConfirm 从任务字段填入)
+      cwd = ctx.worktreePath as string
+    } else {
+      const wt = await createTaskWorktree({
+        projectPath: ctx.project.path,
+        worktreesDir: ctx.deps.paths.worktreesDir,
+        projectName: ctx.project.name,
+        taskId: ctx.task.id,
+        taskText: ctx.task.text,
+        baseBranch: ctx.baseBranch as string
+      })
+      ctx.worktreePath = wt.worktreePath
+      ctx.branch = wt.branch
+      cwd = wt.worktreePath
+    }
   }
-  if (ctx.project.prepareCmd) {
+  // 重入跳过 prepare_cmd(首跑已装);首跑照旧
+  if (!resume && ctx.project.prepareCmd) {
     ctx.log.append(`[dispatch] prepare_cmd: ${ctx.project.prepareCmd}\n`)
     const r = await runShell(ctx.project.prepareCmd, { cwd, onLog: (c) => ctx.log.append(c) })
     if (r.exitCode !== 0) return failTask(ctx, 'prepare_failed')
@@ -162,11 +218,10 @@ async function runPhases(ctx: ExecContext): Promise<Task> {
   } catch (e) {
     return failTask(ctx, `agent_not_ready: ${(e as Error).message}`)
   }
-  // W1b 分流:subAgent 非空 → 三段工作流编排;为空 → 既有单点路径(零语义变更)
+  // W1b 分流:subAgent 非空 → 三段工作流编排(runWorkflow 内部按重入标记自行跳过 plan);为空 → 单点路径
   if (ctx.task.subAgent) return runWorkflow(ctx, adapter, cwd, WORKFLOW_HOST)
-  const failReason = await runAgent(ctx, adapter, cwd)
-  if (failReason) return failTask(ctx, failReason)
-  return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
+  // 单点两跑:重入 → 执行跑(default-exec.md);首跑 → 方案跑(default-plan.md)后暂停或连跑
+  return resume ? runExecPhase(ctx, adapter, cwd) : runPlanPhaseSingle(ctx, adapter, cwd)
 }
 
 /**
@@ -182,12 +237,21 @@ function prepareSessionId(ctx: ExecContext, agentId: AgentId): string | undefine
   return sessionId
 }
 
-async function runAgent(
+/**
+ * 单点两跑共用的主 agent 单次运行:按文件名从 builtinPromptsDir 解析模板(与 wf-*.md 同路径约定),
+ * 渲染四变量、预生成会话 id、跑一次 adapter。返回 fail_reason(进程级失败)或 null(进程正常退出);
+ * 产物判定由调用方按阶段(方案跑判 plan.md、执行跑判 result.json)各自完成。
+ */
+async function runMainAgentOnce(
   ctx: ExecContext,
   adapter: AgentAdapter,
-  cwd: string
+  cwd: string,
+  fileName: string
 ): Promise<string | null> {
-  const template = loadPromptTemplate(ctx.deps.paths.promptsDir, ctx.deps.builtinPromptFile)
+  const builtin = ctx.deps.builtinPromptsDir
+    ? join(ctx.deps.builtinPromptsDir, fileName)
+    : undefined
+  const template = loadPromptTemplate(ctx.deps.paths.promptsDir, builtin, fileName)
   const prompt = renderPrompt(template, {
     TASK_TEXT: ctx.task.text,
     OUT_DIR: ctx.archiveDir,
@@ -207,7 +271,55 @@ async function runAgent(
   if (interrupted) return 'user_interrupted'
   if (timedOut) return 'timeout'
   if (exitCode !== 0) return `exit_${exitCode}`
-  return judgeArtifacts(ctx.archiveDir)
+  return null
+}
+
+/**
+ * 单点首跑=方案跑:渲染 default-plan.md、setPhase('plan')、跑主 agent 判 plan.md。
+ * 判过后:result.json 也已存在(用户改回连跑模板)→ 按旧语义判定后走合并/no_vcs 收尾(连跑兼容分支);
+ * 否则暂停 running→awaiting_confirm(TransitionPatch 带归档/worktree/branch,phase 冻结为 plan),
+ * 直接返回——执行信号量由 runTask 的 finally 自动释放,不额外操作。
+ */
+async function runPlanPhaseSingle(
+  ctx: ExecContext,
+  adapter: AgentAdapter,
+  cwd: string
+): Promise<Task> {
+  ctx.deps.tasks.setPhase(ctx.task.id, 'plan')
+  const fail = await runMainAgentOnce(ctx, adapter, cwd, 'default-plan.md')
+  if (fail) return failTask(ctx, fail)
+  const planFail = judgePlanArtifact(ctx.archiveDir)
+  if (planFail) return failTask(ctx, planFail)
+  if (existsSync(join(ctx.archiveDir, 'result.json'))) {
+    const resultFail = judgeResultArtifact(ctx.archiveDir)
+    if (resultFail) return failTask(ctx, resultFail)
+    ctx.deps.tasks.setPhase(ctx.task.id, null)
+    return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
+  }
+  ctx.log.append('[dispatch] 方案已产出,暂停等待用户确认(awaiting_confirm)\n')
+  return ctx.deps.tasks.transition(ctx.task.id, 'awaiting_confirm', {
+    archiveDir: ctx.archiveDir,
+    worktreePath: ctx.worktreePath,
+    branch: ctx.branch
+  })
+}
+
+/**
+ * 单点执行跑(确认后重入):渲染 default-exec.md、setPhase('implement')、跑主 agent 判产物;
+ * 成功后离开 running 前 setPhase(null) 清场(与 workflow 既有纪律一致),再走合并/no_vcs 收尾。
+ */
+async function runExecPhase(
+  ctx: ExecContext,
+  adapter: AgentAdapter,
+  cwd: string
+): Promise<Task> {
+  ctx.deps.tasks.setPhase(ctx.task.id, 'implement')
+  const fail = await runMainAgentOnce(ctx, adapter, cwd, 'default-exec.md')
+  if (fail) return failTask(ctx, fail)
+  const artifactFail = judgeArtifacts(ctx.archiveDir)
+  if (artifactFail) return failTask(ctx, artifactFail)
+  ctx.deps.tasks.setPhase(ctx.task.id, null)
+  return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
 }
 
 /**
@@ -387,6 +499,29 @@ export async function retryMerge(deps: ExecutorDeps, taskId: string): Promise<Ta
       finishedAt: now().toISOString()
     })
   }
+}
+
+/**
+ * 方案确认闸:用户确认方案后放行执行。守卫 awaiting_confirm → 先关讨论会话(closeDiscussion 幂等,
+ * 开着才实际关)→ transition awaiting_confirm→scheduled(暂停时持久化的 phase='plan'/archiveDir/worktree
+ * 经空 patch 保留,供 execute() 的恢复分支重入跳过方案阶段)。
+ *
+ * 关会话必须先于迁移:讨论进行中确认时,先杀讨论传输再放行执行,避免同一 worktree 里讨论进程与执行进程并存。
+ * 入队(fire-and-forget runTask)由壳层在迁移后完成,不在本函数内——core 层不承担进程编排与其错误日志。
+ * closeDiscussion 由壳层注入(讨论会话表归 SessionService),core 层不触 Electron。
+ */
+export function confirmPlan(
+  deps: ExecutorDeps,
+  taskId: string,
+  closeDiscussion: (taskId: string) => void
+): Task {
+  const task = deps.tasks.get(taskId)
+  if (!task) throw new Error(`任务不存在: ${taskId}`)
+  if (task.status !== 'awaiting_confirm') {
+    throw new Error(`任务 ${taskId} 状态 ${task.status} 不可确认(仅 awaiting_confirm)`)
+  }
+  closeDiscussion(taskId)
+  return deps.tasks.transition(taskId, 'scheduled', {})
 }
 
 export function failTask(ctx: ExecContext, failReason: string): Task {

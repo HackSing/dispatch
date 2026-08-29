@@ -70,8 +70,22 @@ export async function runWorkflow(
   cwd: string,
   host: WorkflowHost
 ): Promise<Task> {
-  const planFail = await runPlanPhase(ctx, mainAdapter, cwd, host)
-  if (planFail) return host.failTask(ctx, planFail)
+  // 方案确认闸重入标记:确认后任务 phase 冻结为 plan 且 plan.md 已落归档 → 跳过 runPlanPhase 与其判定,
+  // 直接进入 implement 循环(方案已由用户确认,不再重跑方案阶段)。首跑 phase 为 null,照常跑方案阶段。
+  const resuming = ctx.task.phase === 'plan' && existsSync(join(ctx.archiveDir, 'plan.md'))
+  if (!resuming) {
+    const planFail = await runPlanPhase(ctx, mainAdapter, cwd, host)
+    if (planFail) return host.failTask(ctx, planFail)
+    // 方案确认闸:工作流首跑方案判过后同样暂停等待用户确认(与单点 runPlanPhaseSingle 完全对齐)。
+    // phase 已由 runPlanPhase 冻结为 'plan';确认重入时上方 resuming 命中,跳过本段直入 implement。
+    // 工作流方案跑只产 plan.md(implement 才产 result.json),故无单点的 result.json 连跑兼容分支。
+    ctx.log.append('[dispatch] 方案已产出,暂停等待用户确认(awaiting_confirm)\n')
+    return ctx.deps.tasks.transition(ctx.task.id, 'awaiting_confirm', {
+      archiveDir: ctx.archiveDir,
+      worktreePath: ctx.worktreePath,
+      branch: ctx.branch
+    })
+  }
 
   // 子 adapter 的 ensureReady 推迟到 implement 阶段首次运行前(主 adapter 已在 Phase0 就绪)
   const subAdapter = ctx.deps.adapterFor(ctx.task.subAgent as AgentId)

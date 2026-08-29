@@ -51,6 +51,7 @@ if (!gotLock) {
 
     const execution = new ExecutionService(ctx)
     const sessions = new SessionService(execution.executorDeps)
+    execution.attachSessions(sessions) // confirmPlan 关讨论会话依赖 sessions,构造后回填
     registerIpcHandlers(ctx, execution, sessions)
     createMainWindow()
     createCaptureWindow()

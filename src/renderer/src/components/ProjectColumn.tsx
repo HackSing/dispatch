@@ -8,6 +8,7 @@ import { DotsIcon, GripIcon } from './icons'
 import { agentChainLabel, humanFailReason, statusBadgeLabel } from '../lib/task-labels'
 import { FILTER_LABELS, matchesFilter, type TaskFilter } from '../lib/task-filters'
 import { usePopoverDismiss } from '../lib/use-popover'
+import { useConfirmDialog } from './ConfirmDialog'
 import { formatElapsed, formatTime } from '../lib/time'
 
 function triggerLabel(task: Task): string {
@@ -90,6 +91,7 @@ function ProjectMenu(props: { project: Project }): React.JSX.Element | null {
   const btnRef = useRef<HTMLButtonElement | null>(null)
 
   usePopoverDismiss(open, wrapRef, () => setOpen(false))
+  const { ask, confirmNode } = useConfirmDialog()
 
   if (project.id === DEFAULT_PROJECT_ID) return null
 
@@ -104,7 +106,7 @@ function ProjectMenu(props: { project: Project }): React.JSX.Element | null {
     setOpen(true)
   }
 
-  const remove = (): void => {
+  const remove = async (): Promise<void> => {
     setOpen(false)
     const confirmText = [
       `移除项目「${project.name}」?`,
@@ -112,7 +114,7 @@ function ProjectMenu(props: { project: Project }): React.JSX.Element | null {
       '· 已结项任务记录随项目移除',
       '· 存在未结项任务时将被拒绝'
     ].join('\n')
-    if (!window.confirm(confirmText)) return
+    if (!(await ask(confirmText, { danger: true }))) return
     void window.dispatchApi
       .invoke('project:remove', { id: project.id })
       // 终态任务随项目删行,project:changed 只刷项目,任务列表需一并刷新
@@ -135,11 +137,12 @@ function ProjectMenu(props: { project: Project }): React.JSX.Element | null {
       </button>
       {open && (
         <div className="menu-pop" role="menu" style={pos}>
-          <button role="menuitem" className="menu-item danger" onClick={remove}>
+          <button role="menuitem" className="menu-item danger" onClick={() => void remove()}>
             移除项目
           </button>
         </div>
       )}
+      {confirmNode}
     </div>
   )
 }

@@ -15,6 +15,7 @@ import { rerunFailedTask } from '@core/task-edit'
 import { makeGitRepo } from './fixtures/git-repo'
 
 const MOCK_SCRIPT = fileURLToPath(new URL('./fixtures/mock-agent.cjs', import.meta.url))
+const BUILTIN_PROMPTS_DIR = fileURLToPath(new URL('../resources/prompts', import.meta.url))
 
 let home: string
 let repo: string
@@ -48,7 +49,8 @@ beforeEach(() => {
     semaphore: new Semaphore(2),
     mergeLocks: new KeyedLock(),
     cancellations,
-    taskTimeoutMs: 60_000
+    taskTimeoutMs: 60_000,
+    builtinPromptsDir: BUILTIN_PROMPTS_DIR
   }
 })
 
@@ -95,6 +97,10 @@ describe('用户中断', () => {
     const rerun = await rerunFailedTask({ tasks, projects }, task.id)
     expect(rerun).toMatchObject({ id: task.id, status: 'scheduled', failReason: null })
     expect(existsSync(worktree)).toBe(false)
+    // 两跑:方案跑停 awaiting_confirm → 确认 → 执行跑合并 done
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    tasks.transition(task.id, 'scheduled', {})
     const done = await runTask(deps, task.id)
     expect(done.status).toBe('done')
   })

@@ -115,11 +115,22 @@ export function registerIpcHandlers(
   })
 
   // 放弃 = 明确不要了:置败后同步清理 worktree 与分支;清理失败时任务已是 failed,
-  // 错误上抛给 UI,用户可经「清理 worktree」按钮重试(cleanupTaskWorkspace 可重入)
+  // 错误上抛给 UI,用户可经「清理 worktree」按钮重试(cleanupTaskWorkspace 可重入)。
+  // awaiting_confirm 放弃前先关讨论会话(幂等,开着才实际关;其余状态无讨论会话为 no-op)
   handle('task:abandon', async ({ id }) => {
+    sessions.closePlanDiscussion(id)
     abandonTask(ctx.tasks, id)
     return cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)
   })
+
+  // 确认放行 / 方案讨论:瘦委托到 ExecutionService(确认+入队)与 SessionService(讨论会话表)
+  handle('task:confirm-plan', ({ id }) => execution.confirmPlan(id))
+
+  handle('task:plan-discuss-open', ({ id }) => sessions.openPlanDiscussion(id))
+
+  handle('task:plan-discuss-send', ({ id, text }) => sessions.sendPlanDiscussion(id, text))
+
+  handle('task:plan-discuss-close', ({ id }) => sessions.closePlanDiscussion(id))
 
   handle('task:cleanup-worktree', ({ id }) =>
     cleanupTaskWorkspace({ tasks: ctx.tasks, projects: ctx.projects }, id)

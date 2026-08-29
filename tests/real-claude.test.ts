@@ -43,9 +43,16 @@ describe.skipIf(!enabled)('真实 Claude Code 实机联调', () => {
       adapterFor: (agent: AgentId) => new GenericCliAdapter(agent, config.agents[agent], getPlatformOps()),
       semaphore: new Semaphore(1),
       mergeLocks: new KeyedLock(),
-      builtinPromptFile: resolve(__dirname, '../resources/prompts/default.md')
+      builtinPromptFile: resolve(__dirname, '../resources/prompts/default.md'),
+      builtinPromptsDir: resolve(__dirname, '../resources/prompts')
     }
 
+    // 方案确认闸两跑:方案跑只产 plan.md 后停 awaiting_confirm;确认放行后执行跑合并
+    const paused = await runTask(deps, task.id)
+    expect(paused.status, `方案跑未停 awaiting_confirm: fail_reason=${paused.failReason}`).toBe(
+      'awaiting_confirm'
+    )
+    tasks.transition(task.id, 'scheduled', {})
     const finished = await runTask(deps, task.id)
     const archive = finished.archiveDir
     const logFile = archive ? join(archive, 'output.log') : null

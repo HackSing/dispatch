@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Task } from '@shared/types'
 import { useAppStore } from '../stores/app-store'
 import { DotsIcon } from './icons'
+import { useConfirmDialog } from './ConfirmDialog'
 import { usePopoverDismiss } from '../lib/use-popover'
 
 /**
@@ -67,6 +68,7 @@ export function TaskMenu(props: {
   const btnRef = useRef<HTMLButtonElement | null>(null)
 
   usePopoverDismiss(open, wrapRef, () => setOpen(false))
+  const { ask, confirmNode } = useConfirmDialog()
 
   const invoke = window.dispatchApi.invoke.bind(window.dispatchApi)
   const capability = task.agent ? capabilities?.[task.agent] : undefined
@@ -187,6 +189,16 @@ export function TaskMenu(props: {
       }
     )
   }
+  // 方案待确认:放弃走 task:abandon(主进程已扩展守卫);确认放行在详情页方案确认区完成
+  if (task.status === 'awaiting_confirm') {
+    items.push({
+      key: 'abandon',
+      label: '放弃',
+      danger: true,
+      confirm: '放弃该任务?方案将不再执行,任务标记为失败并清理 worktree 与任务分支(归档保留)。',
+      action: async () => void (await invoke('task:abandon', { id: task.id }))
+    })
+  }
   if (task.status !== 'running' && task.status !== 'merging') {
     const descendants = collectDescendants(tasks, task.id)
     items.push({
@@ -225,12 +237,12 @@ export function TaskMenu(props: {
     setOpen(true)
   }
 
-  const select = (item: MenuItem): void => {
+  const select = async (item: MenuItem): Promise<void> => {
     setOpen(false)
-    if (item.confirm && !window.confirm(item.confirm)) return
+    if (item.confirm && !(await ask(item.confirm, { danger: item.danger }))) return
     setBusy(true)
     setError(null)
-    void item
+    await item
       .action()
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
@@ -259,7 +271,7 @@ export function TaskMenu(props: {
                 role="menuitem"
                 className={`menu-item${item.danger ? ' danger' : ''}`}
                 title={item.title}
-                onClick={() => select(item)}
+                onClick={() => void select(item)}
               >
                 {item.label}
               </button>
@@ -267,6 +279,7 @@ export function TaskMenu(props: {
           ))}
         </div>
       )}
+      {confirmNode}
     </div>
   )
 }

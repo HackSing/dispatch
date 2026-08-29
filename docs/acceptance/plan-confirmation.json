@@ -1,0 +1,234 @@
+{
+  "schema_version": "docs-harness/acceptance-asset/v1",
+  "title": "方案确认闸验收:执行前用户确认与多轮方案讨论",
+  "key_symbols": [
+    "awaiting_confirm",
+    "PlanDiscussionSession",
+    "task:confirm-plan",
+    "runPlanPhase"
+  ],
+  "objective": "任务状态机新增 awaiting_confirm(待确认)状态:方案阶段判过后任务由 running 迁入并暂停(释放执行信号量、保留 worktree/归档/会话 id),触发系统通知;用户在详情页查看 plan.md、经会话传输与主智能体多轮讨论修订 plan.md;点确认后任务重新入队,执行器跳过方案阶段直接执行;放弃则落 failed(abandoned) 并清理 worktree。单点与工作流两种模式行为一致。",
+  "plan_ref": "docs/plans/plan-confirmation.json",
+  "knowledge_refs": [],
+  "criteria": [
+    {
+      "id": "c1",
+      "title": "状态机契约:TASK_STATUSES/TRANSITIONS 新增 awaiting_confirm 三条边(running→awaiting_confirm、awaiting_confirm→scheduled、awaiting_confirm→failed),非法迁移抛错,SETTLED_STATUSES 不变;穷举消费面(任务标签/过滤器/通知标题/徽章)齐备",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260828T141940-9cde66607a",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "git diff 逐文件审查状态机/标签/通知/徽章改动 + 独立重跑 npm run typecheck(exit 0)与聚焦 vitest(4 文件 28 测试全过,含新迁移合法/非法迁移抛错/SETTLED 不变/recovery 不触碰 awaiting_confirm 断言)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/plan-confirmation/c1-state-machine.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-28T14:19:40+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "执行器两跑行为:单点模式首跑写出 plan.md 后停 awaiting_confirm,确认后重入跳过方案阶段执行至 done;工作流模式确认后跳过 runPlanPhase 直入 implement;首跑后 result.json 已存在时走连跑兼容分支不暂停;重入复用 archiveDir/worktreePath/branch 且跳过 prepare_cmd",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260828T152234-fb0d1c37b3",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "git diff 逐文件审查执行器/讨论引擎改动 + 独立重跑 npm run typecheck(exit 0)与聚焦 vitest(12 文件 111 测试全过,覆盖两跑暂停/重入/连跑兼容/讨论守卫/串行闸门/失败不动状态/恢复保留)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/plan-confirmation/c2-executor-two-run.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-28T15:22:34+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "讨论引擎与恢复:PlanDiscussionSession 守卫(非 awaiting_confirm/无 sessionId/无 resume 能力拒绝)、轮次串行闸门、轮级失败不动任务状态;崩溃恢复对 awaiting_confirm 原样保留;放弃落 failed(abandoned) 并清理 worktree",
+      "acceptance_type": "behavior_acceptance",
+      "layer": "L2",
+      "evidence_layer": "focused_test",
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260828T152234-b9867543f2",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "behavior_acceptance",
+          "status": "passed",
+          "layer": "L2",
+          "evidence_layer": "focused_test",
+          "method": "git diff 审查 + 独立重跑聚焦 vitest(plan-discussion/task-edit/recovery 等,守卫拒绝/串行闸门/轮级失败不动任务/close 幂等/confirmPlan 次序/abandon 清理均有断言)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/plan-confirmation/c3-discussion-recovery.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-28T15:22:34+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "IPC 契约与构建:task:confirm-plan 与 task:plan-discuss-open/send/close 在 src/shared/ipc.ts 三处(InvokeMap/EventMap/CHANNELS 数组)注册一致,npm run build(typecheck+electron-vite)通过",
+      "acceptance_type": "contract_check",
+      "layer": "L1",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260828T153246-aca2142298",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "contract_check",
+          "status": "passed",
+          "layer": "L1",
+          "evidence_layer": null,
+          "method": "git diff 审查 ipc.ts 契约三处与 handler 接线 + 独立重跑 ipc-contract 测试(passed)、npm run typecheck(exit 0)、npm run build 全量(exit 0)",
+          "evidence_refs": [
+            "docs/acceptance/evidence/plan-confirmation/c4-ipc-build.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-28T15:32:46+00:00"
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "title": "真实流程:本地应用用真实 agent CLI 走通「创建任务→方案完成→系统通知→详情页查看方案→讨论一轮修订 plan.md→确认→执行完成 done」全链路",
+      "acceptance_type": "user_acceptance",
+      "layer": "L5",
+      "evidence_layer": null,
+      "status": "passed",
+      "records": [
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260828T154519-95648128ef",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "user_acceptance",
+          "status": "user_pending",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": null,
+          "evidence_refs": [],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-28T15:45:19+00:00",
+          "user_handoff": {
+            "automatically_verified": [
+              "真实 claude CLI 两跑全链路(L3):方案跑停 awaiting_confirm→确认→执行跑→自动合并回 base,RUN_REAL_CLAUDE=1 tests/real-claude.test.ts passed(132s,见 docs/acceptance/evidence/plan-confirmation/l3-real-claude.md)",
+              "npm run build 全量通过(main/preload/renderer 三产物,typecheck 双 tsconfig 通过)",
+              "聚焦测试 111+28 全绿(状态机/执行器/工作流/讨论引擎/IPC 契约/恢复/归档)"
+            ],
+            "user_checks": [
+              "创建「立即执行」任务后收到「方案待确认」系统通知,点击通知直达该任务详情页",
+              "详情页显示方案确认区与方案内容;输入一条讨论意见发送后主智能体回复且 plan.md 被修订",
+              "点击「确认,开始执行」后任务进入执行并最终完成(或按方案内容推进);任务列表待确认徽章显示正常"
+            ],
+            "steps": [
+              "npm run dev 启动应用(或打包后运行)",
+              "用捕获窗创建一个「立即执行」的任务,智能体选 claude-code,项目任选 git 仓库",
+              "等方案跑完:收到系统通知,点击进入详情页,看到待确认状态与方案",
+              "在方案讨论区发一条修订意见,等主智能体回复并确认 plan.md 已修订",
+              "点「确认,开始执行」,观察任务执行至 done"
+            ],
+            "environment_ready": true
+          }
+        },
+        {
+          "schema_version": "docs-harness/acceptance-record/v3",
+          "record_id": "acc-20260829T024825-162fd5028c",
+          "objective_fingerprint": "sha256:6a1afeb778cf020aef987f2028455ca36cb0281d79813e83df71cfd41d298366",
+          "acceptance_type": "user_acceptance",
+          "status": "passed",
+          "layer": "L5",
+          "evidence_layer": null,
+          "method": "用户在本地真实应用(claude-code 真实 CLI)走通两条任务全链路:ed83d263 讨论修订→确认→执行至 done;c5a183d9 两轮讨论修订正常、保持待确认。期间发现两个 UI 生命周期缺陷(卸载误杀讨论轮、重开丢失 busy 态),修复后由主 agent 以真实 GUI 自动化回归验证(轮中 Esc 收起重开输入框仍禁用),用户复核状态正常",
+          "evidence_refs": [
+            "docs/acceptance/evidence/plan-confirmation/c5-user-acceptance.md",
+            "docs/acceptance/evidence/plan-confirmation/l3-real-claude.md"
+          ],
+          "reason": null,
+          "next_action": null,
+          "failure_attributions": [],
+          "recorded_at": "2026-08-29T02:48:25+00:00",
+          "user_confirmation": {
+            "confirmed_by": "user",
+            "confirmation": "用户 2026-08-29 原话:「状态正常了,这个修复可以收尾了」(此前用户指示:修复后由主 agent 自跑本地真实态功能验证,用户只验证最后一次)"
+          }
+        }
+      ]
+    }
+  ],
+  "status": "passed",
+  "revision": 8,
+  "revision_history": [
+    {
+      "revision": 1,
+      "asset_fingerprint": "sha256:230ea1d9c031380b223e94dfa67bdc8c72c8b100a3cd3a66aa3a77e596ce7032",
+      "updated_at": "2026-08-28T14:12:34+00:00"
+    },
+    {
+      "revision": 2,
+      "asset_fingerprint": "sha256:986cfb4a0c16bfb450e1cbdb45939cf964e889b7ac218551e435b5e1080ddf20",
+      "updated_at": "2026-08-28T14:19:40+00:00"
+    },
+    {
+      "revision": 3,
+      "asset_fingerprint": "sha256:2ae5942a7c64c7098118dd0b50b5fa1747d97f010f8e43351cb121611dc0b632",
+      "updated_at": "2026-08-28T15:22:34+00:00"
+    },
+    {
+      "revision": 4,
+      "asset_fingerprint": "sha256:f3911b9d13dd1c05829bcb679bc2010f029cf6997c79634ff128142a8bbf2576",
+      "updated_at": "2026-08-28T15:22:34+00:00"
+    },
+    {
+      "revision": 5,
+      "asset_fingerprint": "sha256:92d94c1fe042d525735829b601936eb3f4eec07d1a4247b1f2eb813f0b149bed",
+      "updated_at": "2026-08-28T15:32:46+00:00"
+    },
+    {
+      "revision": 6,
+      "asset_fingerprint": "sha256:cb076e9dd5cf36556309db0adb831ae0f80fa716fa16046588bed15197504174",
+      "updated_at": "2026-08-28T15:45:19+00:00"
+    },
+    {
+      "revision": 7,
+      "asset_fingerprint": "sha256:08cfffdfc2dccf66a537a46ebb179a72f850dfce45c8b6feb776ebce344caa62",
+      "updated_at": "2026-08-29T02:48:25+00:00"
+    }
+  ],
+  "created_at": "2026-08-28T14:12:34+00:00",
+  "updated_at": "2026-08-29T02:48:33+00:00",
+  "settled_at": "2026-08-29T02:48:33+00:00",
+  "asset_fingerprint": "sha256:88105eb9e262c636eb12e1fda77f6fecce6dd8ce9ff6e97f924bab7ec679b499",
+  "replacement": null
+}

@@ -23,7 +23,10 @@ export interface Task {
   triggerType: TriggerType
   triggerAt: string | null
   status: TaskStatus
-  /** 见 TASK_PHASES;单点模式恒为 null */
+  /**
+   * 见 TASK_PHASES。工作流三段各阶段有值;方案确认闸上线后单点两跑也用之:方案跑 'plan'
+   * (awaiting_confirm 期间冻结为 plan),确认重入执行跑 'implement',离开 running 前清 null。
+   */
   phase: TaskPhase | null
   /**
    * 主智能体最近一次 fresh run 的会话 id(执行前预生成落库;工作流模式 plan/review

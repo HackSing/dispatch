@@ -1,4 +1,9 @@
 <!--
+  【已被取代】方案确认闸上线后,本文件被 default-plan.md(方案跑)+ default-exec.md(执行跑)取代:
+  执行器不再引用 default.md,单点任务改为「方案跑→暂停等用户确认→执行跑」两跑模型。
+  存量用户目录(~/.dispatch/prompts/default.md)里的旧拷贝自然失活,不迁移、不删除;正文原样保留仅作参考。
+  说明:若用户手工把执行器指回本文件(连跑),首跑写出 plan.md 与 result.json 后按已完成收尾,不进入确认闸。
+
   Dispatch 默认提示词模板(源文件 resources/prompts/default.md)。
   - 本文件可编辑:首次启动时拷贝到 ~/.dispatch/prompts/default.md,修改后对所有后续任务生效。
   - 四个变量由 Dispatch 在执行前注入实际值:TASK_TEXT(任务原文)、OUT_DIR(归档目录绝对路径)、

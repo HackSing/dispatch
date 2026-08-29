@@ -7,6 +7,7 @@ import { useAppStore } from '../stores/app-store'
 import { agentChainLabel, humanFailReason, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
 import { TaskMenu } from './TaskMenu'
+import { PlanConfirmPanel } from './PlanConfirmPanel'
 
 const ACTIVE_POLL_MS = 3000
 
@@ -100,6 +101,8 @@ export function TaskDetail(props: {
   const { task, onClose, onOpenTask } = props
   const [archive, setArchive] = useState<TaskArchive | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 讨论轮次可能修订 plan.md;awaiting_confirm 不在 3s 轮询范围,靠此手动触发重拉刷新方案
+  const [refreshTick, setRefreshTick] = useState(0)
 
   // 状态变化即重拉;执行/合并中每 3s 轮询,日志与产物随进度出现
   useEffect(() => {
@@ -113,7 +116,7 @@ export function TaskDetail(props: {
     if (!isActive(task)) return
     const timer = setInterval(fetchArchive, ACTIVE_POLL_MS)
     return () => clearInterval(timer)
-  }, [task.id, task.status])
+  }, [task.id, task.status, refreshTick])
 
   // 执行中的耗时每秒跳动
   const [nowMs, setNowMs] = useState(Date.now())
@@ -285,6 +288,10 @@ export function TaskDetail(props: {
                 <ReactMarkdown>{archive.planMd}</ReactMarkdown>
               </div>
             </Section>
+          )}
+
+          {task.status === 'awaiting_confirm' && (
+            <PlanConfirmPanel task={task} onPlanRevised={() => setRefreshTick((t) => t + 1)} />
           )}
 
           {(archive?.logTail || isActive(task)) && (

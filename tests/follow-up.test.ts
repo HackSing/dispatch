@@ -179,9 +179,13 @@ describe('stream 传输全链路', () => {
       agent: 'claude-code',
       triggerType: 'immediate'
     })
+    // 两跑:方案跑停 awaiting_confirm → 确认 → 执行跑合并 done
+    const paused = await runTask(deps, seed.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    tasks.transition(seed.id, 'scheduled', {})
     const parent = await runTask(deps, seed.id)
     expect(parent.status).toBe('done')
-    // prepareSessionId:fresh run 前预生成并落库
+    // prepareSessionId:fresh run 前预生成并落库(执行跑 last-wins 覆盖方案跑会话)
     expect(parent.sessionId).toMatch(/^[0-9a-f-]{36}$/)
 
     const r = recorder()

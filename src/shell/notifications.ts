@@ -4,12 +4,13 @@ import type { Task, TaskStatus } from '@shared/types'
 import { showMainWindow } from './windows'
 import { broadcast } from './ipc-handlers'
 
-/** spec §3.2 通知四事件;其余状态静默 */
+/** spec §3.2 通知事件;其余状态静默 */
 const NOTIFY_TITLES: Partial<Record<TaskStatus, string>> = {
   done: '任务完成',
   failed: '任务失败',
   conflict: '合并冲突',
-  awaiting_merge: '等待合并'
+  awaiting_merge: '等待合并',
+  awaiting_confirm: '方案待确认'
 }
 
 const TITLE_TEXT_MAX = 40
@@ -34,13 +35,15 @@ function notificationBody(task: Task): string {
       return task.failReason === 'base_checked_out_elsewhere'
         ? '执行成功,但基线分支被其他工作区检出,暂缓合并;可稍后重试'
         : '执行成功,但主工作区有未提交改动,暂缓合并;清理后可重试'
+    case 'awaiting_confirm':
+      return '方案已完成,待你在详情页确认后开始执行'
     default:
       return ''
   }
 }
 
 /**
- * TaskStore onChange 挂载点:进入 done/failed/conflict/awaiting_merge 时发系统通知。
+ * TaskStore onChange 挂载点:进入 done/failed/conflict/awaiting_merge/awaiting_confirm 时发系统通知。
  * 通知不可用(未打包/无权限)只记日志不抛错,不能影响状态流转与广播。
  */
 export function notifyTaskStatusChange(task: Task): void {

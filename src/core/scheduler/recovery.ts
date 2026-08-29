@@ -53,6 +53,8 @@ export async function recoverOnStartup(deps: RecoveryDeps): Promise<RecoveryRepo
   await reattachOrphanWorktrees(deps, report)
   handleMissedScheduled(deps, report, now)
   report.awaitingMerge = deps.tasks.listByStatus('awaiting_merge').map((t) => t.id)
+  // awaiting_confirm 无在跑进程、方案产物(plan.md)已落盘,重启后原样保留,恢复不触碰:
+  // 上述三步只扫 running/merging 残留、孤儿 worktree 回填、过期 scheduled,均不含 awaiting_confirm。
   return report
 }
 

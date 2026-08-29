@@ -4,6 +4,7 @@ export const TASK_STATUSES = [
   'todo',
   'scheduled',
   'running',
+  'awaiting_confirm',
   'merging',
   'awaiting_merge',
   'conflict',
@@ -19,6 +20,9 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
  * - done → todo:手动重开(勾错回退/完成后再改再跑);执行期历史字段保留不清
  * - scheduled → todo:取消执行,退回普通待办
  * - running → done:非 git 项目(no_vcs)执行成功,跳过合并
+ * - running → awaiting_confirm:方案阶段判过暂停,等用户确认后放行执行
+ * - awaiting_confirm → scheduled:用户确认方案,重新入队跳过方案直接执行
+ * - awaiting_confirm → failed:用户放弃(fail_reason=abandoned)
  * - running/merging → failed:含崩溃恢复(interrupted)
  * - conflict/awaiting_merge → failed:用户放弃
  * - failed → scheduled:原地重跑(清执行期字段后重新入队,不复制新任务行;
@@ -27,7 +31,8 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 export const TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   todo: ['scheduled', 'done'],
   scheduled: ['running', 'todo'],
-  running: ['merging', 'done', 'failed'],
+  running: ['awaiting_confirm', 'merging', 'done', 'failed'],
+  awaiting_confirm: ['scheduled', 'failed'],
   merging: ['done', 'awaiting_merge', 'conflict', 'failed'],
   awaiting_merge: ['merging', 'failed'],
   conflict: ['merging', 'failed'],

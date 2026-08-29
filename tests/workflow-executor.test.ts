@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -134,6 +134,18 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>
 }
 
+/**
+ * 方案确认闸后工作流的完整跑法:方案跑(首个 runTask)停 awaiting_confirm → 模拟 confirmPlan
+ * 迁移 scheduled → 执行跑(第二个 runTask)跳过 plan 直入 implement/review。
+ * 方案阶段本身就失败(timeout_plan/no_plan/模板缺失)时首跑直接返回 failed,无暂停,原样透传。
+ */
+async function runWorkflowConfirmed(taskId: string): Promise<Task> {
+  const first = await runTask(deps, taskId)
+  if (first.status !== 'awaiting_confirm') return first
+  tasks.transition(taskId, 'scheduled', {})
+  return runTask(deps, taskId)
+}
+
 describe('runWorkflow 工作流路径', () => {
   it('① pass 直通:plan→implement→review pass→清 phase→合并 done', async () => {
     wireAdapters('review_pass', 'success')
@@ -141,7 +153,7 @@ describe('runWorkflow 工作流路径', () => {
     const task = createWorkflowTask(project.id)
     const before = headOf(repo, 'main')
 
-    const result = await runTask(deps, task.id)
+    const result = await runWorkflowConfirmed(task.id)
 
     expect(result.status).toBe('done')
     expect(result.failReason).toBeNull()
@@ -150,10 +162,13 @@ describe('runWorkflow 工作流路径', () => {
     expect(result.mergedAt).toBeTruthy()
     expect(headOf(repo, 'main')).not.toBe(before)
     expect(existsSync(worktreeDirOf(project, task))).toBe(false)
-    // 状态链与 phase 轨迹
+    // 状态链与 phase 轨迹(方案跑停 awaiting_confirm,确认后执行跑;两次 running 段)
     expect(changes.map((c) => c.status)).toEqual([
       'scheduled',
       'running',
+      'running',
+      'awaiting_confirm',
+      'scheduled',
       'running',
       'running',
       'running',
@@ -162,8 +177,9 @@ describe('runWorkflow 工作流路径', () => {
       'done'
     ])
     expect(phaseTrail()).toEqual([
-      { phase: null, reviewRound: 0 },
-      { phase: 'plan', reviewRound: 0 },
+      { phase: null, reviewRound: 0 }, // 方案跑 → running
+      { phase: 'plan', reviewRound: 0 }, // 方案跑 setPhase plan
+      { phase: 'plan', reviewRound: 0 }, // 执行跑 → running(phase 冻结持久化为 plan)
       { phase: 'implement', reviewRound: 0 },
       { phase: 'review', reviewRound: 1 },
       { phase: null, reviewRound: 1 }
@@ -190,7 +206,7 @@ describe('runWorkflow 工作流路径', () => {
     const project = createProject()
     const task = createWorkflowTask(project.id)
 
-    const result = await runTask(deps, task.id)
+    const result = await runWorkflowConfirmed(task.id)
 
     expect(result.status).toBe('done')
     expect(result.failReason).toBeNull()
@@ -200,6 +216,7 @@ describe('runWorkflow 工作流路径', () => {
     expect(phaseTrail()).toEqual([
       { phase: null, reviewRound: 0 },
       { phase: 'plan', reviewRound: 0 },
+      { phase: 'plan', reviewRound: 0 }, // 执行跑 → running(phase 冻结持久化为 plan)
       { phase: 'implement', reviewRound: 0 },
       { phase: 'review', reviewRound: 1 },
       { phase: 'implement', reviewRound: 1 },
@@ -233,7 +250,7 @@ describe('runWorkflow 工作流路径', () => {
     const project = createProject()
     const task = createWorkflowTask(project.id)
 
-    const result = await runTask(deps, task.id)
+    const result = await runWorkflowConfirmed(task.id)
 
     expect(result.status).toBe('failed')
     expect(result.failReason).toBe('review_rejected')
@@ -256,6 +273,7 @@ describe('runWorkflow 工作流路径', () => {
     expect(phaseTrail().map((p) => p.phase)).toEqual([
       null,
       'plan',
+      'plan', // 执行跑 → running(phase 冻结持久化为 plan)
       'implement',
       'review',
       'implement',
@@ -270,7 +288,7 @@ describe('runWorkflow 工作流路径', () => {
     const project = createProject()
     const task = createWorkflowTask(project.id)
 
-    const result = await runTask(deps, task.id)
+    const result = await runWorkflowConfirmed(task.id)
 
     expect(result.status).toBe('failed')
     expect(result.failReason).toBe('review_modified')
@@ -370,7 +388,7 @@ describe('runWorkflow 工作流路径', () => {
       const project = createProject()
       const task = createWorkflowTask(project.id)
 
-      const result = await runTask(deps, task.id)
+      const result = await runWorkflowConfirmed(task.id)
 
       expect(result.status).toBe('failed')
       expect(result.failReason).toBe(failReason)
@@ -389,7 +407,7 @@ describe('runWorkflow 工作流路径', () => {
       const project = createProject({ name: 'plain', path: plainDir })
       const task = createWorkflowTask(project.id)
 
-      const result = await runTask(deps, task.id)
+      const result = await runWorkflowConfirmed(task.id)
 
       expect(result.status).toBe('done')
       expect(result.failReason).toBeNull()
@@ -420,7 +438,7 @@ describe('runWorkflow 工作流路径', () => {
 })
 
 describe('单点回归(subAgent=null 走既有路径)', () => {
-  it('⑦ success → done:phase 全程 null,无工作流产物,状态链与单点一致', async () => {
+  it('⑦ 单点两跑:方案跑停 awaiting_confirm → 确认 → 执行跑 done,无工作流产物', async () => {
     process.env.MOCK_MODE = 'success'
     wireAdapters(null, null)
     const project = createProject()
@@ -431,18 +449,126 @@ describe('单点回归(subAgent=null 走既有路径)', () => {
       triggerType: 'immediate'
     })
 
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    expect(paused.phase).toBe('plan')
+    tasks.transition(task.id, 'scheduled', {}) // 模拟批次3 confirmPlan
     const result = await runTask(deps, task.id)
 
     expect(result.status).toBe('done')
     expect(result.failReason).toBeNull()
     expect(result.subAgent).toBeNull()
     expect(result.reviewRound).toBe(0)
-    expect(changes.map((c) => c.status)).toEqual(['scheduled', 'running', 'merging', 'done'])
-    expect(changes.every((c) => c.phase === null)).toBe(true)
+    expect(result.phase).toBeNull()
+    // 状态迁移主干(setPhase 的重复 running 广播折叠)
+    const trail: string[] = []
+    for (const c of changes) if (trail[trail.length - 1] !== c.status) trail.push(c.status)
+    expect(trail).toEqual([
+      'scheduled',
+      'running',
+      'awaiting_confirm',
+      'scheduled',
+      'running',
+      'merging',
+      'done'
+    ])
     const archive = archiveDirOf(project, task)
     expect(existsSync(join(archive, 'result.json'))).toBe(true)
     expect(existsSync(join(archive, 'review-r1.json'))).toBe(false)
+    // 单点两跑不产生工作流的 ===== phase: 分隔行(那是 wf-* 三段编排的日志)
     const log = readFileSync(join(archive, 'output.log'), 'utf-8')
     expect(log).not.toContain('===== phase:')
+  }, 20_000)
+})
+
+describe('工作流方案确认闸(批次3:首跑暂停 + resume 跳过 runPlanPhase)', () => {
+  it('首跑方案判过 → 停 awaiting_confirm,phase=plan,字段持久化,未进 implement/review', async () => {
+    wireAdapters('review_pass', 'success')
+    const project = createProject()
+    const task = createWorkflowTask(project.id)
+
+    const paused = await runTask(deps, task.id)
+
+    expect(paused.status).toBe('awaiting_confirm')
+    expect(paused.phase).toBe('plan')
+    // 暂停时持久化归档/worktree/branch(确认重入的复用字段)
+    expect(paused.archiveDir).toBe(archiveDirOf(project, task))
+    expect(paused.worktreePath).toBe(worktreeDirOf(project, task))
+    expect(paused.branch).toMatch(/^task\//)
+    const archive = archiveDirOf(project, task)
+    expect(existsSync(join(archive, 'plan.md'))).toBe(true)
+    expect(existsSync(join(archive, 'result.json'))).toBe(false)
+    expect(existsSync(join(archive, 'review-r1.json'))).toBe(false)
+    // 只跑了 plan 阶段,未进 implement/review
+    const log = readFileSync(join(archive, 'output.log'), 'utf-8')
+    expect(log).toContain('===== phase: plan =====')
+    expect(log).not.toContain('===== phase: implement')
+    expect(log).not.toContain('===== phase: review')
+    expect(log).toContain('暂停等待用户确认')
+  }, 20_000)
+
+  it('首跑暂停 → 确认 → 重入跳过 plan 直入 implement/review → 合并 done', async () => {
+    wireAdapters('review_pass', 'success')
+    const project = createProject()
+    const task = createWorkflowTask(project.id)
+    const before = headOf(repo, 'main')
+
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    tasks.transition(task.id, 'scheduled', {}) // 模拟批次3 confirmPlan 迁移
+    const result = await runTask(deps, task.id)
+
+    expect(result.status).toBe('done')
+    expect(result.failReason).toBeNull()
+    expect(result.phase).toBeNull()
+    expect(result.mergedAt).toBeTruthy()
+    expect(headOf(repo, 'main')).not.toBe(before)
+    expect(existsSync(worktreeDirOf(project, task))).toBe(false)
+    // 重入跳过 plan:整段 output.log 里 plan 阶段只出现一次(首跑),implement/review 照跑
+    const archive = archiveDirOf(project, task)
+    const log = readFileSync(join(archive, 'output.log'), 'utf-8')
+    expect(log.split('===== phase: plan =====')).toHaveLength(2)
+    expect(log).toContain('===== phase: implement round 1 =====')
+    expect(log).toContain('===== phase: review round 1 =====')
+    expect(log).toContain('重入执行(跳过方案阶段)')
+    expect(readJson(join(archive, 'review-r1.json')).verdict).toBe('pass')
+  }, 25_000)
+
+  it('phase=plan 且 plan.md 存在(手工构造重入态)→ 跳过 runPlanPhase 直入 implement → done(no_vcs)', async () => {
+    wireAdapters('review_pass', 'success')
+    const plainDir = mkdtempSync(join(tmpdir(), 'dispatch-wfplain-'))
+    try {
+      const project = createProject({ name: 'plain', path: plainDir })
+      const task = createWorkflowTask(project.id)
+      // 直接置字段模拟 running→awaiting_confirm→scheduled(confirm)后的持久化结果,单测 resume 分支
+      tasks.transition(task.id, 'running', { startedAt: new Date().toISOString(), baseBranch: null })
+      const archive = archiveDirOf(project, task)
+      mkdirSync(archive, { recursive: true })
+      writeFileSync(join(archive, 'plan.md'), '# 已确认方案\n\n- 步骤: 由子智能体实现\n')
+      tasks.setPhase(task.id, 'plan')
+      tasks.transition(task.id, 'awaiting_confirm', {
+        archiveDir: archive,
+        worktreePath: null,
+        branch: null
+      })
+      tasks.transition(task.id, 'scheduled', {}) // 确认放行
+
+      const result = await runTask(deps, task.id)
+
+      expect(result.status).toBe('done')
+      expect(result.failReason).toBeNull()
+      expect(result.phase).toBeNull()
+      // 跳过 runPlanPhase 的证据:output.log 无 plan 阶段分隔行,implement/review 照跑
+      const log = readFileSync(join(archive, 'output.log'), 'utf-8')
+      expect(log).not.toContain('===== phase: plan =====')
+      expect(log).toContain('===== phase: implement round 1 =====')
+      expect(log).toContain('===== phase: review round 1 =====')
+      expect(log).toContain('重入执行(跳过方案阶段)')
+      // 已确认的 plan.md 未被重写
+      expect(readFileSync(join(archive, 'plan.md'), 'utf-8')).toContain('已确认方案')
+      expect(readJson(join(archive, 'review-r1.json')).verdict).toBe('pass')
+    } finally {
+      rmSync(plainDir, { recursive: true, force: true })
+    }
   }, 20_000)
 })

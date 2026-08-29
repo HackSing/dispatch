@@ -1,7 +1,7 @@
 # Dispatch 业务流程图
 
-> 状态:有效(现行事实,与 main 分支实现一致,2026-08-22 第二次核对:含工作流模式与清理闭环)
-> 依据实现:`src/shared/state-machine.ts`、`src/core/executor/`(含 `workflow.ts`)、`src/core/gitops/`、`src/core/scheduler/`、`src/shell/`。改流程必须同步改本文档。
+> 状态:有效(现行事实,与 main 分支实现一致,2026-08-28 第三次核对:含工作流模式、清理闭环与方案确认闸 awaiting_confirm)
+> 依据实现:`src/shared/state-machine.ts`、`src/core/executor/`(含 `workflow.ts`、`plan-discussion.ts`)、`src/core/gitops/`、`src/core/scheduler/`、`src/shell/`。改流程必须同步改本文档。
 
 ## 1. 端到端全景:一条任务的一生
 
@@ -51,6 +51,8 @@ sequenceDiagram
 
 工作流模式**不增加状态**:三段接力全程处于 `running`,进度经展示性 `phase` 字段(plan/implement/review,仅 `TaskStore.setPhase` 可写)表达;失败时 phase 冻结在末阶段供追溯,仅审查通过离开 running 前清空。
 
+`awaiting_confirm` 是方案阶段与执行阶段之间的**用户确认闸**(单点与工作流两种模式一致):方案判过后由 `running` 迁入并暂停,`phase` 冻结为 `plan`,等用户确认(`→ scheduled`,重入跳过方案阶段)或放弃(`→ failed`,abandoned)。暂停期间会话讨论只修订归档 plan.md,不迁移任务状态(见 §8)。
+
 ```mermaid
 stateDiagram-v2
     [*] --> todo: 创建(trigger=none)
@@ -59,6 +61,9 @@ stateDiagram-v2
     todo --> done: 手动勾选完成
     scheduled --> todo: 取消执行
     scheduled --> running: 到点触发 / 立即执行
+    running --> awaiting_confirm: 方案阶段判过,暂停待用户确认
+    awaiting_confirm --> scheduled: 用户确认,重入跳过方案阶段
+    awaiting_confirm --> failed: 放弃(abandoned),清理 worktree
     running --> merging: 执行成功(git 项目)
     running --> done: 执行成功(no_vcs)
     running --> failed: 超时/缺产物/异常退出/interrupted
@@ -78,9 +83,13 @@ stateDiagram-v2
 
 `runTask` 按 `sub_agent` 是否为空分流:空 = 下图单点路径;非空 = §7 工作流编排(Phase0/完成判定/合并链路与单点共用同一批函数)。
 
+单点执行拆为**方案跑**(`default-plan.md`)与**执行跑**(`default-exec.md`)两跑,中间隔一道用户确认闸;确认后重入 `runTask` 复用暂停时字段、跳过方案阶段直接执行。
+
 ```mermaid
 flowchart TD
-    A["取任务,校验 status=scheduled"] --> B["→ running<br/>记 startedAt、baseBranch"]
+    A["取任务,校验 status=scheduled"] --> A1{"确认重入?<br/>phase=plan 且归档 plan.md 在"}
+    A1 -- "是(复用归档/worktree/base<br/>跳过建档与 worktree)" --> B2["→ running"]
+    A1 -- 否 --> B["→ running<br/>记 startedAt、baseBranch"]
     B --> C["创建归档目录<br/>写 task.md,开 output.log"]
     C --> D{git 项目?}
     D -- 否 --> E["cwd = 项目目录,记 no_vcs"]
@@ -89,15 +98,23 @@ flowchart TD
     F --> G
     G -- "执行失败" --> X1["failed: prepare_failed"]
     G -- "成功/未配置" --> H["adapter.ensureReady()<br/>(dsh 类:ready_check→start→轮询)"]
-    H --> I["加载模板 + 四变量替换<br/>(纯字符串,无模型)"]
-    I --> J["spawn agent CLI<br/>detached 进程组,超时=AbortSignal"]
-    J -- "超时 → killTree 全进程组" --> X2["failed: timeout<br/>worktree 保留"]
-    J --> K{"完成判定(全过才算成功)"}
-    K -- "退出码≠0" --> X3["failed: exit_&lt;code&gt;"]
-    K -- "无 plan.md" --> X4["failed: no_plan"]
+    H --> IP["方案跑:default-plan.md<br/>setPhase('plan')、四变量替换"]
+    IP --> JP["spawn agent CLI(方案跑)"]
+    JP -- "超时/退出码≠0" --> XF["failed: timeout / exit_&lt;code&gt;<br/>worktree 保留"]
+    JP --> KP{"plan.md 产出?"}
+    KP -- 无 --> X4["failed: no_plan"]
+    KP -- "有 + result.json 已存在(连跑兼容分支)" --> K
+    KP -- "有 + 无 result.json" --> AC["→ awaiting_confirm<br/>暂停·通知·释放信号量<br/>phase 冻结为 plan"]
+    AC -. "用户确认 → scheduled 重新入队" .-> A1
+    AC -. "用户放弃" .-> XA["failed: abandoned<br/>清理 worktree 与分支"]
+    B2 --> IE["执行跑:default-exec.md<br/>setPhase('implement')"]
+    IE --> JE["spawn agent CLI(执行跑)"]
+    JE -- "超时/退出码≠0" --> XF
+    JE --> K{"完成判定(全过才算成功)"}
     K -- "无/坏 result.json" --> X5["failed: no_result / bad_result"]
     K -- "status=failed" --> X6["failed: result_failed"]
-    K -- 通过 --> L{git 项目?}
+    K -- 通过 --> KL["setPhase(null),离开 running"]
+    KL --> L{git 项目?}
     L -- 否 --> M["→ done"]
     L -- 是 --> N["mergeFlow(§4,项目合并锁串行)"]
     N -- 干净 --> O["→ done,removeWorktree+删分支"]
@@ -142,6 +159,8 @@ flowchart TD
     end
 ```
 
+`awaiting_confirm` 恢复时**原样保留**:无在跑进程、方案产物(plan.md)已落盘、执行信号量已释放,恢复既不置 failed 也不重扫——上述三步只处理 running/merging 残留、孤儿 worktree 回填与过期 scheduled,均不触碰 awaiting_confirm。重启后用户可继续讨论或确认(与实现 `recoverOnStartup` 一致)。
+
 ## 6. 用户干预操作流
 
 ```mermaid
@@ -166,11 +185,15 @@ sequenceDiagram
     participant E as Executor
     participant M as 主智能体
     participant S as 子智能体
+    participant U as 用户
 
     Note over E: Phase0 复用单点:归档/worktree/prepare
     E->>M: phase=plan · wf-plan 模板(独立超时)
     M-->>E: plan.md(只方案,禁止动代码)
     Note over E: 缺 plan.md → failed: no_plan
+    Note over E,U: 确认闸(首跑):runPlanPhase 判过后<br/>→ awaiting_confirm 暂停·通知(phase 冻结 plan)
+    U-->>E: 确认放行(→ scheduled 重入)/ 放弃(→ failed abandoned)
+    Note over E: 确认重入命中 resuming 标记(phase=plan 且 plan.md 在)<br/>→ 跳过 runPlanPhase,直入 implement 循环
     loop 返工上限 2 轮(第 3 次 reject 落败)
         E->>S: phase=implement · wf-implement<br/>注入 REVIEW_FEEDBACK(首轮「无」)
         S-->>E: 实现 + git 提交 + result.json
@@ -190,6 +213,51 @@ sequenceDiagram
 ```
 
 工作流新增 fail_reason:`timeout_plan / timeout_implement / timeout_review / no_plan / no_review / bad_review / review_modified / review_rejected / agent_not_ready`。`reviewRound` 语义:implement 阶段 = 已完成审查数(首轮 0);review 阶段 = 当前审查轮次(从 1 起)。
+
+## 8. 方案确认与讨论会话(awaiting_confirm)
+
+任务在 `awaiting_confirm` 期间,用户可在详情页确认区(`PlanConfirmPanel`)查看方案并与主智能体多轮讨论修订。讨论引擎 `PlanDiscussionSession`(`src/core/executor/plan-discussion.ts`)复用追写面板同一套会话传输(stream 优先,回退轮次 spawn),但**不建接力任务、不建 worktree、不碰合并链路,也绝不迁移任务状态**。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant P as PlanConfirmPanel<br/>(渲染层)
+    participant SS as SessionService
+    participant D as PlanDiscussionSession
+    participant M as 主智能体(resume)
+
+    Note over U,P: 详情页进入 awaiting_confirm
+    P->>SS: task:plan-discuss-open(幂等,返回 busy 供重开详情恢复输入闸门)
+    SS->>D: start:守卫 status=awaiting_confirm<br/>+ sessionId + agent + 会话续接能力
+    P->>P: 从归档 discussion.log 回填历史
+    loop 多轮讨论(串行闸门)
+        U->>P: 输入修订意见(⌘/Ctrl+Enter)
+        P->>SS: task:plan-discuss-send
+        SS->>D: sendTurn(首轮渲染 plan-discussion.md 模板)
+        D->>M: resume 续会话
+        M-->>D: 修订 plan.md + 流式回话
+        D->>D: 追加 discussion.log,广播 task:session-event
+        Note over D: 轮级失败(超时/退出/渲染)→ 只关会话广播 closed<br/>任务保持 awaiting_confirm,方案仍有效
+    end
+    alt 确认
+        U->>P: 「确认,开始执行」
+        P->>SS: task:confirm-plan
+        SS->>D: closePlanDiscussion(先关会话)
+        SS->>SS: awaiting_confirm → scheduled → 入队(执行器跳过方案阶段)
+    else 放弃
+        U->>P: 放弃(TaskMenu)
+        P->>SS: task:abandon → failed(abandoned),清理 worktree
+    end
+```
+
+要点:
+
+- **首轮模板**:`sendTurn` 首轮经 `plan-discussion.md` 注入四变量(`TASK_TEXT/OUT_DIR/PROJECT_PATH/BASE_BRANCH`)+ 用户首条输入,后续轮直发用户原文。
+- **discussion.log**:讨论逐轮追加写入归档 `<archiveDir>/discussion.log`(`OutputLog` 复用同一流式追加,构造传入文件名);详情页重开时从中回填上下文,归档读取(`readTaskArchive`)一并返回 `discussionLog` 尾部。
+- **轮级失败不动任务状态**:超时/进程退出/模板渲染失败只关会话并广播 `closed`,任务仍停在 `awaiting_confirm`,用户可重开讨论或直接确认。
+- **能力门禁**:无会话续接能力(`followUpTransport` 判定为空)的 agent 不提供讨论输入框,仅保留查看方案 + 确认/放弃。
+- **确认/放弃入口**:确认走 `task:confirm-plan`(`confirmPlan` 先关讨论会话再迁移状态,规避讨论进行中点确认的竞态);放弃走 `task:abandon`(守卫已扩展至 `awaiting_confirm`)。
+- **通知点击定位**:进入 `awaiting_confirm` 时 `notifications.ts` 发「方案待确认」系统通知,点击复用既有 `ui:open-task` 链路直达该任务详情页确认区(与 done/failed/conflict/awaiting_merge 同一定位机制)。
 
 ## 已知边角(与图的偏差点)
 

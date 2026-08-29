@@ -71,13 +71,16 @@ export function createArchive(
   return { archiveDir, taskMdFile }
 }
 
-/** 执行期 stdout/stderr 流式追加落盘,写失败在 close 时抛出,不静默丢日志 */
+/**
+ * 执行期 stdout/stderr 流式追加落盘,写失败在 close 时抛出,不静默丢日志。
+ * fileName 缺省 output.log(既有执行/会话链路);方案讨论会话传入 discussion.log 复用同一流式追加实现。
+ */
 export class OutputLog {
   private readonly stream: WriteStream
   private error: Error | null = null
 
-  constructor(archiveDir: string) {
-    this.stream = createWriteStream(join(archiveDir, 'output.log'), { flags: 'a' })
+  constructor(archiveDir: string, fileName = 'output.log') {
+    this.stream = createWriteStream(join(archiveDir, fileName), { flags: 'a' })
     this.stream.once('error', (e) => {
       this.error = e
     })

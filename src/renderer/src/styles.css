@@ -332,6 +332,10 @@ button {
   background: rgba(255, 149, 0, 0.16);
   color: #a85400;
 }
+.badge.awaiting_confirm {
+  background: rgba(255, 149, 0, 0.16);
+  color: #a85400;
+}
 .badge.conflict {
   background: rgba(255, 59, 48, 0.12);
   color: #d70015;
@@ -428,6 +432,43 @@ button {
 .form-error {
   color: #d70015;
   font-size: 12px;
+}
+
+/* ── 应用内确认对话框(替代 window.confirm,见 ConfirmDialog.tsx) ── */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.confirm-dialog {
+  width: min(360px, 86vw);
+  background: #f5f5f7;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirm-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1d1d1f;
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* ── 编辑表单(主窗内联)与共用输入控件 ── */

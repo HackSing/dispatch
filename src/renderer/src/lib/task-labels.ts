@@ -7,6 +7,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: '待办',
   scheduled: '已排程',
   running: '执行中',
+  awaiting_confirm: '待确认',
   merging: '合并中',
   awaiting_merge: '待合并',
   conflict: '冲突',

@@ -50,9 +50,16 @@ async function runRealAgent(agent: AgentId): Promise<void> {
     adapterFor: (id: AgentId) => new GenericCliAdapter(id, config.agents[id], getPlatformOps()),
     semaphore: new Semaphore(1),
     mergeLocks: new KeyedLock(),
-    builtinPromptFile: resolve(__dirname, '../resources/prompts/default.md')
+    builtinPromptFile: resolve(__dirname, '../resources/prompts/default.md'),
+    builtinPromptsDir: resolve(__dirname, '../resources/prompts')
   }
 
+  // 方案确认闸两跑:方案跑(default-plan.md)只产 plan.md 后停 awaiting_confirm;确认放行后执行跑合并
+  const paused = await runTask(deps, task.id)
+  expect(paused.status, `方案跑未停 awaiting_confirm: fail_reason=${paused.failReason}`).toBe(
+    'awaiting_confirm'
+  )
+  tasks.transition(task.id, 'scheduled', {})
   const finished = await runTask(deps, task.id)
   const archive = finished.archiveDir
   const logFile = archive ? join(archive, 'output.log') : null

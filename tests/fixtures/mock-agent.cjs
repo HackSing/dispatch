@@ -6,14 +6,20 @@
 // 模式来源(W1b 起):headless_args 里的 --mock-mode=<mode> 优先(工作流主/子角色各自
 // AgentConfig 注入,互不串扰),否则读 MOCK_MODE 环境变量(既有单点测试用法不变)。
 //
+// 两跑拆分(方案确认闸):单点任务分「方案跑」(default-plan.md)与「执行跑」(default-exec.md)两跑。
+//   本 mock 按提示词正文是否含锚点「等待用户确认」区分:含 = 方案跑,只写 plan.md 后退出
+//   (执行器随即暂停 awaiting_confirm);不含 = 执行跑,plan.md 已在归档,只产 result.json。
+//   下列 success/no_result/bad_json/fail_status 均按此分流;connect 模式无视分流模拟连跑。
+//
 // 基础模式:
-//   success      写合法 plan.md + result.json,并在 cwd 改文件后 git add+commit(非 git 跳过)
-//   no_result    只写 plan.md
-//   bad_json     result.json 写非法内容
-//   fail_status  result.json status=failed
-//   nonzero_exit 直接以退出码 3 退出
-//   hang         写 pid 文件后睡 600s(超时路径用)
-//   noop         正常退出但不写任何产物(no_plan / no_result 路径用)
+//   success      方案跑只写 plan.md;执行跑改文件后 git commit(非 git 跳过)并写合法 result.json
+//   no_result    方案跑只写 plan.md;执行跑不写 result.json(no_result 路径)
+//   bad_json     方案跑只写 plan.md;执行跑写非法 result.json(bad_result 路径)
+//   fail_status  方案跑只写 plan.md;执行跑写 status=failed 的 result.json
+//   connect      模拟用户改回连跑模板:方案跑里一次性写 plan.md + result.json + 提交,不暂停
+//   nonzero_exit 直接以退出码 3 退出(方案跑即失败,exit_3 路径)
+//   hang         写 pid 文件后睡 600s(方案跑超时路径用)
+//   noop         正常退出但不写任何产物(方案跑 no_plan 路径用)
 //   stream       会话面板常驻模式:stdin 每行一个 user NDJSON,逐轮回 assistant+result
 //                事件(线格式对齐 claude stream-json 实测样本),收到的文本全文追加写
 //                cwd/stream-turns.log;文本含 mock-commit 时在 cwd 提交一次文件改动,
@@ -77,6 +83,24 @@ function writePlan(outDir) {
 
 function writeResult(outDir, body) {
   fs.writeFileSync(path.join(outDir, 'result.json'), body)
+}
+
+// 执行跑成功尾:等待可选合并竞态闸 → 改文件并提交(非 git 跳过提交)→ 写合法 result.json
+function writeSuccess(cwd, outDir) {
+  if (process.env.MOCK_WAIT_FILE) waitForFile(process.env.MOCK_WAIT_FILE)
+  const file = process.env.MOCK_FILE || 'mock-output.txt'
+  const content = process.env.MOCK_CONTENT || `mock-${process.pid}-${Date.now()}`
+  commitChange(cwd, file, content)
+  writeResult(
+    outDir,
+    JSON.stringify({
+      status: 'success',
+      summary: `mock 完成,写入 ${file}`,
+      files_changed: [file],
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString()
+    })
+  )
 }
 
 function hang(outDir) {
@@ -218,27 +242,23 @@ function main() {
   if (mode.startsWith('review_')) return reviewMain(mode, prompt, outDir, cwd)
   if (mode === 'hang') return hang(outDir)
 
-  writePlan(outDir)
+  // 连跑兼容:方案跑一次性写 plan.md + result.json + 提交(执行器按已完成收尾,不暂停)
+  if (mode === 'connect') {
+    writePlan(outDir)
+    return writeSuccess(cwd, outDir)
+  }
+
+  // 两跑分流:方案跑(提示词含「等待用户确认」锚点)只落 plan.md;执行跑只产 result.json
+  const isPlanRun = /等待用户确认/.test(prompt)
+  if (isPlanRun) {
+    return writePlan(outDir)
+  }
   if (mode === 'no_result') return
   if (mode === 'bad_json') return writeResult(outDir, '{ not json !!!')
   if (mode === 'fail_status') {
     return writeResult(outDir, JSON.stringify({ status: 'failed', summary: 'mock 故障' }))
   }
-
-  if (process.env.MOCK_WAIT_FILE) waitForFile(process.env.MOCK_WAIT_FILE)
-  const file = process.env.MOCK_FILE || 'mock-output.txt'
-  const content = process.env.MOCK_CONTENT || `mock-${process.pid}-${Date.now()}`
-  commitChange(cwd, file, content)
-  writeResult(
-    outDir,
-    JSON.stringify({
-      status: 'success',
-      summary: `mock 完成,写入 ${file}`,
-      files_changed: [file],
-      started_at: new Date().toISOString(),
-      finished_at: new Date().toISOString()
-    })
-  )
+  writeSuccess(cwd, outDir)
 }
 
 main()
