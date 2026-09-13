@@ -1,18 +1,18 @@
 # AGENTS.md
 
 <!-- docs-harness:managed-entry:start -->
-## Docs Harness 2.14.1：默认直跑，能力按需
+## Docs Harness 2.16.2：默认直跑，能力按需
 
-Docs Harness 当前版本：2.14.1
+Docs Harness 当前版本：2.16.2
 
 - 普通问答、只读检查、代码修改、构建和测试默认由 agent 直接完成；Harness 不作为任务入口，也不创建任务控制状态。
 - 用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
 - 只有缺少的项目事实会改变目标、范围、方案或验收时才运行 knowledge query；需要长期维护的事实才进入 Knowledge 资产生命周期。
 - 简单任务不生成方案；复杂、跨模块、高风险或用户明确要求时依次运行 plan select/create，方案会自动落入 docs/plans 并登记 docs/INDEX；plan create 的 --selection 可直接传 plan select 输出的 selection_ref（sha256 指纹），正式冻结前先以同参数 --dry-run 一次性校验全部字段；Full Plan 声明验收与知识影响，任务收尾按 Knowledge → Acceptance → Plan 顺序结算。
 - 复杂任务在 Plan 后创建 Acceptance 目标，执行中逐条记录真实证据并结项；acceptance create 同样支持 --dry-run 预检；证据文件必须位于随仓库提交的路径（如 docs/acceptance/evidence/<验收名>/），git 忽略路径会被拒绝登记；简单任务仍可直接验证，不强制创建资产。
-- 验收以真实功能为中心：能运行聚焦测试、接口、页面、应用、构建或安装流程时运行最小充分流程；不能独立判断时准备最低成本环境，再交给用户做最短确认。
+- 验收以真实功能为中心：能运行聚焦测试、接口、页面、应用、构建或安装流程时运行最小充分流程；改动产生运行态行为（页面、接口、应用、命令或安装流程）的任务完成后，agent 必须自己走一遍详细的运行态验证（模拟器/本地联调，可用 mock 数据），确认功能流程正常、视觉与交互对用户友好，发现不友好之处直接重新优化并复验，不把功能、视觉或交互体验的验证推给用户；纯文档、只读或不改变行为的任务只做与改动对应的验证；仅真实硬件、系统权限等本地确实无法运行的层准备最低成本环境交用户最短确认。
 - 高风险动作使用原生授权与沙箱，不建立第二套 Harness Gate 或授权协议。
-- Plan/Knowledge/Acceptance/ADR 输入 JSON 必须携带各自 schema_version 与注册字段（输入形状与示例见 python3 scripts/harness.py <cmd> --help）；校验失败报错直接附期望形状。
+- Plan/Knowledge/Acceptance/ADR 输入 JSON 必须携带各自 schema_version 与注册字段（输入形状与示例见 python3 scripts/harness.py <cmd> --help）；校验失败报错直接附期望形状；一次性输入 JSON 写入 `.docs-harness/inputs/`（安装器保证不入库、升级不清理）。
 - 需要项目架构或历史事实时，先查当前源码与符号；仍缺关键事实再显式运行 knowledge query，不得全量加载 docs/。
 - pre-2.0 项目只通过 project upgrade 单向迁移；迁移后不保留旧运行能力。
 - 不在没有证据或没有明确维护任务时自动更新 Knowledge、Changelog、TODO 或质量账本。架构决策由主 agent 通过 adr create 登记（定稿不可改，复杂决策可选只读子智能体复审）；决策失效时用 adr settle 废弃或标记被替代。
@@ -112,6 +112,8 @@ Knowledge 资产只记录有当前源码或项目文档证据支持的可复用�
 
 收尾统一运行 `assets-check`，不要求智能体手动拼接三个 check。提交时由入库 pre-commit 钩子执行
 `assets-check --fast`；GitHub CI 执行 `assets-check --strict`（新克隆机器先运行 `scripts/githooks/setup.sh` 激活钩子）。
+项目自定义提交检查写入 `scripts/githooks/pre-commit.local`（受管钩子在 assets-check 通过后自动 source，
+随项目提交、不计入受管指纹），不得分叉修改受管 pre-commit。
 
 ## 收尾
 
