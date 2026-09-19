@@ -12,10 +12,13 @@ const CORE_VARS = ['TASK_TEXT', 'OUT_DIR', 'PROJECT_PATH', 'BASE_BRANCH'] as con
 const BUILTIN = resolve(__dirname, '../resources/prompts/default.md')
 const BUILTIN_PLAN = resolve(__dirname, '../resources/prompts/default-plan.md')
 const BUILTIN_EXEC = resolve(__dirname, '../resources/prompts/default-exec.md')
+const BUILTIN_PLAN_BRIEF = resolve(__dirname, '../resources/prompts/default-plan-brief.md')
 // tests/fixtures/mock-agent.cjs 的解析锚点,正则须与其保持一致
 const MOCK_OUT_DIR_ANCHOR = /^OUT_DIR:\s*(.+)\s*$/m
 // 两跑相位锚点:mock-agent.cjs 按提示词是否含「等待用户确认」区分方案跑/执行跑,断了两跑失灵
 const PLAN_PHASE_ANCHOR = '等待用户确认'
+// 简单方案档锚点:mock-agent.cjs 据此在方案跑补写 plan-mode.txt(executor 据此定档分流)
+const PLAN_BRIEF_ANCHOR = 'plan-mode.txt'
 
 let dir: string
 
@@ -67,7 +70,8 @@ describe('两跑模板兼容性(default-plan.md / default-exec.md)', () => {
 
   it.each([
     ['default-plan.md', BUILTIN_PLAN],
-    ['default-exec.md', BUILTIN_EXEC]
+    ['default-exec.md', BUILTIN_EXEC],
+    ['default-plan-brief.md', BUILTIN_PLAN_BRIEF]
   ])('%s:四变量齐备且 TASK_TEXT 仅一次,渲染后无残留、OUT_DIR 锚点可解析', (_name, file) => {
     const template = readFileSync(file, 'utf-8')
     for (const name of CORE_VARS) expect(template, name).toContain(`{${name}}`)
@@ -79,6 +83,17 @@ describe('两跑模板兼容性(default-plan.md / default-exec.md)', () => {
 
   it('相位锚点互斥:方案跑模板含「等待用户确认」,执行跑模板不含(mock 两跑分流依赖)', () => {
     expect(readFileSync(BUILTIN_PLAN, 'utf-8')).toContain(PLAN_PHASE_ANCHOR)
+    expect(readFileSync(BUILTIN_PLAN_BRIEF, 'utf-8')).toContain(PLAN_PHASE_ANCHOR)
     expect(readFileSync(BUILTIN_EXEC, 'utf-8')).not.toContain(PLAN_PHASE_ANCHOR)
+  })
+
+  it('简单方案档协议:brief 模板含 plan-mode.txt 锚点,plan/exec 模板不含(mock 补写标记依赖)', () => {
+    const brief = readFileSync(BUILTIN_PLAN_BRIEF, 'utf-8')
+    expect(brief).toContain(PLAN_BRIEF_ANCHOR)
+    // 档位取值协议:骨架内只允许 brief/full 两个词,执行器按保守策略消费
+    expect(brief).toContain('brief')
+    expect(brief).toContain('full')
+    expect(readFileSync(BUILTIN_PLAN, 'utf-8')).not.toContain(PLAN_BRIEF_ANCHOR)
+    expect(readFileSync(BUILTIN_EXEC, 'utf-8')).not.toContain(PLAN_BRIEF_ANCHOR)
   })
 })

@@ -1,8 +1,15 @@
 /** IPC 通道契约唯一来源:preload 与主进程 handler 均从此派生,禁止手写字符串 channel。 */
 
 import type { TaskStatus } from './state-machine'
-import type { AgentDetection, AgentId, Project, Task, TriggerType } from './types'
-
+import type {
+  AgentDetection,
+  AgentId,
+  PlanMode,
+  Project,
+  Task,
+  TriggerType,
+  WorktreeMode
+} from './types'
 export interface AppStatus {
   version: string
   dbSchemaVersion: number
@@ -23,6 +30,10 @@ export interface CreateTaskPayload {
   agent: AgentId | null
   /** 工作流模式子智能体,可空;非空时 agent 为主智能体 */
   subAgent: AgentId | null
+  /** 方案档位;缺省 full(完整方案 + 确认闸) */
+  planMode?: PlanMode
+  /** 工作区模式;缺省 isolated(新开 worktree) */
+  worktreeMode?: WorktreeMode
   triggerType: TriggerType
   triggerAt: string | null
 }
@@ -34,6 +45,8 @@ export interface UpdateTaskPayload {
   projectId?: string
   agent?: AgentId | null
   subAgent?: AgentId | null
+  planMode?: PlanMode
+  worktreeMode?: WorktreeMode
   triggerType?: TriggerType
   triggerAt?: string | null
 }
@@ -70,6 +83,9 @@ export interface UiState {
   lastAgent: AgentId | null
   lastSubAgent: AgentId | null
   lastProjectId: string | null
+  /** 捕获窗记住的方案档位与工作区模式缺省 */
+  lastPlanMode: PlanMode
+  lastWorktreeMode: WorktreeMode
   /** 主窗清单页折叠起来的项目分组 */
   collapsedProjectIds: string[]
 }

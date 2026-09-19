@@ -6,10 +6,15 @@
 // 模式来源(W1b 起):headless_args 里的 --mock-mode=<mode> 优先(工作流主/子角色各自
 // AgentConfig 注入,互不串扰),否则读 MOCK_MODE 环境变量(既有单点测试用法不变)。
 //
-// 两跑拆分(方案确认闸):单点任务分「方案跑」(default-plan.md)与「执行跑」(default-exec.md)两跑。
+// 两跑拆分(方案确认闸):单点任务分「方案跑」(default-plan.md / default-plan-brief.md)
+//   与「执行跑」(default-exec.md)两跑。
 //   本 mock 按提示词正文是否含锚点「等待用户确认」区分:含 = 方案跑,只写 plan.md 后退出
-//   (执行器随即暂停 awaiting_confirm);不含 = 执行跑,plan.md 已在归档,只产 result.json。
-//   下列 success/no_result/bad_json/fail_status 均按此分流;connect 模式无视分流模拟连跑。
+//   (执行器随即暂停 awaiting_confirm 或按简单方案档自动放行);不含 = 执行跑,plan.md 已在
+//   归档,只产 result.json。下列 success/no_result/bad_json/fail_status 均按此分流;
+//   connect 模式无视分流模拟连跑。
+//
+//   简单方案档(default-plan-brief.md):提示词含「plan-mode.txt」锚点时,方案跑额外写
+//   plan-mode.txt,值为 MOCK_PLAN_LEVEL(默认 brief;full=升级完整方案,none=不写以模拟缺标记)。
 //
 // 基础模式:
 //   success      方案跑只写 plan.md;执行跑改文件后 git commit(非 git 跳过)并写合法 result.json
@@ -41,9 +46,11 @@
 //   MOCK_CONTENT          success 模式写入的内容(默认含 pid 的唯一串)
 //   MOCK_WAIT_FILE        success 模式写完 plan.md 后轮询等待该文件出现再继续(制造合并竞态)
 //   MOCK_REVIEW_PASS_FROM 见 review_reject
+//   MOCK_PLAN_LEVEL       简单方案档 plan-mode.txt 的值:brief(默认)/full/none(不写,缺标记)
 //   MOCK_DUMP_PROMPT      置 1 时把每次收到的完整提示词追加写入 <outDir>/mock-prompts.log
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
@@ -121,6 +128,22 @@ function inGitWorktree(cwd) {
 }
 
 function commitChange(cwd, file, content) {
+  // 沙箱护栏:mock 的 git 写操作只允许落在系统临时目录(所有测试仓库/worktree 都在 tmpdir 下)。
+  // cwd 一旦异常继承到真实仓库(2026-09-19 幽灵提交 59b08df 实录),在此硬停并暴露,绝不外溢。
+  const tmpRoot = fs.realpathSync(os.tmpdir())
+  let cwdReal = null
+  try {
+    cwdReal = fs.realpathSync(cwd)
+  } catch {
+    // cwd 已不存在:下面的 mkdirSync 会重建,重建后路径仍在 tmpdir 前缀下才放行
+    cwdReal = cwd
+  }
+  const insideTmp = cwdReal === tmpRoot || cwdReal.startsWith(tmpRoot + path.sep)
+  if (!insideTmp) {
+    console.error(`mock-agent: 拒绝在临时目录之外写入/提交: cwd=${cwd}`)
+    process.exit(66)
+  }
+  fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true })
   fs.writeFileSync(path.join(cwd, file), content + '\n')
   if (!inGitWorktree(cwd)) return
   execFileSync('git', ['add', '-A'], { cwd })
@@ -251,7 +274,15 @@ function main() {
   // 两跑分流:方案跑(提示词含「等待用户确认」锚点)只落 plan.md;执行跑只产 result.json
   const isPlanRun = /等待用户确认/.test(prompt)
   if (isPlanRun) {
-    return writePlan(outDir)
+    writePlan(outDir)
+    // 简单方案档(default-plan-brief.md):按档位协议补写 plan-mode.txt(MOCK_PLAN_LEVEL 可覆盖)
+    if (prompt.includes('plan-mode.txt')) {
+      const level = process.env.MOCK_PLAN_LEVEL || 'brief'
+      if (level !== 'none') {
+        fs.writeFileSync(path.join(outDir, 'plan-mode.txt'), level)
+      }
+    }
+    return
   }
   if (mode === 'no_result') return
   if (mode === 'bad_json') return writeResult(outDir, '{ not json !!!')

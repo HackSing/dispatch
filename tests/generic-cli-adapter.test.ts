@@ -31,7 +31,9 @@ function makeAdapter(config: Partial<AgentConfig> = {}): GenericCliAdapter {
 
 describe('run', () => {
   it('prompt_via=stdin:提示词写入 stdin,产物落 outDir,日志逐 chunk 回调', async () => {
-    process.env.MOCK_MODE = 'success'
+    // connect 模式:一次性产出 plan.md + result.json(两跑拆分后裸提示词无「等待用户确认」
+    // 锚点会按执行跑处理,只写 result.json——本测试只关心 stdin 传输与产物落盘)
+    process.env.MOCK_MODE = 'connect'
     const logs: string[] = []
     const adapter = makeAdapter({ prompt_via: 'stdin' })
     const { exitCode } = await adapter.run({
@@ -44,7 +46,7 @@ describe('run', () => {
     expect(exitCode).toBe(0)
     expect(existsSync(join(dir, 'plan.md'))).toBe(true)
     expect(existsSync(join(dir, 'result.json'))).toBe(true)
-    expect(logs.join('')).toContain('mock-agent: mode=success')
+    expect(logs.join('')).toContain('mock-agent: mode=connect')
   })
 
   it('signal abort → killTree 并以 exitCode=-1 归还', async () => {

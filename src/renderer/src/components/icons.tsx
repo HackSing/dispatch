@@ -115,6 +115,50 @@ export function FolderIcon(): React.JSX.Element {
   )
 }
 
+/** 方案档位:三层叠纸(方案深度) */
+export function LayersIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 1.9 12.2 4.5 7 7.1 1.8 4.5Z" />
+      <path d="m2.2 7.2 4.8 2.4 4.8-2.4" />
+      <path d="m2.2 9.8 4.8 2.4 4.8-2.4" />
+    </svg>
+  )
+}
+
+/** 工作区模式:git 分支 */
+export function BranchIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="3.6" cy="2.9" r="1.5" />
+      <circle cx="3.6" cy="11.1" r="1.5" />
+      <circle cx="10.4" cy="2.9" r="1.5" />
+      <path d="M3.6 4.4v5.2" />
+      <path d="M10.4 4.4c0 2.7-2.7 2.9-5.1 3.2" />
+    </svg>
+  )
+}
+
 export function ChevronLeftIcon(): React.JSX.Element {
   return (
     <svg

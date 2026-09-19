@@ -84,6 +84,8 @@ export function registerIpcHandlers(
       projectId: payload.projectId,
       agent: payload.agent,
       subAgent: payload.subAgent,
+      planMode: payload.planMode,
+      worktreeMode: payload.worktreeMode,
       triggerType: payload.triggerType,
       triggerAt: payload.triggerAt
     })

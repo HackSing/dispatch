@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
-import { AGENT_IDS } from '@shared/types'
+import { AGENT_IDS, PLAN_MODES, WORKTREE_MODES } from '@shared/types'
 import type { UiState } from '@shared/ipc'
 
 /** 机器管理文件,非用户手写配置:缺失/损坏一律静默重建,禁止照 config 抛错 */
@@ -8,6 +8,8 @@ const UiStateSchema = z.object({
   lastAgent: z.enum(AGENT_IDS).nullable().default(null),
   lastSubAgent: z.enum(AGENT_IDS).nullable().default(null),
   lastProjectId: z.string().nullable().default(null),
+  lastPlanMode: z.enum(PLAN_MODES).default('full'),
+  lastWorktreeMode: z.enum(WORKTREE_MODES).default('isolated'),
   collapsedProjectIds: z.array(z.string()).default([])
 })
 
@@ -37,6 +39,8 @@ export function saveUiState(file: string, patch: Partial<UiState>): UiState {
   if (patch.lastAgent !== undefined) next.lastAgent = patch.lastAgent
   if (patch.lastSubAgent !== undefined) next.lastSubAgent = patch.lastSubAgent
   if (patch.lastProjectId !== undefined) next.lastProjectId = patch.lastProjectId
+  if (patch.lastPlanMode !== undefined) next.lastPlanMode = patch.lastPlanMode
+  if (patch.lastWorktreeMode !== undefined) next.lastWorktreeMode = patch.lastWorktreeMode
   if (patch.collapsedProjectIds !== undefined) next.collapsedProjectIds = patch.collapsedProjectIds
   writeUiState(file, next)
   return next

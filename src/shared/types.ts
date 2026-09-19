@@ -12,6 +12,29 @@ export type TriggerType = 'immediate' | 'at' | 'none'
 export const TASK_PHASES = ['plan', 'implement', 'review'] as const
 export type TaskPhase = (typeof TASK_PHASES)[number]
 
+/**
+ * 方案档位:单点两跑的方案深度。
+ * - full(默认):完整方案,产出后暂停 awaiting_confirm 等用户确认(既有行为)。
+ * - brief:简单方案——方案跑先按难度定档:简单档产出薄方案(plan-mode.txt=brief)后
+ *   执行器自动放行执行,不停等确认;复杂档自动升级为完整方案(plan-mode.txt=full)照常暂停。
+ *   仅单点模式生效;工作流模式( subAgent 非空)始终走完整方案,忽略本字段。
+ */
+export const PLAN_MODES = ['full', 'brief'] as const
+export type PlanMode = (typeof PLAN_MODES)[number]
+
+/**
+ * 工作区模式:执行位置。
+ * - isolated(默认):从基线分支新开独立 worktree + 任务分支,完成后自动合并回基线(既有行为)。
+ * - current:在项目主工作区当前检出直接执行,不建 worktree、不合并——适用于拉取代码等
+ *   简单任务;执行提示词会追加工作区补充段(严禁 commit/push 等写操作,任务原文要求的除外)。
+ */
+export const WORKTREE_MODES = ['isolated', 'current'] as const
+export type WorktreeMode = (typeof WORKTREE_MODES)[number]
+
+/** 业务默认值单一来源:建任务/存储归一化的唯一缺省 */
+export const DEFAULT_PLAN_MODE: PlanMode = 'full'
+export const DEFAULT_WORKTREE_MODE: WorktreeMode = 'isolated'
+
 export interface Task {
   id: string
   createdAt: string
@@ -20,6 +43,10 @@ export interface Task {
   agent: AgentId | null
   /** 工作流模式的子智能体;null = 单点模式(既有流程零变化) */
   subAgent: AgentId | null
+  /** 方案档位(单点两跑方案深度),见 PLAN_MODES */
+  planMode: PlanMode
+  /** 工作区模式(新开 worktree / 当前工作区),见 WORKTREE_MODES */
+  worktreeMode: WorktreeMode
   triggerType: TriggerType
   triggerAt: string | null
   status: TaskStatus

@@ -1,6 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from 'better-sqlite3'
-import type { AgentId, Task, TaskPhase, TriggerType } from '@shared/types'
+import {
+  DEFAULT_PLAN_MODE,
+  DEFAULT_WORKTREE_MODE,
+  PLAN_MODES,
+  WORKTREE_MODES,
+  type AgentId,
+  type PlanMode,
+  type Task,
+  type TaskPhase,
+  type TriggerType,
+  type WorktreeMode
+} from '@shared/types'
 import { assertTransition, type TaskStatus } from '@shared/state-machine'
 
 interface TaskRow {
@@ -10,6 +21,8 @@ interface TaskRow {
   project_id: string
   agent: string | null
   sub_agent: string | null
+  plan_mode: string
+  worktree_mode: string
   trigger_type: string
   trigger_at: string | null
   status: string
@@ -28,6 +41,19 @@ interface TaskRow {
   merged_at: string | null
 }
 
+/** 建任务/编辑边界的一次性校验与归一:非法值明确报错,不静默吞(下游信任行内不变量) */
+function normalizePlanMode(v: PlanMode | undefined | null): PlanMode {
+  if (v === undefined || v === null) return DEFAULT_PLAN_MODE
+  if (!(PLAN_MODES as readonly string[]).includes(v)) throw new Error(`非法方案档位: ${v}`)
+  return v
+}
+
+function normalizeWorktreeMode(v: WorktreeMode | undefined | null): WorktreeMode {
+  if (v === undefined || v === null) return DEFAULT_WORKTREE_MODE
+  if (!(WORKTREE_MODES as readonly string[]).includes(v)) throw new Error(`非法工作区模式: ${v}`)
+  return v
+}
+
 function toTask(row: TaskRow): Task {
   return {
     id: row.id,
@@ -36,6 +62,8 @@ function toTask(row: TaskRow): Task {
     projectId: row.project_id,
     agent: row.agent as AgentId | null,
     subAgent: row.sub_agent as AgentId | null,
+    planMode: row.plan_mode as PlanMode,
+    worktreeMode: row.worktree_mode as WorktreeMode,
     triggerType: row.trigger_type as TriggerType,
     triggerAt: row.trigger_at,
     status: row.status as TaskStatus,
@@ -61,6 +89,10 @@ export interface CreateTaskInput {
   agent?: AgentId | null
   /** 工作流子智能体,可空;非空时 agent 为主智能体且必填 */
   subAgent?: AgentId | null
+  /** 方案档位(单点两跑);缺省 full(完整方案 + 确认闸) */
+  planMode?: PlanMode
+  /** 工作区模式;缺省 isolated(新开 worktree) */
+  worktreeMode?: WorktreeMode
   triggerType: TriggerType
   triggerAt?: string | null
   /** 接力任务专用:继承原任务会话并以 --resume 执行,两者必须同时提供 */
@@ -74,6 +106,8 @@ export interface EditableTaskPatch {
   projectId?: string
   agent?: AgentId | null
   subAgent?: AgentId | null
+  planMode?: PlanMode
+  worktreeMode?: WorktreeMode
   triggerType?: TriggerType
   triggerAt?: string | null
 }
@@ -139,6 +173,8 @@ export class TaskStore {
       throw new Error('接力任务必须同时提供 parentTaskId 与 sessionId')
     }
     const now = new Date().toISOString()
+    const planMode = normalizePlanMode(input.planMode)
+    const worktreeMode = normalizeWorktreeMode(input.worktreeMode)
     const task: Task = {
       id: randomUUID(),
       createdAt: now,
@@ -146,6 +182,8 @@ export class TaskStore {
       projectId: input.projectId,
       agent: input.agent ?? null,
       subAgent: input.subAgent ?? null,
+      planMode,
+      worktreeMode,
       triggerType: input.triggerType,
       triggerAt: input.triggerType === 'at' ? (input.triggerAt ?? null) : null,
       status: input.triggerType === 'none' ? 'todo' : 'scheduled',
@@ -165,10 +203,12 @@ export class TaskStore {
     }
     this.db
       .prepare(
-        `INSERT INTO tasks (id, created_at, text, project_id, agent, sub_agent, trigger_type,
-                            trigger_at, status, scheduled_at, session_id, parent_task_id)
-         VALUES (@id, @createdAt, @text, @projectId, @agent, @subAgent, @triggerType,
-                 @triggerAt, @status, @scheduledAt, @sessionId, @parentTaskId)`
+        `INSERT INTO tasks (id, created_at, text, project_id, agent, sub_agent, plan_mode,
+                            worktree_mode, trigger_type, trigger_at, status, scheduled_at,
+                            session_id, parent_task_id)
+         VALUES (@id, @createdAt, @text, @projectId, @agent, @subAgent, @planMode,
+                 @worktreeMode, @triggerType, @triggerAt, @status, @scheduledAt,
+                 @sessionId, @parentTaskId)`
       )
       .run({
         id: task.id,
@@ -177,6 +217,8 @@ export class TaskStore {
         projectId: task.projectId,
         agent: task.agent,
         subAgent: task.subAgent,
+        planMode: task.planMode,
+        worktreeMode: task.worktreeMode,
         triggerType: task.triggerType,
         triggerAt: task.triggerAt,
         status: task.status,
@@ -222,6 +264,9 @@ export class TaskStore {
       projectId: patch.projectId ?? current.projectId,
       agent: patch.agent !== undefined ? patch.agent : current.agent,
       subAgent: patch.subAgent !== undefined ? patch.subAgent : current.subAgent,
+      planMode: normalizePlanMode(patch.planMode !== undefined ? patch.planMode : current.planMode),
+      worktreeMode:
+        normalizeWorktreeMode(patch.worktreeMode !== undefined ? patch.worktreeMode : current.worktreeMode),
       triggerType: patch.triggerType ?? current.triggerType,
       triggerAt: patch.triggerAt !== undefined ? patch.triggerAt : current.triggerAt
     }
@@ -239,7 +284,8 @@ export class TaskStore {
     this.db
       .prepare(
         `UPDATE tasks SET text = @text, project_id = @projectId, agent = @agent,
-           sub_agent = @subAgent, trigger_type = @triggerType, trigger_at = @triggerAt
+           sub_agent = @subAgent, plan_mode = @planMode, worktree_mode = @worktreeMode,
+           trigger_type = @triggerType, trigger_at = @triggerAt
          WHERE id = @id`
       )
       .run({ id, ...next })

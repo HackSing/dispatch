@@ -1,4 +1,4 @@
-import type { Task, TaskPhase } from '@shared/types'
+import type { Task, TaskPhase, PlanMode, WorktreeMode } from '@shared/types'
 import type { TaskStatus } from '@shared/state-machine'
 
 /** 列表与详情共用的任务展示文案(状态徽标/阶段/主→子链),渲染层唯一来源 */
@@ -13,6 +13,26 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   conflict: '冲突',
   failed: '失败',
   done: '完成'
+}
+
+const PLAN_MODE_LABELS: Record<PlanMode, string> = {
+  full: '完整方案',
+  brief: '简单方案'
+}
+
+const WORKTREE_MODE_LABELS: Record<WorktreeMode, string> = {
+  isolated: '新开 worktree',
+  current: '当前工作区'
+}
+
+/** 方案档位文案(详情页元数据用) */
+export function planModeLabel(mode: PlanMode): string {
+  return PLAN_MODE_LABELS[mode]
+}
+
+/** 工作区模式文案(详情页元数据用) */
+export function worktreeModeLabel(mode: WorktreeMode): string {
+  return WORKTREE_MODE_LABELS[mode]
 }
 
 const PHASE_LABELS: Record<TaskPhase, string> = {

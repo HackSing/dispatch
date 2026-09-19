@@ -35,6 +35,8 @@ function fakeTask(): Task {
     projectId: 'p1',
     agent: 'claude-code',
     subAgent: null,
+    planMode: 'full',
+    worktreeMode: 'isolated',
     triggerType: 'immediate',
     triggerAt: null,
     status: 'running',

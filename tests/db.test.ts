@@ -146,4 +146,48 @@ describe('TaskStore', () => {
       store.create({ text: 'x', projectId: 'nonexistent', triggerType: 'none' })
     ).toThrow(/FOREIGN KEY/)
   })
+
+  it('planMode/worktreeMode:缺省 full/isolated,显式值落库往返,非法值拒绝', () => {
+    const store = new TaskStore(db)
+    const dflt = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    expect(dflt.planMode).toBe('full')
+    expect(dflt.worktreeMode).toBe('isolated')
+
+    const custom = store.create({
+      text: '拉取代码',
+      projectId,
+      agent: 'claude-code',
+      planMode: 'brief',
+      worktreeMode: 'current',
+      triggerType: 'immediate'
+    })
+    expect(store.get(custom.id)).toMatchObject({ planMode: 'brief', worktreeMode: 'current' })
+
+    expect(() =>
+      store.create({
+        text: 'x',
+        projectId,
+        agent: 'claude-code',
+        planMode: 'nope' as Task['planMode'],
+        triggerType: 'immediate'
+      })
+    ).toThrow(/非法方案档位/)
+    expect(() =>
+      store.create({
+        text: 'x',
+        projectId,
+        agent: 'claude-code',
+        worktreeMode: 'nope' as Task['worktreeMode'],
+        triggerType: 'immediate'
+      })
+    ).toThrow(/非法工作区模式/)
+  })
+
+  it('updateEditable 可改 planMode/worktreeMode', () => {
+    const store = new TaskStore(db)
+    const task = store.create({ text: 'x', projectId, agent: 'claude-code', triggerType: 'immediate' })
+    const updated = store.updateEditable(task.id, { planMode: 'brief', worktreeMode: 'current' })
+    expect(updated.planMode).toBe('brief')
+    expect(updated.worktreeMode).toBe('current')
+  })
 })

@@ -8,7 +8,7 @@ import type { ProjectStore, TaskStore } from '@core/db'
 import type { AgentAdapter, TaskResult } from '@core/agents/types'
 import { createArchive, OutputLog } from '@core/archive'
 import { supportsSession } from '@core/agents/session'
-import { loadPromptTemplate, renderPrompt } from '@core/prompt'
+import { currentWorkspaceAddendum, loadPromptTemplate, renderPrompt } from '@core/prompt'
 import { runShell } from '@core/proc/shell'
 import {
   createTaskWorktree,
@@ -172,7 +172,9 @@ async function resumeAfterConfirm(
     deps,
     task: running,
     project,
-    git: running.worktreePath !== null,
+    // git 与否:首跑建过 worktree(isolated)或落了基线分支(current-git)均为 git 项目;
+    // no_vcs 项目两者皆空。current-git 需要判 true,工作流审查的越权快照依赖它
+    git: running.worktreePath !== null || running.baseBranch !== null,
     baseBranch: running.baseBranch,
     archiveDir,
     log: new OutputLog(archiveDir),
@@ -194,8 +196,11 @@ async function runPhases(ctx: ExecContext, resume = false): Promise<Task> {
   let cwd = ctx.project.path
   if (ctx.git) {
     if (resume) {
-      // 复用首跑 worktree(ctx.worktreePath/branch 已由 resumeAfterConfirm 从任务字段填入)
-      cwd = ctx.worktreePath as string
+      // 复用首跑现场:isolated 用暂停时持久化的 worktree;current 无 worktree,留在主工作区
+      cwd = ctx.worktreePath ?? ctx.project.path
+    } else if (ctx.task.worktreeMode === 'current') {
+      // 当前工作区执行:不建 worktree、不切分支,改动直接落在项目主工作区;结束不经合并
+      ctx.log.append('[dispatch] 当前工作区执行:不创建 worktree,改动直接落在主工作区\n')
     } else {
       const wt = await createTaskWorktree({
         projectPath: ctx.project.path,
@@ -279,10 +284,12 @@ async function runMainAgentOnce(
 }
 
 /**
- * 单点首跑=方案跑:渲染 default-plan.md、setPhase('plan')、跑主 agent 判 plan.md。
- * 判过后:result.json 也已存在(用户改回连跑模板)→ 按旧语义判定后走合并/no_vcs 收尾(连跑兼容分支);
- * 否则暂停 running→awaiting_confirm(TransitionPatch 带归档/worktree/branch,phase 冻结为 plan),
- * 直接返回——执行信号量由 runTask 的 finally 自动释放,不额外操作。
+ * 单点首跑=方案跑:setPhase('plan') 后按方案档位选模板——full 用 default-plan.md(既有行为);
+ * brief 用 default-plan-brief.md(智能体按难度定档:简单档产出薄方案 + plan-mode.txt=brief)。
+ * 判过后:result.json 也已存在(用户改回连跑模板)→ 按旧语义判定后走收尾(连跑兼容分支);
+ * brief 且档位=brief → 不停等确认直接进入执行跑;brief 且档位=full/缺标记(含坏值,保守升级)
+ * 或 full 档 → 暂停 running→awaiting_confirm(TransitionPatch 带归档/worktree/branch,
+ * phase 冻结为 plan),直接返回——执行信号量由 runTask 的 finally 自动释放,不额外操作。
  */
 async function runPlanPhaseSingle(
   ctx: ExecContext,
@@ -290,7 +297,8 @@ async function runPlanPhaseSingle(
   cwd: string
 ): Promise<Task> {
   ctx.deps.tasks.setPhase(ctx.task.id, 'plan')
-  const fail = await runMainAgentOnce(ctx, adapter, cwd, 'default-plan.md')
+  const fileName = ctx.task.planMode === 'brief' ? 'default-plan-brief.md' : 'default-plan.md'
+  const fail = await runMainAgentOnce(ctx, adapter, cwd, fileName)
   if (fail) return failTask(ctx, fail)
   const planFail = judgePlanArtifact(ctx.archiveDir)
   if (planFail) return failTask(ctx, planFail)
@@ -298,7 +306,17 @@ async function runPlanPhaseSingle(
     const resultFail = judgeResultArtifact(ctx.archiveDir)
     if (resultFail) return failTask(ctx, resultFail)
     ctx.deps.tasks.setPhase(ctx.task.id, null)
-    return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
+    return finishWithoutMerge(ctx)
+  }
+  if (ctx.task.planMode === 'brief') {
+    const level = readPlanLevel(ctx.archiveDir)
+    if (level === 'brief') {
+      ctx.log.append('[dispatch] 简单方案档:智能体定档简单,自动放行进入执行\n')
+      return runExecPhase(ctx, adapter, cwd)
+    }
+    ctx.log.append(
+      `[dispatch] 简单方案档:智能体定档${level === 'full' ? '复杂,升级为完整方案' : '结果缺失(视为复杂)'},暂停等待用户确认\n`
+    )
   }
   ctx.log.append('[dispatch] 方案已产出,暂停等待用户确认(awaiting_confirm)\n')
   return ctx.deps.tasks.transition(ctx.task.id, 'awaiting_confirm', {
@@ -309,8 +327,9 @@ async function runPlanPhaseSingle(
 }
 
 /**
- * 单点执行跑(确认后重入):渲染 default-exec.md、setPhase('implement')、跑主 agent 判产物;
- * 成功后离开 running 前 setPhase(null) 清场(与 workflow 既有纪律一致),再走合并/no_vcs 收尾。
+ * 单点执行跑(确认后重入或简单方案自动放行):渲染 default-exec.md、setPhase('implement')、
+ * 跑主 agent 判产物;成功后离开 running 前 setPhase(null) 清场(与 workflow 既有纪律一致),
+ * 再走合并/no_vcs 收尾。
  */
 async function runExecPhase(
   ctx: ExecContext,
@@ -323,12 +342,34 @@ async function runExecPhase(
   const artifactFail = judgeArtifacts(ctx.archiveDir)
   if (artifactFail) return failTask(ctx, artifactFail)
   ctx.deps.tasks.setPhase(ctx.task.id, null)
-  return ctx.git ? mergeAndFinish(ctx) : finishNoVcs(ctx)
+  return finishWithoutMerge(ctx)
+}
+
+/**
+ * plan-mode.txt 档位标记(default-plan-brief.md 产物协议):智能体定档结果,'brief'=简单档,
+ * 'full'=复杂档(升级完整方案)。文件缺失或内容非法返回 null,调用方按保守策略(升级/暂停)处理。
+ */
+function readPlanLevel(archiveDir: string): 'brief' | 'full' | null {
+  const file = join(archiveDir, 'plan-mode.txt')
+  if (!existsSync(file)) return null
+  const raw = readFileSync(file, 'utf-8').trim()
+  return raw === 'brief' || raw === 'full' ? raw : null
+}
+
+/**
+ * 无合并收尾:非 git 项目(no_vcs)与当前工作区执行(current,worktreePath 为空)共用——
+ * 改动已落在最终位置,任务直接 done,不经 merging/awaiting_merge/conflict。
+ */
+async function finishWithoutMerge(ctx: ExecContext): Promise<Task> {
+  return ctx.worktreePath ? mergeAndFinish(ctx) : finishNoVcs(ctx)
 }
 
 /**
  * 单次 adapter 运行:独立 AbortController + 超时,kill 统一由 adapter 经 platform.killTree 落实;
  * 运行期间在中断登记表挂号,用户中断与超时/普通失败在返回值区分。
+ * 当前工作区模式(git 项目)在提示词末尾追加工作区补充段:内置模板正文按「独立 worktree」
+ * 措辞写成且为用户可编辑真源(存量用户不会自动更新),占位符方案对旧模板不生效,
+ * 追加段对全部模板版本一律成立(单点与工作流各阶段共用本出口,一处追加全覆盖)。
  */
 async function runAdapterOnce(
   ctx: ExecContext,
@@ -338,6 +379,10 @@ async function runAdapterOnce(
   timeoutMs: number,
   sessionId?: string
 ): Promise<{ timedOut: boolean; exitCode: number; interrupted: boolean }> {
+  const scopedPrompt =
+    ctx.git && ctx.task.worktreeMode === 'current'
+      ? prompt + currentWorkspaceAddendum(ctx.project.path)
+      : prompt
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -348,7 +393,7 @@ async function runAdapterOnce(
   let exitCode: number
   try {
     ;({ exitCode } = await adapter.run({
-      prompt,
+      prompt: scopedPrompt,
       cwd,
       outDir: ctx.archiveDir,
       timeoutMs,

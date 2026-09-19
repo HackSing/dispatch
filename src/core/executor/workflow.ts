@@ -109,9 +109,10 @@ export async function runWorkflow(
     feedback = serializeReviewFeedback(round, review.report)
   }
 
-  // pass:离开 running 前清 phase,随后复用与单点完全相同的合并链路 / no_vcs 收尾
+  // pass:离开 running 前清 phase,随后复用与单点完全相同的收尾:
+  // isolated(git)走合并链路;current(无 worktree)与非 git 一致,改动已落位直接 done
   ctx.deps.tasks.setPhase(ctx.task.id, null)
-  return ctx.git ? host.mergeAndFinish(ctx) : host.finishNoVcs(ctx)
+  return ctx.worktreePath ? host.mergeAndFinish(ctx) : host.finishNoVcs(ctx)
 }
 
 /** wf-plan:主 adapter 产出 {OUT_DIR}/plan.md;缺 → no_plan,超时 → timeout_plan */

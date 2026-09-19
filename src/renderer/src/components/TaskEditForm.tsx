@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import type { AgentDetection, AgentId, Project, Task } from '@shared/types'
+import type { AgentDetection, AgentId, PlanMode, Project, Task, WorktreeMode } from '@shared/types'
 import {
   AgentSelect,
+  PlanModeSelect,
   ProjectSelect,
   SubAgentSelect,
   TriggerSelect,
+  WorktreeModeSelect,
   type TriggerValue
 } from './selectors'
 import { fromDatetimeLocal, toDatetimeLocal } from '../lib/time'
@@ -22,6 +24,8 @@ export function TaskEditForm(props: {
   const [projectId, setProjectId] = useState(task.projectId)
   const [agent, setAgent] = useState<AgentId | ''>(task.agent ?? '')
   const [subAgent, setSubAgent] = useState<AgentId | ''>(task.subAgent ?? '')
+  const [planMode, setPlanMode] = useState<PlanMode>(task.planMode)
+  const [worktreeMode, setWorktreeMode] = useState<WorktreeMode>(task.worktreeMode)
   const [trigger, setTrigger] = useState<TriggerValue>({
     triggerType: task.triggerType,
     triggerAtLocal: toDatetimeLocal(task.triggerAt)
@@ -51,6 +55,8 @@ export function TaskEditForm(props: {
         projectId,
         agent: agent || null,
         subAgent: (agent && subAgent) || null,
+        planMode,
+        worktreeMode,
         triggerType: trigger.triggerType,
         triggerAt
       })
@@ -90,6 +96,8 @@ export function TaskEditForm(props: {
         />
       </div>
       <div className="field-row">
+        <PlanModeSelect value={planMode} onChange={setPlanMode} disabled={Boolean(agent && subAgent)} />
+        <WorktreeModeSelect value={worktreeMode} onChange={setWorktreeMode} />
         <button className="btn primary" disabled={saving} onClick={() => void save()}>
           保存
         </button>

@@ -19,7 +19,14 @@ import { branchExists, commitFile, git, headOf, makeDirty, makeGitRepo } from '.
 const MOCK_SCRIPT = fileURLToPath(new URL('./fixtures/mock-agent.cjs', import.meta.url))
 // 方案确认闸两跑:单点 default-plan.md/default-exec.md 与 wf-*.md 同走 builtinPromptsDir 解析
 const BUILTIN_PROMPTS_DIR = fileURLToPath(new URL('../resources/prompts', import.meta.url))
-const MOCK_ENV_KEYS = ['MOCK_MODE', 'MOCK_FILE', 'MOCK_CONTENT', 'MOCK_WAIT_FILE', 'MOCK_DUMP_PROMPT']
+const MOCK_ENV_KEYS = [
+  'MOCK_MODE',
+  'MOCK_FILE',
+  'MOCK_CONTENT',
+  'MOCK_WAIT_FILE',
+  'MOCK_DUMP_PROMPT',
+  'MOCK_PLAN_LEVEL'
+]
 
 let home: string
 let repo: string
@@ -550,5 +557,118 @@ describe('放弃 awaiting_confirm', () => {
     expect(cleaned.worktreePath).toBeNull()
     expect(existsSync(wt)).toBe(false)
     expect(branchExists(repo, paused.branch as string)).toBe(false)
+  }, 20_000)
+})
+
+describe('方案档位(planMode)与工作区模式(worktreeMode)', () => {
+  it('brief 档智能体判简单 → 方案跑后自动放行,不停等确认直达 done(仍走合并)', async () => {
+    process.env.MOCK_MODE = 'success'
+    process.env.MOCK_CONTENT = 'from-brief'
+    const project = createProject()
+    const task = tasks.create({
+      text: '同步远端代码',
+      projectId: project.id,
+      agent: 'claude-code',
+      planMode: 'brief',
+      triggerType: 'immediate'
+    })
+    const before = headOf(repo, 'main')
+
+    const result = await runTask(deps, task.id)
+
+    expect(result.status).toBe('done')
+    expect(result.failReason).toBeNull()
+    // isolated 缺省:worktree 照建照清,产出经合并落主工作区
+    expect(result.mergedAt).toBeTruthy()
+    expect(result.worktreePath).toBeNull()
+    expect(existsSync(worktreeDirOf(project, task))).toBe(false)
+    // 全程未经 awaiting_confirm:scheduled → running → merging → done
+    expect(statusTrail()).toEqual(['scheduled', 'running', 'merging', 'done'])
+    const archive = archiveDirOf(project, task)
+    expect(readFileSync(join(archive, 'plan-mode.txt'), 'utf-8').trim()).toBe('brief')
+    expect(readFileSync(join(archive, 'output.log'), 'utf-8')).toContain('简单方案档')
+    expect(headOf(repo, 'main')).not.toBe(before)
+  }, 20_000)
+
+  it('brief 档智能体判复杂(plan-mode.txt=full)→ 升级完整方案,停 awaiting_confirm', async () => {
+    process.env.MOCK_MODE = 'success'
+    process.env.MOCK_PLAN_LEVEL = 'full'
+    const project = createProject()
+    const task = tasks.create({
+      text: '重构登录模块',
+      projectId: project.id,
+      agent: 'claude-code',
+      planMode: 'brief',
+      triggerType: 'immediate'
+    })
+
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    expect(paused.phase).toBe('plan')
+    expect(readFileSync(join(paused.archiveDir as string, 'plan-mode.txt'), 'utf-8').trim()).toBe(
+      'full'
+    )
+
+    confirm(task.id)
+    const result = await runTask(deps, task.id)
+    expect(result.status).toBe('done')
+  }, 20_000)
+
+  it('brief 档缺 plan-mode.txt → 保守视为复杂,停 awaiting_confirm 不盲跑', async () => {
+    process.env.MOCK_MODE = 'success'
+    process.env.MOCK_PLAN_LEVEL = 'none'
+    const project = createProject()
+    const task = tasks.create({
+      text: '同步远端代码',
+      projectId: project.id,
+      agent: 'claude-code',
+      planMode: 'brief',
+      triggerType: 'immediate'
+    })
+
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    expect(existsSync(join(paused.archiveDir as string, 'plan-mode.txt'))).toBe(false)
+    expect(readFileSync(join(paused.archiveDir as string, 'output.log'), 'utf-8')).toContain(
+      '结果缺失'
+    )
+  }, 20_000)
+
+  it('current 工作区:不建 worktree、不经合并,确认后 done,主工作区直接拿产出', async () => {
+    process.env.MOCK_MODE = 'success'
+    process.env.MOCK_DUMP_PROMPT = '1'
+    const project = createProject()
+    const task = tasks.create({
+      text: '拉取最新代码',
+      projectId: project.id,
+      agent: 'claude-code',
+      worktreeMode: 'current',
+      triggerType: 'immediate'
+    })
+    const before = headOf(repo, 'main')
+
+    const paused = await runTask(deps, task.id)
+    expect(paused.status).toBe('awaiting_confirm')
+    // 方案跑即在主工作区:无 worktree、无任务分支
+    expect(paused.worktreePath).toBeNull()
+    expect(paused.branch).toBeNull()
+    expect(existsSync(worktreeDirOf(project, task))).toBe(false)
+
+    confirm(task.id)
+    const result = await runTask(deps, task.id)
+
+    expect(result.status).toBe('done')
+    expect(result.worktreePath).toBeNull()
+    expect(result.branch).toBeNull()
+    expect(result.mergedAt).toBeNull()
+    // 未经 merging:当前工作区改动已落位,无合并动作
+    expect(statusTrail()).toEqual(['scheduled', 'running', 'awaiting_confirm', 'scheduled', 'running', 'done'])
+    // 改动直接落在主工作区(mock 在当前分支提交)
+    expect(headOf(repo, 'main')).not.toBe(before)
+    expect(existsSync(join(repo, 'mock-output.txt'))).toBe(true)
+    // 工作区补充段已注入两跑提示词
+    const prompts = readFileSync(join(paused.archiveDir as string, 'mock-prompts.log'), 'utf-8')
+    expect(prompts).toContain('工作区模式补充')
+    expect(prompts).toContain('主工作区')
   }, 20_000)
 })

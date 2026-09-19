@@ -1,4 +1,13 @@
-import { AGENT_IDS, type AgentDetection, type AgentId, type Project } from '@shared/types'
+import {
+  AGENT_IDS,
+  PLAN_MODES,
+  WORKTREE_MODES,
+  type AgentDetection,
+  type AgentId,
+  type PlanMode,
+  type Project,
+  type WorktreeMode
+} from '@shared/types'
 import type { TriggerType } from '@shared/types'
 
 /** 捕获窗与主窗编辑表单共用的三选择器,行为保持一致(spec §3.1) */
@@ -95,6 +104,65 @@ export function SubAgentSelect(props: {
     >
       <option value="">子智能体(不使用)</option>
       {agentOptions(detections)}
+    </select>
+  )
+}
+
+const PLAN_MODE_LABELS: Record<PlanMode, string> = {
+  full: '完整方案',
+  brief: '简单方案'
+}
+
+/** 方案档位选择器(仅单点模式生效):简单方案由智能体按难度定档,简单任务不停等确认直接执行 */
+export function PlanModeSelect(props: {
+  value: PlanMode
+  onChange: (next: PlanMode) => void
+  /** 工作流模式(subAgent 非空)下禁用:三段工作流始终走完整方案 */
+  disabled?: boolean
+}): React.JSX.Element {
+  const { value, onChange, disabled } = props
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      title={
+        disabled
+          ? '工作流模式始终走完整方案'
+          : '方案档位:简单方案=智能体先判难度,简单任务产出薄方案后直接执行,复杂任务自动升级完整方案并暂停确认'
+      }
+      onChange={(e) => onChange(e.target.value as PlanMode)}
+    >
+      {PLAN_MODES.map((m) => (
+        <option key={m} value={m}>
+          {PLAN_MODE_LABELS[m]}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+const WORKTREE_MODE_LABELS: Record<WorktreeMode, string> = {
+  isolated: '新开 worktree',
+  current: '当前工作区'
+}
+
+/** 工作区模式选择器:当前工作区=在项目主工作区直接执行,不建 worktree、不经合并(适合拉取代码等简单任务) */
+export function WorktreeModeSelect(props: {
+  value: WorktreeMode
+  onChange: (next: WorktreeMode) => void
+}): React.JSX.Element {
+  const { value, onChange } = props
+  return (
+    <select
+      value={value}
+      title="工作区:新开 worktree=独立分支执行并自动合并回基线;当前工作区=在项目主工作区直接执行,不建 worktree、不经合并"
+      onChange={(e) => onChange(e.target.value as WorktreeMode)}
+    >
+      {WORKTREE_MODES.map((m) => (
+        <option key={m} value={m}>
+          {WORKTREE_MODE_LABELS[m]}
+        </option>
+      ))}
     </select>
   )
 }

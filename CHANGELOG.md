@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 任务档位与工作区选择:简单任务不再被全方案拖累(2026-09-19)
+新建任务时可选两个新维度(捕获窗与编辑表单均可,捕获窗记住上次选择):
+- **方案档位**(planMode,默认「完整方案」):「简单方案」下方案跑先按难度定档——简单档只产出薄方案(plan.md)与档位标记(plan-mode.txt=brief),执行器**自动放行执行,不停等确认**;复杂档(标记 full 或标记缺失,保守升级)自动升级为完整方案并照常暂停 awaiting_confirm。完整方案档行为零变化。仅单点模式生效,工作流模式(subAgent 非空)始终走完整方案(选择器置灰)。
+- **工作区模式**(worktreeMode,默认「新开 worktree」):「当前工作区」不建 worktree、不切分支,改动直接落在项目主工作区,结束后**不经合并**直接 done——适合拉取代码、装依赖等简单任务;执行提示词末尾追加「工作区模式补充」段(严禁 commit/push 等写操作,任务原文要求的除外;与模板正文冲突时以补充段为准)。基线分支照常记录,详情页对非常规取值展示「简单方案」「当前工作区」元信息。
+- 实现面:任务表迁移 v5(plan_mode/worktree_mode,存量任务默认 full/isolated)、执行器方案档位分流与无合并收尾、新模板 `default-plan-brief.md`、mock agent 支持 `MOCK_PLAN_LEVEL`。
+**升级注意**:`~/.dispatch/prompts/` 首次执行简单方案任务时会自动新增 `default-plan-brief.md` 模板,无需手工操作;`default-plan.md`/`default-exec.md` 未改动。
+
 ### 实时日志修复:方案阶段即可看到 agent 输出(2026-09-19)
 - 根因:执行器在 `running` 迁移之后才建归档目录,`archive_dir` 直到 awaiting_confirm 才入库——期间 `task:archive` 轮询拿不到归档路径,详情页「执行日志(实时)」整段空白(79a5c9c5 实录:方案阶段 5 分钟全程"暂无过程输出")
 - 修复:Phase 0 建归档后即刻经新增 `TaskStore.setArchiveDir` 入库(running 态记账,不触发 onChange);磁盘上的 output.log 本就逐事件落盘,无需改写盘机制(其间曾怀疑 fs.WriteStream 攒盘并重写为同步追加,插桩证明误判后已回滚)

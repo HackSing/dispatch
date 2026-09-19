@@ -78,6 +78,14 @@ const MIGRATIONS: Migration[] = [
         SELECT COUNT(*) FROM projects AS p2 WHERE p2.created_at < projects.created_at
       );
     `
+  },
+  {
+    version: 5,
+    name: 'task-plan-worktree-mode',
+    sql: `
+      ALTER TABLE tasks ADD COLUMN plan_mode TEXT NOT NULL DEFAULT 'full';
+      ALTER TABLE tasks ADD COLUMN worktree_mode TEXT NOT NULL DEFAULT 'isolated';
+    `
   }
 ]
 

@@ -4,7 +4,7 @@ import type { Task } from '@shared/types'
 import type { TaskArchive } from '@shared/ipc'
 import type { TaskResult } from '@core/agents/types'
 import { useAppStore } from '../stores/app-store'
-import { agentChainLabel, humanFailReason, phaseDetailLabel, statusBadgeLabel } from '../lib/task-labels'
+import { agentChainLabel, humanFailReason, phaseDetailLabel, planModeLabel, statusBadgeLabel, worktreeModeLabel } from '../lib/task-labels'
 import { formatElapsed, formatTime } from '../lib/time'
 import { TaskMenu } from './TaskMenu'
 import { PlanConfirmPanel } from './PlanConfirmPanel'
@@ -175,6 +175,18 @@ export function TaskDetail(props: {
                 <div className="kv">
                   <span className="k">当前阶段</span>
                   <span className="v">{phaseDetailLabel(task)}</span>
+                </div>
+              )}
+              {task.planMode === 'brief' && (
+                <div className="kv">
+                  <span className="k">方案</span>
+                  <span className="v">{planModeLabel(task.planMode)}</span>
+                </div>
+              )}
+              {task.worktreeMode === 'current' && (
+                <div className="kv">
+                  <span className="k">工作区</span>
+                  <span className="v">{worktreeModeLabel(task.worktreeMode)}</span>
                 </div>
               )}
               <div className="kv">

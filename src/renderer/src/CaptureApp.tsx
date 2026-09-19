@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentDetection, AgentId, Project } from '@shared/types'
+import type { AgentDetection, AgentId, PlanMode, Project, WorktreeMode } from '@shared/types'
 import { DEFAULT_PROJECT_ID } from '@shared/types'
 import { AgentChainPicker } from './components/AgentChainPicker'
-import { ClockIcon, FolderIcon } from './components/icons'
-import { ProjectSelect, TriggerSelect, type TriggerValue } from './components/selectors'
+import { BranchIcon, ClockIcon, FolderIcon, LayersIcon } from './components/icons'
+import {
+  PlanModeSelect,
+  ProjectSelect,
+  TriggerSelect,
+  WorktreeModeSelect,
+  type TriggerValue
+} from './components/selectors'
 import { pickAndCreateProject } from './lib/projects'
 import { fromDatetimeLocal } from './lib/time'
 
@@ -15,6 +21,8 @@ export function CaptureApp(): React.JSX.Element {
   const [trigger, setTrigger] = useState<TriggerValue>({ triggerType: 'none', triggerAtLocal: '' })
   const [agent, setAgent] = useState<AgentId | ''>('')
   const [subAgent, setSubAgent] = useState<AgentId | ''>('')
+  const [planMode, setPlanMode] = useState<PlanMode>('full')
+  const [worktreeMode, setWorktreeMode] = useState<WorktreeMode>('isolated')
   const [projectId, setProjectId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -46,6 +54,8 @@ export function CaptureApp(): React.JSX.Element {
         // 子智能体依赖主智能体,仅在主恢复成功时一并恢复
         if (usable(uiState.lastSubAgent)) setSubAgent(uiState.lastSubAgent)
       }
+      setPlanMode(uiState.lastPlanMode)
+      setWorktreeMode(uiState.lastWorktreeMode)
     }
   }, [])
 
@@ -105,13 +115,17 @@ export function CaptureApp(): React.JSX.Element {
         projectId,
         agent: agent || null,
         subAgent: (agent && subAgent) || null,
+        planMode,
+        worktreeMode,
         triggerType: trigger.triggerType,
         triggerAt
       })
       await window.dispatchApi.invoke('ui-state:set', {
         lastAgent: agent || null,
         lastSubAgent: (agent && subAgent) || null,
-        lastProjectId: projectId
+        lastProjectId: projectId,
+        lastPlanMode: planMode,
+        lastWorktreeMode: worktreeMode
       })
       setText('')
       setError(null)
@@ -163,6 +177,18 @@ export function CaptureApp(): React.JSX.Element {
             setSubAgent(nextAgent ? nextSub : '')
           }}
         />
+        <div className="capture-pop" title="方案档位">
+          <LayersIcon />
+          <PlanModeSelect
+            value={planMode}
+            onChange={setPlanMode}
+            disabled={Boolean(agent && subAgent)}
+          />
+        </div>
+        <div className="capture-pop" title="工作区">
+          <BranchIcon />
+          <WorktreeModeSelect value={worktreeMode} onChange={setWorktreeMode} />
+        </div>
         <div className="capture-pop" title="项目">
           <FolderIcon />
           <ProjectSelect

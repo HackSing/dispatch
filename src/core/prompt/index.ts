@@ -82,3 +82,22 @@ export function renderPrompt(template: string, vars: PromptVars): string {
     (_, name: PromptVarName) => (vars as Partial<Record<PromptVarName, string>>)[name] ?? '无'
   )
 }
+
+/**
+ * 当前工作区模式(worktreeMode='current')的执行提示词补充段,由执行器追加在渲染后的
+ * 提示词末尾。不走模板占位符:内置模板正文按「独立 worktree」措辞写成且为用户可编辑真源
+ * (缺失才从内置拷贝,已装用户不会自动更新),占位符方案对存量模板不生效;
+ * 追加段对全部模板版本一律成立,并显式声明冲突时以本节为准。
+ */
+export function currentWorkspaceAddendum(projectPath: string): string {
+  return `
+
+## 工作区模式补充(Dispatch 注入,与上文冲突时以本节为准)
+
+本任务由用户指定在项目**主工作区**直接执行,不是从基线分支切出的独立 worktree:
+
+1. 工作目录 ${projectPath} 就是项目主工作区,检出的是用户当前正在使用的分支;任务结束后不经过合并,也不做任何清理。
+2. 严禁 commit、push、切换或新建分支、merge、rebase、reset 等 git 写操作;任务原文明确要求的 git 操作(如拉取更新、同步远端)除外。
+3. 所有改动完成后留在工作区,由用户自行检视;result.json 的 files_changed 照常如实列出。
+`
+}
