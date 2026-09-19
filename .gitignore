@@ -9,3 +9,7 @@ coverage/
 .zcode/
 __pycache__/
 *.py[cod]
+
+# 视频插件(video2code / video-agent-kit)SessionStart 钩子留下的工具戳
+.v2c/
+.video_agent/
