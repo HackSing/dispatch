@@ -27,7 +27,7 @@ import {
 import { createProject } from '@core/project-ops'
 import { cleanupTaskWorkspace } from '@core/executor/cleanup'
 import { readTaskArchive } from '@core/archive/read'
-import { getDialogParent, hideCaptureWindow, withCaptureAutoHideSuspended } from './windows'
+import { getDialogParent, hideCaptureWindow, showCaptureWindow, withCaptureAutoHideSuspended } from './windows'
 import type { AppContext } from './context'
 import type { ExecutionService } from './execution'
 import type { SessionService } from './session-service'
@@ -256,6 +256,8 @@ export function registerIpcHandlers(
   handle('ui-state:set', (patch) => saveUiState(ctx.paths.uiStateFile, patch))
 
   handle('capture:hide', () => hideCaptureWindow())
+
+  handle('capture:show', () => showCaptureWindow())
 }
 
 function terminalCwd(ctx: AppContext, sessions: SessionService, task: Task): string {

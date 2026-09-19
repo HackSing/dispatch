@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+### 实时日志修复:方案阶段即可看到 agent 输出(2026-09-19)
+- 根因:执行器在 `running` 迁移之后才建归档目录,`archive_dir` 直到 awaiting_confirm 才入库——期间 `task:archive` 轮询拿不到归档路径,详情页「执行日志(实时)」整段空白(79a5c9c5 实录:方案阶段 5 分钟全程"暂无过程输出")
+- 修复:Phase 0 建归档后即刻经新增 `TaskStore.setArchiveDir` 入库(running 态记账,不触发 onChange);磁盘上的 output.log 本就逐事件落盘,无需改写盘机制(其间曾怀疑 fs.WriteStream 攒盘并重写为同步追加,插桩证明误判后已回滚)
+- 验证:真实微型任务 4.1s 日志首次可见、运行期持续增长;新增 executor 回归单测(running 中 archiveDir 必须非空)
+
+### 合并闸精确化:未跟踪文件不碰撞即放行(2026-09-19)
+- 此前 `advanceBase` 对主检出区任何 porcelain 脏条目(含未跟踪文件)一律 base_dirty 拦停;实录 79a5c9c5 被两个与 incoming 提交零交集的插件目录(.v2c/.video_agent)挡停 10 分钟,而快进根本不写未跟踪路径
+- 新增 `inspectDirty` 拆分 tracked/untracked:tracked 改动仍拦;仅未跟踪时与 incoming diff(`git diff --name-only <base> <task>`)求路径交集,无交集放行(目录坍缩形态按前缀匹配;git 自身对真实碰撞仍拒绝,双保险)
+- `awaiting_merge` 的 failReason 携带挡路条目(`base_dirty: <文件,前5个,等N项>`),详情页人话展示"先处理这些条目再重试合并",不再让用户猜
+- 回归测试:未跟踪放行/文件碰撞/目录坍缩碰撞/tracked 仍拦四态;既有 base_dirty 断言(tracked 场景)全部保持
+
+### 修复:方案讨论会话并发双开泄漏孤儿进程(2026-09-19)
+- StrictMode 开发期双挂载 × `SessionService.openPlanDiscussion` 幂等检查与登记之间的 await 窗口 → 同任务同秒拉起两个 `claude --resume`,未入表的孤儿进程退出应用也不回收(79a5c9c5 实录 PID 79824/79825)
+- 修复:开启过程以 in-flight promise 共享(`discussionOpens` 表),并发调用复用同一次 start;新增并发双开单测(start 仅一次、结果同源)
+
+### 主窗右下角新增「新建任务」悬浮入口(2026-09-19)
+- 此前主窗只能新建项目,新建任务仅全局快捷键一条路,不可发现;现于主窗右下角增加悬浮按钮,点击经新增 `capture:show` IPC 通道唤起与快捷键同一捕获窗(无项目空态同样可见)
+- 按钮提示展示当前全局快捷键;层级置于看板内容之上、抽屉与确认框之下
+
 ### 修复:确认框失效导致删除/放弃等危险操作无反应(2026-08-29)
 - 根因:渲染进程(Electron sandbox)下原生 `window.confirm` 点「OK」也同步返回 `false`(实测复现:confirm-return=false,删除 IPC 从未发出),所有以它为闸的操作(删除任务/放弃任务/移除项目/会话完成与放弃)静默无效
 - 修复:新增应用内确认对话框 `useConfirmDialog`(`ConfirmDialog.tsx`),四处用法全部替换;支持 Esc 取消 / Enter 确认 / 点遮罩取消,危险操作红色确认按钮

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -174,6 +174,64 @@ describe('retryMerge — conflict 起点(手动)', () => {
     const report = readFileSync(join(task.archiveDir as string, 'conflict-report.md'), 'utf-8')
     expect(report).toContain('second conflicting change on main')
   }, 30_000)
+})
+
+describe('retryMerge — 未跟踪文件精确放行(合并闸收紧的反向:不碰撞即放行)', () => {
+  /** 造「仅未跟踪脏」:主检出区预置未跟踪条目,mock 按 MOCK_FILE 提交 incoming 文件 */
+  async function makeUntrackedOnly(project: Project, untrackedSetup: () => void, mockFile: string): Promise<Task> {
+    process.env.MOCK_MODE = 'success'
+    process.env.MOCK_FILE = mockFile
+    process.env.MOCK_CONTENT = 'from-task'
+    untrackedSetup()
+    const task = createTask(project.id)
+    return planConfirmRun(task)
+  }
+
+  it('未跟踪文件与 incoming 无交集 → 直接 done,未跟踪文件原样保留', async () => {
+    const project = createProject()
+    const result = await makeUntrackedOnly(
+      project,
+      () => {
+        writeFileSync(join(repo, 'other.txt'), 'user file\n')
+        mkdirSync(join(repo, 'other-dir'))
+        writeFileSync(join(repo, 'other-dir', 'n.txt'), 'nested\n')
+      },
+      'file.txt'
+    )
+    expect(result.status).toBe('done')
+    expect(result.failReason).toBeNull()
+    expect(readFileSync(join(repo, 'other.txt'), 'utf-8')).toBe('user file\n')
+    expect(readFileSync(join(repo, 'other-dir', 'n.txt'), 'utf-8')).toBe('nested\n')
+    expect(readFileSync(join(repo, 'file.txt'), 'utf-8')).toBe('from-task\n')
+  }, 20_000)
+
+  it('未跟踪文件与 incoming 新增路径同名碰撞 → awaiting_merge,failReason 列出挡路文件', async () => {
+    const project = createProject()
+    const result = await makeUntrackedOnly(
+      project,
+      () => writeFileSync(join(repo, 'newfile.txt'), 'user local version\n'),
+      'newfile.txt'
+    )
+    expect(result.status).toBe('awaiting_merge')
+    expect(result.failReason).toBe('base_dirty: newfile.txt')
+    // 用户未跟踪文件分毫未动
+    expect(readFileSync(join(repo, 'newfile.txt'), 'utf-8')).toBe('user local version\n')
+  }, 20_000)
+
+  it('整体未跟踪目录(坍缩形态)内有 incoming 路径 → 按目录前缀拦截', async () => {
+    const project = createProject()
+    const result = await makeUntrackedOnly(
+      project,
+      () => {
+        mkdirSync(join(repo, 'sub'))
+        writeFileSync(join(repo, 'sub', 'keep.txt'), 'user nested\n')
+      },
+      'sub/x.txt'
+    )
+    expect(result.status).toBe('awaiting_merge')
+    expect(result.failReason).toBe('base_dirty: sub/')
+    expect(readFileSync(join(repo, 'sub', 'keep.txt'), 'utf-8')).toBe('user nested\n')
+  }, 20_000)
 })
 
 describe('retryMerge — 边界', () => {

@@ -14,6 +14,7 @@
 - [项目看板列拖拽排序(桌面端 + dsh 插件)](plans/project-column-drag-reorder.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-23 核对）；关键符号：`project:reorder`、`ProjectStore.reorder`、`sort_order`、`ProjectColumn`
 - [B5 Windows 适配:platform 层 win32 实现与全链路 Windows 可用](plans/b5-windows-adaptation.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-25 核对）；关键符号：`win32Ops`、`PlatformOps`、`spawnShellDetached`、`getPlatformOps`
 - [方案确认闸:任务执行前的用户确认与多轮方案讨论](plans/plan-confirmation.md) — 状态：已实施-仅追溯（代码已是真源，2026-08-29 核对）；关键符号：`awaiting_confirm`、`PlanDiscussionSession`、`task:confirm-plan`、`runPlanPhase`
+- [合并闸精确化与会话/日志两缺陷修复](plans/merge-gate-and-session-log-fixes.md) — 状态：已实施-仅追溯（代码已是真源，2026-09-19 核对）；关键符号：`inspectDirty`、`advanceBase`、`openPlanDiscussion`、`blockingFiles`
 <!-- docs-harness:plans-index:end -->
 
 <!-- docs-harness:knowledge-index:start -->

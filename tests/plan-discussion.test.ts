@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import { openDatabase, ProjectStore, TaskStore } from '@core/db'
 import { AgentConfigSchema, loadConfig } from '@core/config'
@@ -12,6 +12,12 @@ import { GenericCliAdapter } from '@core/agents/generic-cli-adapter'
 import { RoundTimeoutError, type RoundResult } from '@core/agents/session-transport'
 import { runTask, Semaphore, KeyedLock, type ExecutorDeps } from '@core/executor'
 import { PlanDiscussionSession } from '@core/executor/plan-discussion'
+import { SessionService } from '../src/shell/session-service'
+
+vi.mock('electron-log/main', () => ({
+  default: { info: () => {}, warn: () => {}, error: () => {} }
+}))
+vi.mock('../src/shell/ipc-handlers', () => ({ broadcast: vi.fn() }))
 import type { FollowUpEvents, SessionCloseReason } from '@core/executor/follow-up'
 import type { Project, Task } from '@shared/types'
 import { makeGitRepo } from './fixtures/git-repo'
@@ -236,4 +242,26 @@ describe('PlanDiscussionSession 真实 stream 会话', () => {
     expect(session.open).toBe(false)
     expect((tasks.get(paused.id) as Task).status).toBe('awaiting_confirm')
   }, 15_000)
+})
+
+describe('SessionService.openPlanDiscussion 并发幂等(孤儿进程回归)', () => {
+  it('并发双开只 start 一个会话,两调用共享同一结果;已开再开仍幂等', async () => {
+    const project = createProject()
+    const paused = await runToAwaitingConfirm(project.id)
+    const svc = new SessionService(deps)
+    const startSpy = vi.spyOn(PlanDiscussionSession, 'start')
+
+    // StrictMode 双挂载形态:两次调用落在 start 的 await 窗口内
+    const [a, b] = await Promise.all([svc.openPlanDiscussion(paused.id), svc.openPlanDiscussion(paused.id)])
+    expect(startSpy).toHaveBeenCalledTimes(1)
+    expect(a).toBe(b)
+    expect(a.busy).toBe(false)
+
+    // 已开着再开:直接返回现有会话状态
+    const again = await svc.openPlanDiscussion(paused.id)
+    expect(startSpy).toHaveBeenCalledTimes(1)
+    expect(again.busy).toBe(false)
+
+    svc.closePlanDiscussion(paused.id)
+  }, 20_000)
 })

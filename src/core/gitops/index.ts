@@ -82,6 +82,36 @@ export async function isDirty(dir: string): Promise<boolean> {
   return (await statusPorcelain(dir)).trim().length > 0
 }
 
+export interface DirtyState {
+  /** 已跟踪文件的改动/暂存/删除条目(porcelain 原文) */
+  tracked: string[]
+  /** 未跟踪条目;整体未跟踪的目录保留 git 的坍缩形态(以 / 结尾) */
+  untracked: string[]
+}
+
+/** 合并闸专用:把脏区拆成 tracked 与 untracked 两类,供「未跟踪不碰撞即放行」判定 */
+export async function inspectDirty(dir: string): Promise<DirtyState> {
+  const lines = (await statusPorcelain(dir)).split('\n').filter((l) => l.trim().length > 0)
+  const tracked: string[] = []
+  const untracked: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('?? ')) untracked.push(line.slice(3).trim())
+    else tracked.push(line)
+  }
+  return { tracked, untracked }
+}
+
+/**
+ * 未跟踪条目与 incoming 文件的碰撞检测:条目命中即被挡。
+ * 条目是文件时按相等,是坍缩目录(dir/ 结尾)时按目录前缀;incoming 一律是文件路径。
+ */
+function collidingUntracked(untracked: string[], incoming: string[]): string[] {
+  return untracked.filter((u) => {
+    const prefix = u.endsWith('/') ? u : `${u}/`
+    return incoming.some((p) => p === u || p.startsWith(prefix))
+  })
+}
+
 /**
  * 工作区未提交改动整体入一笔提交,干净时 no-op 返回 false。
  * 会话面板收尾专用:交互轮次不承诺提交纪律,而合并只认提交——
@@ -127,7 +157,12 @@ export interface MergeFlowOptions {
 export type MergeOutcome =
   | { kind: 'merged'; mode: 'update_ref' | 'ff_forward' }
   | { kind: 'conflict'; files: string[] }
-  | { kind: 'awaiting_merge'; reason: 'base_dirty' | 'base_checked_out_elsewhere' }
+  | {
+      kind: 'awaiting_merge'
+      reason: 'base_dirty' | 'base_checked_out_elsewhere'
+      /** reason=base_dirty 且纯未跟踪碰撞时列出挡路条目;tracked 改动拦截时不带 */
+      blockingFiles?: string[]
+    }
 
 /**
  * spec §7.3 + dev-plan §0 修正 2:先在 task worktree 内 merge base(冲突即 abort),
@@ -181,7 +216,21 @@ async function advanceBase(o: MergeFlowOptions): Promise<MergeOutcome> {
     return { kind: 'merged', mode: 'update_ref' }
   }
   if (holder !== entries[0]) return { kind: 'awaiting_merge', reason: 'base_checked_out_elsewhere' }
-  if (await isDirty(holder.path)) return { kind: 'awaiting_merge', reason: 'base_dirty' }
+  const dirty = await inspectDirty(holder.path)
+  if (dirty.tracked.length > 0) return { kind: 'awaiting_merge', reason: 'base_dirty' }
+  if (dirty.untracked.length > 0) {
+    // 快进只写 incoming 涉及的 tracked 路径;未跟踪条目与 incoming 无路径交集时不构成阻挡。
+    // 判定漏判时 git 自身对「未跟踪文件会被覆盖」仍拒绝,双重防线。
+    const incoming = (
+      await git(['diff', '--name-only', `refs/heads/${o.baseBranch}`, `refs/heads/${o.branch}`], o.projectPath)
+    )
+      .split('\n')
+      .filter((f) => f.length > 0)
+    const blocking = collidingUntracked(dirty.untracked, incoming)
+    if (blocking.length > 0) {
+      return { kind: 'awaiting_merge', reason: 'base_dirty', blockingFiles: blocking }
+    }
+  }
   await git(['merge', '--ff-only', o.branch], holder.path)
   return { kind: 'merged', mode: 'ff_forward' }
 }

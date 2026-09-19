@@ -342,6 +342,23 @@ export class TaskStore {
   }
 
   /**
+   * 归档目录落库,仅 running 状态允许(executor 在 Phase 0 建目录后立刻写入)。
+   * 不触发 onChange:属运行中记账;task:archive 轮询每次直读 DB,详情页据此在方案阶段
+   * 就能读到 output.log 尾部——若不提前入库,方案阶段归档路径为空,实时日志整段空白。
+   */
+  setArchiveDir(id: string, archiveDir: string): Task {
+    const current = this.get(id)
+    if (!current) throw new Error(`task not found: ${id}`)
+    if (current.status !== 'running') {
+      throw new Error(`任务状态 ${current.status} 不允许写入 archiveDir`)
+    }
+    this.db.prepare('UPDATE tasks SET archive_dir = @archiveDir WHERE id = @id').run({ id, archiveDir })
+    const updated = this.get(id)
+    if (!updated) throw new Error(`task disappeared during setArchiveDir: ${id}`)
+    return updated
+  }
+
+  /**
    * 原地重跑的前置清场,仅 failed 允许:清空上一轮执行期字段(含 phase/reviewRound,
    * 否则工作流重跑会撞 setPhase 单调递增守卫)并把触发改为 immediate。
    * 不触发 onChange:紧随其后的 failed→scheduled 迁移会广播整任务。

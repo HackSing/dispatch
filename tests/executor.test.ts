@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import { openDatabase, ProjectStore, TaskStore } from '@core/db'
 import { AgentConfigSchema, loadConfig } from '@core/config'
@@ -322,6 +322,31 @@ describe('runTask 八条路径(方案确认闸两跑)', () => {
 })
 
 describe('runTask 补充路径', () => {
+  it('方案阶段归档目录即刻入库:running 中 archiveDir 非空(实时日志轮询的前提)', async () => {
+    process.env.MOCK_MODE = 'hang'
+    const project = createProject()
+    const task = createTask(project.id)
+    const running = runTask(deps, task.id) // 不等待:方案跑被 mock 挂住
+
+    // Phase 0(建归档)先于 agent 启动,running 中 archiveDir 就必须可读——
+    // 否则 task:archive 轮询整段拿不到 output.log,详情页实时日志全程空白
+    await vi.waitFor(
+      () => {
+        expect(tasks.get(task.id)?.archiveDir).not.toBeNull()
+      },
+      { timeout: 10_000, interval: 100 }
+    )
+    // 结束挂死的 mock(hang 在归档目录写 pid),让 runTask 落到终态
+    const archiveDir = tasks.get(task.id)!.archiveDir as string
+    await vi.waitFor(
+      () => expect(existsSync(join(archiveDir, 'mock.pid'))).toBe(true),
+      { timeout: 10_000, interval: 100 }
+    )
+    process.kill(Number(readFileSync(join(archiveDir, 'mock.pid'), 'utf-8').trim()))
+    const result = await running
+    expect(result.status).toBe('failed')
+  }, 20_000)
+
   it('base 未被任何 worktree 检出 → update-ref 推进,主工作区不动', async () => {
     process.env.MOCK_MODE = 'success'
     git(repo, ['checkout', '-b', 'other'])

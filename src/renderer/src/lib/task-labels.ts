@@ -95,5 +95,7 @@ export function humanFailReason(reason: string): string {
   if (reason.startsWith('round_error: ')) return `轮次失败:${reason.slice('round_error: '.length)}`
   if (reason.startsWith('internal: ')) return `内部错误:${reason.slice('internal: '.length)}`
   if (reason.startsWith('merge_retry: ')) return `合入失败,待重试:${reason.slice('merge_retry: '.length)}`
+  if (reason.startsWith('base_dirty: '))
+    return `基线有未跟踪改动挡路,先处理这些条目再重试合并:${reason.slice('base_dirty: '.length)}`
   return reason
 }

@@ -174,6 +174,8 @@ export interface InvokeMap {
   'ui-state:get': { req: void; res: UiState }
   'ui-state:set': { req: Partial<UiState>; res: UiState }
   'capture:hide': { req: void; res: void }
+  /** 主窗「新建任务」入口唤起捕获窗(与全局快捷键同一入口) */
+  'capture:show': { req: void; res: void }
 }
 
 /** 事件型通道:主进程广播 → 渲染层订阅 */
@@ -227,7 +229,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'agent:refresh',
   'ui-state:get',
   'ui-state:set',
-  'capture:hide'
+  'capture:hide',
+  'capture:show'
 ]
 export const EVENT_CHANNELS: readonly EventChannel[] = [
   'task:changed',

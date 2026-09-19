@@ -74,6 +74,14 @@ export function App(): React.JSX.Element {
     })
   }
 
+  // Electron accelerator 直出不可读:CommandOrControl 按平台转写(macOS 实际运行值来自 config)
+  const hotkeyHint = store.hotkey
+    ? store.hotkey.accelerator.replace(
+        'CommandOrControl',
+        store.status?.platform === 'darwin' ? 'Cmd' : 'Ctrl'
+      )
+    : '全局快捷键'
+
   return (
     <div className="app">
       {store.hotkey && !store.hotkey.registered && (
@@ -180,6 +188,14 @@ export function App(): React.JSX.Element {
           </main>
         </>
       )}
+      {/* 右下角「新建任务」悬浮入口:唤起与全局快捷键同一捕获窗 */}
+      <button
+        className="fab"
+        title={`新建任务(${hotkeyHint})`}
+        onClick={() => void window.dispatchApi.invoke('capture:show', undefined)}
+      >
+        <PlusIcon /> 新建任务
+      </button>
       {detailTask && (
         <TaskDetail
           task={detailTask}

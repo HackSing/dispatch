@@ -16,7 +16,8 @@ import {
   isGitRepo,
   mergeFlow,
   removeWorktree,
-  writeConflictReport
+  writeConflictReport,
+  type MergeOutcome
 } from '@core/gitops'
 import type { KeyedLock, Semaphore, TaskCancellations } from './locks'
 import { runWorkflow, type WorkflowHost } from './workflow'
@@ -123,6 +124,9 @@ async function execute(deps: ExecutorDeps, task: Task, project: Project): Promis
     vcs: info.git ? 'git' : 'no_vcs',
     now: now()
   })
+  // 归档目录即刻入库:否则方案阶段 task.archiveDir 为空,task:archive 轮询读不到
+  // output.log,详情页「执行日志(实时)」整段空白(79a5c9c5 实录)
+  deps.tasks.setArchiveDir(task.id, archiveDir)
   const ctx: ExecContext = {
     deps,
     task: running,
@@ -432,8 +436,18 @@ export async function mergeAndFinish(ctx: ExecContext): Promise<Task> {
   }
   return ctx.deps.tasks.transition(ctx.task.id, 'awaiting_merge', {
     finishedAt,
-    failReason: outcome.reason
+    failReason: awaitingMergeFailReason(outcome)
   })
+}
+
+/** awaiting_merge 的 failReason:纯未跟踪碰撞时附带挡路条目(前 5 个),UI 直读免猜 */
+function awaitingMergeFailReason(outcome: Extract<MergeOutcome, { kind: 'awaiting_merge' }>): string {
+  if (outcome.reason === 'base_dirty' && outcome.blockingFiles?.length) {
+    const shown = outcome.blockingFiles.slice(0, 5).join(', ')
+    const more = outcome.blockingFiles.length > 5 ? ` 等${outcome.blockingFiles.length}项` : ''
+    return `base_dirty: ${shown}${more}`
+  }
+  return outcome.reason
 }
 
 export function finishNoVcs(ctx: ExecContext): Task {
@@ -491,7 +505,9 @@ export async function retryMerge(deps: ExecutorDeps, taskId: string): Promise<Ta
       }
       return deps.tasks.transition(task.id, 'conflict')
     }
-    return deps.tasks.transition(task.id, 'awaiting_merge', { failReason: outcome.reason })
+    return deps.tasks.transition(task.id, 'awaiting_merge', {
+      failReason: awaitingMergeFailReason(outcome)
+    })
   } catch (e) {
     // 非预期 git 错误(如用户 worktree 中 merge 未收尾):宁可误停,worktree 保留供排查
     return deps.tasks.transition(task.id, 'failed', {

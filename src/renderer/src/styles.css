@@ -353,6 +353,31 @@ button {
   color: #4644b8;
 }
 
+/* ── 右下角「新建任务」悬浮入口(视觉沿用 .btn 语言,固定于内容流之外) ── */
+
+.fab {
+  position: fixed;
+  right: 22px;
+  bottom: 20px;
+  z-index: 10; /* 盖过看板内容,低于抽屉(20/30)与确认框(40) */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 17px;
+  background: #fff;
+  border: 0.5px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+  color: #1d1d1f;
+  white-space: nowrap;
+}
+
+.fab:hover {
+  background: #f5f5f7;
+}
+
 /* ── 按钮(mac 推按钮) ───────────────── */
 
 .btn {

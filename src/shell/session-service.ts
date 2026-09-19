@@ -68,23 +68,34 @@ export class SessionService {
    * 开启方案讨论会话(幂等:同一任务已开着直接返回)。进展与失败均经 task:session-event 广播;
    * onClosed 只从讨论表摘除并广播,绝不迁移任务状态(任务保持 awaiting_confirm)。
    * 返回当前轮次忙碌态,供详情页重开时恢复输入闸门(busy 不进任务状态,重开详情只能靠此拿回)。
+   * 并发开启共享同一 in-flight promise:start 的 await 窗口内重复调用不再各自拉起进程
+   * (StrictMode 双挂载实录:曾同秒双 spawn claude --resume,一个泄漏为孤儿)。
    */
+  private readonly discussionOpens = new Map<string, Promise<{ busy: boolean }>>()
+
   async openPlanDiscussion(taskId: string): Promise<{ busy: boolean }> {
     const existing = this.discussions.get(taskId)
     if (existing) return { busy: existing.busy }
-    const session = await PlanDiscussionSession.start(this.deps, taskId, {
-      onRoundStart: (task, round) =>
-        broadcast('task:session-event', { taskId: task.id, kind: 'round-start', round }),
-      onChunk: (id, text) => broadcast('task:session-event', { taskId: id, kind: 'chunk', text }),
-      onRoundResult: (task, round, result) =>
-        broadcast('task:session-event', { taskId: task.id, kind: 'round-result', round, result }),
-      onClosed: (task, reason) => {
-        this.discussions.delete(task.id)
-        broadcast('task:session-event', { taskId: task.id, kind: 'closed', reason })
-      }
-    })
-    this.discussions.set(taskId, session)
-    return { busy: session.busy }
+    const inFlight = this.discussionOpens.get(taskId)
+    if (inFlight) return inFlight
+    const opening = (async (): Promise<{ busy: boolean }> => {
+      const session = await PlanDiscussionSession.start(this.deps, taskId, {
+        onRoundStart: (task, round) =>
+          broadcast('task:session-event', { taskId: task.id, kind: 'round-start', round }),
+        onChunk: (id, text) => broadcast('task:session-event', { taskId: id, kind: 'chunk', text }),
+        onRoundResult: (task, round, result) =>
+          broadcast('task:session-event', { taskId: task.id, kind: 'round-result', round, result }),
+        onClosed: (task, reason) => {
+          this.discussions.delete(task.id)
+          broadcast('task:session-event', { taskId: task.id, kind: 'closed', reason })
+        }
+      })
+      this.discussions.set(taskId, session)
+      return { busy: session.busy }
+    })()
+    this.discussionOpens.set(taskId, opening)
+    void opening.catch(() => {}).finally(() => this.discussionOpens.delete(taskId))
+    return opening
   }
 
   /** 契约:同步校验后立即返回,轮次进展与失败均经 task:session-event 广播 */
