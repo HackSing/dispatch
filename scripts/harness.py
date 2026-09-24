@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Docs Harness 2.9.0：默认直跑，按需管理四类资产生命周期。"""
+"""Docs Harness：默认直跑，按需管理四类资产生命周期。"""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ from usage_log import (
     is_enabled as usage_log_enabled,
 )
 from usage_report import USAGE_REPORT_DEFAULT_DAYS, build_report as build_usage_report
-VERSION = "2.21.1"
+VERSION = "2.22.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -3074,7 +3074,13 @@ def project_changes(target: Path, source_root: Path) -> list[dict[str, Any]]:
         changes.append({"path": ".docs-harness/config.json", "action": "create"})
     elif existing != expected_config:
         changes.append({"path": ".docs-harness/config.json", "action": "update"})
-    return changes
+    # docs/INDEX.md 承载四类资产各自的索引区块，各结构检查会分别登记同一条变更；
+    # 清单描述的是文件级动作，完全相同的条目只保留首次出现。
+    unique: list[dict[str, Any]] = []
+    for item in changes:
+        if item not in unique:
+            unique.append(item)
+    return unique
 
 
 def apply_project_install(
@@ -3525,10 +3531,10 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         from_version = existing.get("version") if existing else None
         cleanup = legacy_cleanup_plan(target)
         changes = project_changes(target, source_root)
-        if args.action == "upgrade" and not args.apply:
+        if not args.apply:
             notices = usage_enabled_notices(existing, USAGE_LOG_DEFAULT_ENABLED)
             return 0, {
-                "action": "upgrade",
+                "action": args.action,
                 "mode": "preview",
                 "target": str(target),
                 "source": str(source_root),
@@ -4676,7 +4682,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("init", "upgrade", "check", "diff", "uninstall"),
     )
     add_target(project)
-    project.add_argument("--apply", action="store_true")
+    project.add_argument(
+        "--apply",
+        action="store_true",
+        help="init/upgrade/uninstall 只有带上它才写入；不带时只预览，不落任何文件",
+    )
     project.add_argument("--purge-runtime", action="store_true")
     project.add_argument(
         "--source",
