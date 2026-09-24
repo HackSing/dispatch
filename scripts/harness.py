@@ -70,7 +70,7 @@ from usage_log import (
     is_enabled as usage_log_enabled,
 )
 from usage_report import USAGE_REPORT_DEFAULT_DAYS, build_report as build_usage_report
-VERSION = "2.22.0"
+VERSION = "2.23.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -699,6 +699,52 @@ def git_hook_directory(target: Path) -> Path | None:
     return common / "hooks"
 
 
+GITHOOK_INDEX_FIX_COMMAND = (
+    "git update-index --chmod=+x scripts/githooks/pre-commit scripts/githooks/setup.sh"
+)
+
+
+def register_githook_index_mode(target: Path) -> list[str]:
+    """core.filemode=false 的仓库里把受管钩子以 100755 登记进索引，返回登记的路径。
+
+    filemode=false（Windows 默认）时 git 首次登记新文件读不到磁盘可执行位，钩子会以
+    100644 入库，类 Unix 克隆上不执行；已入库条目的模式此后被沿用，所以只需在索引缺失
+    或非 100755 时登记一次。副作用：这两个文件的内容随之进入暂存区。filemode=true 时
+    git 按磁盘可执行位入库（安装器已 chmod +x），被 git 忽略的钩子路径不强行加入索引。
+    """
+    root = git_root(target)
+    if root is None:
+        return []
+    filemode = git_command(root, "config", "--get", "core.filemode")
+    if filemode.stdout.decode("utf-8", errors="replace").strip().lower() != "false":
+        return []
+    hook_paths = [f"{GIT_HOOKS_RELATIVE}/{relative}" for relative in GIT_HOOK_RELATIVE_FILES]
+    ignored = set(git_ignored_install_paths(target, hook_paths))
+    registered: list[str] = []
+    for relative in hook_paths:
+        path = target / relative
+        if relative in ignored or not path.is_file():
+            continue
+        git_relative = path.resolve().relative_to(root).as_posix()
+        listed = git_command(root, "ls-files", "-s", "--", git_relative)
+        mode = listed.stdout.decode("utf-8", errors="replace").split(None, 1)[:1]
+        if mode == ["100755"]:
+            continue
+        result = git_command(
+            root, "update-index", "--add", "--chmod=+x", "--", git_relative
+        )
+        if result.returncode != 0:
+            raise HarnessError(
+                f"钩子可执行位登记失败（{relative}）："
+                + result.stderr.decode("utf-8", errors="replace").strip()
+                + f"；请手工执行：{GITHOOK_INDEX_FIX_COMMAND}",
+                code="githook_index_mode_failed",
+                exit_code=1,
+            )
+        registered.append(relative)
+    return registered
+
+
 def check_githook_health(target: Path, findings: list[dict[str, str]]) -> None:
     """钩子健康检查（yellow）：受管钩子入库可执行位 + hooksPath 屏蔽冲突。
 
@@ -728,7 +774,8 @@ def check_githook_health(target: Path, findings: list[dict[str, str]]) -> None:
                     "severity": "yellow",
                     "code": "githook_index_mode",
                     "message": "受管钩子入库模式非 100755，类 Unix 克隆上不会执行："
-                    + ", ".join(sorted(non_executable)),
+                    + ", ".join(sorted(non_executable))
+                    + f"；修复：{GITHOOK_INDEX_FIX_COMMAND} 后提交",
                 }
             )
     hooks_dir = git_hook_directory(target)
@@ -3550,6 +3597,7 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
                 **({"notices": notices} if notices else {}),
             }
         changed, cleanup_applied = apply_project_install(target, source_root)
+        githook_index_registered = register_githook_index_mode(target)
         findings = project_findings(target)
         red = [item for item in findings if item["severity"] == "red"]
         delivery = project_delivery(target)
@@ -3582,6 +3630,8 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
                 "如需启用入库 pre-commit（提交时执行 assets-check --fast），"
                 "请执行一次 scripts/githooks/setup.sh"
             ),
+            # core.filemode=false 时已把这些钩子以 100755 登记进暂存区（内容一并暂存）。
+            "githook_index_mode_registered": githook_index_registered,
             "findings": findings,
             "legacy_document_cleanup": cleanup_applied,
             "preserved_existing_docs": True,
