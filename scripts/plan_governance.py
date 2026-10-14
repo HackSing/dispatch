@@ -199,7 +199,22 @@ def governance_from_content(level: str, content: dict[str, Any]) -> dict[str, An
         "updated_knowledge_refs": [],
         "unchanged_reason": None,
         "governance_settled_at": None,
+        "amend_log": [],
     }
+
+
+def _validate_amend_log(entries: Any) -> None:
+    if entries is None:
+        return
+    if not isinstance(entries, list):
+        raise PlanGovernanceError("Plan amend_log 必须是数组", "invalid_plan_ref")
+    for item in entries:
+        if not isinstance(item, dict):
+            raise PlanGovernanceError("Plan amend_log 项必须是对象", "invalid_plan_ref")
+        for key in ("amended_at", "reason", "fingerprint_before", "fingerprint_after"):
+            value = item.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise PlanGovernanceError(f"Plan amend_log 缺少有效 {key}", "invalid_plan_ref")
 
 
 def _validate_governance_state(governance: dict[str, Any]) -> None:
@@ -224,6 +239,7 @@ def _validate_governance_state(governance: dict[str, Any]) -> None:
             raise PlanGovernanceError("unchanged 治理不得登记 Knowledge 引用", "invalid_plan_ref")
     elif refs or reason is not None:
         raise PlanGovernanceError("未结算 unchanged 治理状态无效", "invalid_plan_ref")
+    _validate_amend_log(governance.get("amend_log"))
 
 
 def validate_plan(value: Any) -> dict[str, Any]:
@@ -231,6 +247,10 @@ def validate_plan(value: Any) -> dict[str, Any]:
         raise PlanGovernanceError("方案冻结合同无效", "invalid_plan_ref")
     if value.get("plan_fingerprint") != plan_fingerprint(value):
         raise PlanGovernanceError("方案冻结合同指纹无效", "invalid_plan_ref")
+    last_amended = value.get("last_amended_at")
+    if last_amended is not None and not isinstance(last_amended, str):
+        raise PlanGovernanceError("Plan last_amended_at 无效", "invalid_plan_ref")
+    _validate_amend_log(value.get("amend_log"))
     if value["schema_version"] == PLAN_SCHEMA_V2:
         return value
     refs = value.get("acceptance_refs")
@@ -260,6 +280,19 @@ def new_plan_fields(level: str, content: dict[str, Any]) -> dict[str, Any]:
     if governance is not None:
         fields["governance"] = governance
     return fields
+
+
+def plan_amend_notice_line(frozen: dict[str, Any]) -> str:
+    governance = frozen.get("governance")
+    log: list[Any] = []
+    if isinstance(governance, dict):
+        log = list(governance.get("amend_log") or [])
+    if not log:
+        log = list(frozen.get("amend_log") or [])
+    if not log:
+        return ""
+    last = log[-1]
+    return f"> 最近修订：{last['amended_at'][:10]} — {last['reason']}\n"
 
 
 def render_governance_block(frozen: dict[str, Any]) -> str:
@@ -354,6 +387,79 @@ def remove_acceptance_ref(
     return _update_acceptance_ref(
         target, plan_ref, acceptance_ref, False, allow_archived=allow_archived_plan
     )
+
+
+def _seal_amend_log_fixed_point(sealed: dict[str, Any]) -> dict[str, Any]:
+    for _ in range(8):
+        fingerprint = sealed["plan_fingerprint"]
+        if isinstance(sealed.get("governance"), dict):
+            gov = dict(sealed["governance"])
+            log = list(gov["amend_log"])
+            log[-1] = {**log[-1], "fingerprint_after": fingerprint}
+            candidate = seal_plan({**sealed, "governance": {**gov, "amend_log": log}})
+        elif isinstance(sealed.get("amend_log"), list) and sealed["amend_log"]:
+            log = list(sealed["amend_log"])
+            log[-1] = {**log[-1], "fingerprint_after": fingerprint}
+            candidate = seal_plan({**sealed, "amend_log": log})
+        else:
+            break
+        if candidate["plan_fingerprint"] == fingerprint:
+            return candidate
+        sealed = candidate
+    return sealed
+
+
+def _assert_amend_governance_unchanged(
+    frozen: dict[str, Any], content: dict[str, Any]
+) -> None:
+    governance = frozen.get("governance")
+    if isinstance(governance, dict) and governance.get("governance_settled_at"):
+        raise PlanGovernanceError("已 settle 的方案不可 amend", "plan_amend_settled")
+    expected = governance_from_content(frozen.get("plan_level", ""), content)
+    if expected is None:
+        if governance is not None:
+            raise PlanGovernanceError("非 Full Plan 不得包含 governance", "invalid_plan_ref")
+        return
+    if not isinstance(governance, dict):
+        raise PlanGovernanceError("Full Plan 缺少 governance", "invalid_plan_ref")
+    for key in ("acceptance_required", "knowledge_impact"):
+        if expected[key] != governance[key]:
+            raise PlanGovernanceError(
+                "amend 不得改变 acceptance_required 或 knowledge_impact；"
+                "方向或验收语义变化请 plan settle --status deprecated --replacement",
+                "plan_amend_governance_change",
+            )
+
+
+def apply_plan_amend(
+    frozen: dict[str, Any],
+    content: dict[str, Any],
+    reason: str,
+    now: str,
+) -> dict[str, Any]:
+    """受控修订活方案 content；重算 plan_fingerprint 并追加 amend_log。"""
+    reason = _single_line(reason, "amend reason")
+    _assert_amend_governance_unchanged(frozen, content)
+    fingerprint_before = frozen["plan_fingerprint"]
+    governance = frozen.get("governance")
+    entry = {
+        "amended_at": now,
+        "reason": reason,
+        "fingerprint_before": fingerprint_before,
+        "fingerprint_after": "",
+    }
+    updated = dict(frozen)
+    updated["content"] = content
+    updated["last_amended_at"] = now
+    if isinstance(governance, dict):
+        gov = dict(governance)
+        gov["amend_log"] = list(gov.get("amend_log") or []) + [entry]
+        updated["governance"] = gov
+    else:
+        updated["amend_log"] = list(updated.get("amend_log") or []) + [entry]
+    sealed = _seal_amend_log_fixed_point(seal_plan(updated))
+    validate_plan(sealed)
+    return sealed
 
 
 def _load_linked_asset(target: Path, raw: str, schema: str) -> dict[str, Any]:

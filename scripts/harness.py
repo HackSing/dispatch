@@ -31,6 +31,7 @@ from plan_governance import (
     FAILURE_ATTRIBUTION_CATEGORIES, PLAN_GOVERNANCE_INPUT_SCHEMA, PLAN_SCHEMA_V3, PlanGovernanceError,
     collect_bugfix_plan_errors,
     governance_from_content, legacy_plan_template_fingerprints, new_plan_fields, nonempty_string_list,
+    plan_amend_notice_line,
     prepare_settlement as prepare_plan_settlement, render_governance_block, update_plan_markdown,
     validate_bugfix_plan_contract, validate_plan as validate_governed_plan,
 )
@@ -63,6 +64,7 @@ from adr_assets import (
     ADR_SETTLE_STATUSES,
     ADR_SPEC,
     check as check_adr_assets,
+    amend as amend_adr_asset,
     create as create_adr_asset,
     settle as settle_adr_asset,
 )
@@ -74,7 +76,9 @@ from usage_log import (
 )
 from usage_report import USAGE_REPORT_DEFAULT_DAYS, build_report as build_usage_report
 from diagram_view import VIEWS_RELATIVE, open_in_browser, write_view
-VERSION = "2.28.0"
+from plan_amend import collect_plan_content_errors
+
+VERSION = "2.30.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -118,6 +122,7 @@ MANAGED_MODULE_RELATIVE_FILES = (
     "usage_log.py",
     "usage_report.py",
     "diagram_view.py",
+    "plan_amend.py",
 )
 PLAN_DOCS_RELATIVE = "docs/plans"
 PLAN_ARCHIVE_RELATIVE = "docs/plans/archive"
@@ -497,8 +502,11 @@ _GENERIC_STANDARDS = """
 - plans 文档卫生（状态横幅、索引符号、归档死链、符号存活与时效）由 `plan check` 把关，pre-commit 与 CI 的 assets-check 已包含；起草期间不跑，提交前或 plan settle 时跑一次，报错即改。判定纪律：代码里找不到符号只能证明概念已死，不能证明方案过期（合法待实施方案同样没有代码）；证据不足标"存疑"，交用户裁决；符号全命中但仍在推进的部分交付方案按 WARN 提示登记核对日，\
 不得为消除 WARN 而 settle。
 - WARN 消费：收尾时 assets-check 输出与本任务领域相关的 WARN，必须在收尾报告中转达，不得静默略过。
-- Plan：复杂任务先 `plan select` 再 `plan create --output docs/plans/<name>.json` 冻结执行合同（自动生成同名 Markdown 并维护 docs/INDEX.md）；实施完成运行 `plan settle --status implemented`，被取代或废弃用 `--status deprecated`；无伴随 JSON 的手写方案同样直接 settle，不得手工补造冻结 JSON。不手工复制平行方案。Full Plan 声明验收与知识影响，settle 时校验；收尾按 Knowledge → Acceptance → Plan 顺序结算，\
+- **目标与验收语义不变 → `plan amend` / `adr amend`（必填 `--reason`）；目标、范围主张或验收语义改变 → `plan settle --status deprecated --replacement` 或新建 ADR 并 settle 旧 ADR。**
+- Harness Plan：复杂任务先 `plan select` 再 `plan create --output docs/plans/<name>.json` 冻结执行合同（自动生成同名 Markdown 并维护 docs/INDEX.md）；方向未变仅修正内容时用 `plan amend --plan <path> --content <JSON> --reason "<原因>"`（整包 content，\
+不得改 acceptance_required/knowledge_impact）；已 settle 或归档不可 amend。实施完成运行 `plan settle --status implemented`，被取代或废弃用 `--status deprecated`；无伴随 JSON 的手写方案同样直接 settle，不得手工补造冻结 JSON。不手工复制平行方案。**Full** 级冻结 Markdown 必须含 `process_flowchart`（Mermaid 流程图）与 `ux_journey`（体验或操作者路径）；**brief** 级不要求这两项。Full Plan 声明验收与知识影响，settle 时校验；收尾按 Knowledge → Acceptance → Plan 顺序结算，\
 声明需要验收的先完成 Acceptance 结项。
+- ADR：`adr create` 定稿后不得手改；内容修正用 `adr amend --adr <path> --input <JSON> --reason "<原因>"`（不得改 supersedes）；失效时 `adr settle --status deprecated|superseded`。
 - Knowledge：只记录有当前源码或项目文档证据支持的可复用事实：按需 `knowledge query`，沉淀 `create`，事实变化 `update`，被替代或废弃 `settle`，收尾 `check`。不得凭模型猜测自动写知识。
 - Acceptance：复杂任务在 Plan 后 `acceptance create` 建立目标，真实验证后逐条 `acceptance record`，证据文件必须位于随仓库提交的路径（如 docs/acceptance/evidence/<验收名>/）；失败修复后重新验收，最终 `acceptance settle` 并 `acceptance check`。简单任务直接验证，不强制创建资产。只有收到用户明确确认原话后才能记录 User Acceptance 通过；合同、测试、运行、安装和用户可见层不得相互替代。
 - 收尾统一运行 `assets-check`。提交时 pre-commit 钩子执行 `assets-check --fast`，GitHub CI 执行 `assets-check --strict`（新克隆机器先运行 `scripts/githooks/setup.sh` 激活钩子）。项目自定义提交检查写入 `scripts/githooks/pre-commit.local`，不得分叉修改受管 pre-commit。
@@ -555,10 +563,10 @@ def _managed_content() -> str:
 - 普通问答、只读检查、代码修改、构建和测试默认不经 Harness 流程直接执行；Harness 不作为任务入口，也不创建任务控制状态。"直接"指不走 Harness，不指主 agent 亲自串行完成，任务如何拆分与委派见工作流规则第 5 条。
 - 用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
 - 只有缺少的项目事实会改变目标、范围、方案或验收时才运行 knowledge query；需要长期维护的事实才进入 Knowledge 资产生命周期。
-- 简单任务不生成方案；复杂、跨模块、高风险或用户明确要求时才走 Plan 与 Acceptance 资产流程，命令与结算顺序见"方案、知识与验收资产"。
-- 验收以真实功能为中心：能运行聚焦测试、接口、页面、应用、构建或安装流程时运行最小充分流程；交付物要被别人照步骤安装或使用时，复制到干净目录、照自己写的步骤跑一遍；改动产生运行态行为（页面、接口、应用、命令或安装流程）的任务完成后，agent 必须自己走一遍详细的运行态验证（模拟器/本地联调，可用 mock 数据），确认功能流程正常、视觉与交互对用户友好，\
-发现不友好之处直接重新优化并复验，不把功能、视觉或交互体验的验证推给用户；纯文档、只读或不改变行为的任务只做与改动对应的验证，非运行态交付物按接收方的用法验证：方案沿执行路径推演一遍，找第一个卡住的步骤及其代价；核对换一条独立路径重算，看是否收敛到同一答案；文档以零基础读者身份从头读一遍，找出用到但没给的前提；\
-仅真实硬件、系统权限等本地确实无法运行的层准备最低成本环境交用户最短确认。
+- 简单任务不生成方案；复杂、跨模块、高风险或用户明确要求时才走 **Harness Plan（方案资产）** 与 Acceptance 资产流程，命令与结算顺序见"方案、知识与验收资产"。口语「走 plan / 方案模式」默认指 `python3 scripts/harness.py plan select|create|…`，**不是** IDE 自带的 Plan 聊天模式；不得用切换 IDE Plan 代替 `plan create` 冻结合同。
+- 验收以真实功能为中心：能运行聚焦测试、接口、页面、应用、构建或安装流程时运行最小充分流程；交付物要被别人照步骤安装或使用时，复制到干净目录、照自己写的步骤跑一遍；改动产生运行态行为（页面、接口、应用、命令或安装流程）的任务完成后，agent 必须自己走一遍详细的运行态验证（模拟器/本地联调，可用 mock 数据），\
+确认功能流程正常、视觉与交互对用户友好，发现不友好之处直接重新优化并复验，不把功能、视觉或交互体验的验证推给用户；纯文档、只读或不改变行为的任务只做与改动对应的验证，非运行态交付物按接收方的用法验证：方案沿执行路径推演一遍，找第一个卡住的步骤及其代价；\
+核对换一条独立路径重算，看是否收敛到同一答案；文档以零基础读者身份从头读一遍，找出用到但没给的前提；仅真实硬件、系统权限等本地确实无法运行的层准备最低成本环境交用户最短确认。
 - 高风险动作使用原生授权与沙箱，不建立第二套 Harness Gate 或授权协议。
 - Plan/Knowledge/Acceptance/ADR 的输入 JSON 形状、必填字段与 --dry-run 预检见 python3 scripts/harness.py <cmd> --help；校验失败的报错直接附期望形状；一次性输入 JSON 写入 `{TASK_INPUTS_RELATIVE}/`（不入库、升级不清理）。
 - 预计跨多批次或可能经历上下文压缩的长任务，把进度清单写入 `{TASKS_RELATIVE}/<任务名>.md`（不入库、升级不清理）：完成一项勾一项，新发现的事项随时补进去，查进度以这个文件为准，不以对话记录为准。有 Plan 的任务在清单开头写明 Plan 路径，条目按 Plan 的步骤或批次列出、只记进度，不复述 Plan 内容；Plan 是冻结合同，进度不写回 Plan。
@@ -1499,7 +1507,11 @@ def render_plan_value(value: Any) -> str:
 
 
 def render_plan_markdown(
-    selection: dict[str, Any], content: dict[str, Any], frozen: dict[str, Any]
+    selection: dict[str, Any],
+    content: dict[str, Any],
+    frozen: dict[str, Any],
+    *,
+    banner_status: str = PLAN_STATUS_ACTIVE,
 ) -> str:
     title, symbols = plan_title_and_symbols(content)
     labels = {item["id"]: item["label"] for item in selection["fields"]}
@@ -1510,8 +1522,9 @@ def render_plan_markdown(
             continue
         sections.append(f"## {labels[field_id]}\n\n{render_plan_value(content[field_id])}")
     symbol_text = "、".join(f"`{symbol}`" for symbol in symbols)
+    notice = plan_amend_notice_line(frozen)
     return (
-        f"> 状态：{PLAN_STATUS_ACTIVE}\n{PLAN_DOCUMENT_MARKER}\n\n# {title}\n\n"
+        f"> 状态：{banner_status}\n{notice}{PLAN_DOCUMENT_MARKER}\n\n# {title}\n\n"
         f"- 冻结合同：`{frozen['plan_fingerprint']}`\n"
         f"- 关键符号：{symbol_text}\n\n" + "\n\n".join(sections)
         + "\n\n" + render_governance_block(frozen) + "\n"
@@ -1606,33 +1619,11 @@ def inspect_plan_create(
     title: str | None = None
     symbols: list[str] | None = None
     if selection is not None and content is not None:
-        fields = selection["fields"]
-        allowed = {item["id"] for item in fields}
-        required = {item["id"] for item in fields if item["required"]}
-        unknown = sorted(set(content) - allowed)
-        if unknown:
-            errors.append(HarnessError(
-                "方案包含未注册字段：" + ", ".join(unknown), code="invalid_plan_content"
-            ))
-        missing = sorted(
-            field for field in required if not nonempty_plan_value(content.get(field))
-        )
-        if missing:
-            errors.append(HarnessError(
-                "方案缺少必填字段：" + ", ".join(missing), code="invalid_plan_content"
-            ))
+        errors.extend(collect_plan_content_errors(selection, content))
         try:
             title, symbols = plan_title_and_symbols(content)
-        except HarnessError as exc:
-            errors.append(exc)
-        errors.extend(
-            HarnessError(str(exc), code=exc.code)
-            for exc in collect_bugfix_plan_errors(selection, content)
-        )
-        try:
-            governance_from_content(selection["plan_level"], content)
-        except PlanGovernanceError as exc:
-            errors.append(HarnessError(str(exc), code=exc.code))
+        except HarnessError:
+            title, symbols = None, None
     output: Path | None = None
     document: Path | None = None
     try:
@@ -1766,6 +1757,12 @@ def plan_create(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         "execution_projection": projection,
         "next_action": "execute_plan_then_plan_settle",
     }
+
+
+def plan_amend(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    from plan_amend import run_plan_amend  # noqa: PLC0415
+
+    return run_plan_amend(args)
 
 
 def plan_settle_paths(target: Path, raw: str) -> tuple[Path | None, Path, bool]:
@@ -2547,6 +2544,20 @@ ADR_INPUT_EXAMPLE = {
 }
 
 
+def adr_amend(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    if not args.adr or not args.input or not args.reason:
+        raise HarnessError(
+            "adr amend 必须提供 --adr、--input 与 --reason",
+            code="missing_adr_amend_input",
+        )
+    target = safe_target(args.target)
+    value = read_json(project_input_path(target, args.input, code="invalid_adr_input"))
+    try:
+        return 0, amend_adr_asset(target, args.adr, value, args.reason, utc_now())
+    except AssetError as exc:
+        raise translate_asset_error(exc) from exc
+
+
 def adr_create(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     if not args.input or not args.output:
         raise HarnessError("adr create 必须提供 --input 与 --output", code="missing_adr_input")
@@ -2827,6 +2838,28 @@ USAGE_ENABLED_NOTICE = (
     "不需要时把 .docs-harness/config.json 的 usage_log.enabled 改为 false 即可关闭。"
 )
 
+HARNESS_PLAN_V230_NOTICE = (
+    "【2.30.0 必读】口语「走 plan / 方案模式」指 Harness Plan"
+    "（python3 scripts/harness.py plan select|create），不是 IDE 自带的 Plan 聊天模式；"
+    "不得用切换 IDE Plan 代替 plan create 冻结合同。"
+    "Full 级方案新建时必填 process_flowchart（Mermaid 流程图）与 ux_journey（体验或操作者路径）；brief 级不变。"
+)
+
+
+def parse_semver(version: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for piece in version.strip().split("."):
+        if not piece.isdigit():
+            break
+        parts.append(int(piece))
+    return tuple(parts or (0,))
+
+
+def semver_lt(left: str, right: str) -> bool:
+    a, b = parse_semver(left), parse_semver(right)
+    width = max(len(a), len(b))
+    return a + (0,) * (width - len(a)) < b + (0,) * (width - len(b))
+
 
 def usage_enabled_notices(existing: dict[str, Any] | None, enabled: bool) -> list[str]:
     """首次开启 usage 观测时的一次性告知；其余情况返回空列表。
@@ -2846,6 +2879,20 @@ def usage_enabled_notices(existing: dict[str, Any] | None, enabled: bool) -> lis
     if "usage_log" in existing or not enabled:
         return []
     return [USAGE_ENABLED_NOTICE]
+
+
+def project_upgrade_notices(
+    *,
+    action: str,
+    from_version: str | None,
+    existing: dict[str, Any] | None,
+    usage_enabled: bool,
+) -> list[str]:
+    notices: list[str] = []
+    if action == "upgrade" and from_version and semver_lt(from_version, "2.30.0"):
+        notices.append(HARNESS_PLAN_V230_NOTICE)
+    notices.extend(usage_enabled_notices(existing, usage_enabled))
+    return notices
 
 
 def v2_config(
@@ -3648,7 +3695,12 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         cleanup = legacy_cleanup_plan(target)
         changes = project_changes(target, source_root)
         if not args.apply:
-            notices = usage_enabled_notices(existing, USAGE_LOG_DEFAULT_ENABLED)
+            notices = project_upgrade_notices(
+                action=args.action,
+                from_version=from_version,
+                existing=existing,
+                usage_enabled=USAGE_LOG_DEFAULT_ENABLED,
+            )
             return 0, {
                 "action": args.action,
                 "mode": "preview",
@@ -3671,7 +3723,12 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         red = [item for item in findings if item["severity"] == "red"]
         delivery = project_delivery(target)
         pending = not red and delivery["delivery_status"] == "pending_commit"
-        notices = usage_enabled_notices(existing, project_config(target)["usage_log"]["enabled"])
+        notices = project_upgrade_notices(
+            action=args.action,
+            from_version=from_version,
+            existing=existing,
+            usage_enabled=project_config(target)["usage_log"]["enabled"],
+        )
         status = (
             "failed"
             if red
@@ -4686,6 +4743,8 @@ PLAN_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
     "plan check [--fast] [--strict]：docs/plans 文档可发现性常驻检查（横幅、索引符号、归档死链、符号存活与时效）。",
     f"部分交付仍在推进的方案横幅写「{PLAN_PARTIAL_DELIVERY_BANNER}（YYYY-MM-DD 核对）」，"
     f"核对日起 {PLAN_PARTIAL_DELIVERY_RECHECK_DAYS} 天内不报符号全命中告警，未来日期不豁免。",
+    "plan amend --content：形状与 plan create --content 相同（整包 content 替换）；"
+    "不得改变 acceptance_required/knowledge_impact；已 settle 或归档方案拒绝。",
 ))
 
 ACCEPTANCE_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
@@ -4710,7 +4769,8 @@ ADR_EPILOG = _EPILOG_INTRO + "\n\n" + _schema_example_block(
     f"adr create --input（{ADR_INPUT_SCHEMA}）：",
     ADR_INPUT_EXAMPLE,
     (
-        "ADR 定稿后不可更新；失效时 adr settle --status deprecated|superseded（superseded 需 --replacement）。",
+        "定稿后不得手改；内容修正用 adr amend --input（同 create 形状）并必填 --reason。"
+        "失效时 adr settle --status deprecated|superseded（superseded 需 --replacement）。",
     ),
 )
 
@@ -4747,7 +4807,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=PLAN_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    plan.add_argument("action", choices=("select", "create", "settle", "check"))
+    plan.add_argument("action", choices=("select", "create", "amend", "settle", "check"))
     add_target(plan)
     plan.add_argument("--strict", action="store_true", help="WARN 也使退出码非 0（供 CI 使用；仅 check）")
     plan.add_argument("--fast", action="store_true", help="跳过符号存活性与 Git 时效慢检查（仅 check）")
@@ -4783,6 +4843,10 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--status", choices=PLAN_SETTLE_STATUSES)
     plan.add_argument("--replacement")
     plan.add_argument("--governance-input")
+    plan.add_argument(
+        "--reason",
+        help="修订原因（仅 amend）：单行非空",
+    )
 
     acceptance = commands.add_parser(
         "acceptance",
@@ -4811,13 +4875,17 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=ADR_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    adr.add_argument("action", choices=("create", "settle", "check"))
+    adr.add_argument("action", choices=("create", "amend", "settle", "check"))
     add_target(adr)
     adr.add_argument("--input")
     adr.add_argument("--output")
     adr.add_argument("--adr")
     adr.add_argument("--status", choices=ADR_SETTLE_STATUSES)
     adr.add_argument("--replacement")
+    adr.add_argument(
+        "--reason",
+        help="修订原因（仅 amend）：单行非空",
+    )
 
     project = commands.add_parser(
         "project",
@@ -4886,7 +4954,10 @@ def emit(payload: dict[str, Any], as_json: bool) -> None:
     if as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
+    notices = payload.get("notices")
     for key, value in payload.items():
+        if key == "notices":
+            continue
         print(
             f"{key}: "
             + (
@@ -4895,6 +4966,15 @@ def emit(payload: dict[str, Any], as_json: bool) -> None:
                 else str(value)
             )
         )
+    if isinstance(notices, list) and notices:
+        print("")
+        print("=" * 72)
+        print("重要提示（请读）")
+        print("=" * 72)
+        for index, notice in enumerate(notices, start=1):
+            prefix = f"[{index}] " if len(notices) > 1 else ""
+            print(f"{prefix}{notice}")
+        print("=" * 72)
 
 
 # cmd.invoke 只收录枚举白名单 flag：全部来自 argparse 的 choices 或 store_true，
@@ -4982,6 +5062,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             plan_handlers = {
                 "select": plan_select,
                 "create": plan_create,
+                "amend": plan_amend,
                 "settle": plan_settle,
                 "check": command_plan_check,
             }
@@ -4997,6 +5078,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "adr":
             adr_handlers = {
                 "create": adr_create,
+                "amend": adr_amend,
                 "settle": adr_settle,
                 "check": adr_check,
             }

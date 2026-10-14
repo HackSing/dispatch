@@ -1,12 +1,12 @@
 # AGENTS.md
 
 <!-- docs-harness:managed-entry:start -->
-## Docs Harness 2.28.0：默认直跑，能力按需
+## Docs Harness 2.30.0：默认直跑，能力按需
 
 - 普通问答、只读检查、代码修改、构建和测试默认不经 Harness 流程直接执行；Harness 不作为任务入口，也不创建任务控制状态。"直接"指不走 Harness，不指主 agent 亲自串行完成，任务如何拆分与委派见工作流规则第 5 条。
 - 用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
 - 只有缺少的项目事实会改变目标、范围、方案或验收时才运行 knowledge query；需要长期维护的事实才进入 Knowledge 资产生命周期。
-- 简单任务不生成方案；复杂、跨模块、高风险或用户明确要求时才走 Plan 与 Acceptance 资产流程，命令与结算顺序见"方案、知识与验收资产"。
+- 简单任务不生成方案；复杂、跨模块、高风险或用户明确要求时才走 **Harness Plan（方案资产）** 与 Acceptance 资产流程，命令与结算顺序见"方案、知识与验收资产"。口语「走 plan / 方案模式」默认指 `python3 scripts/harness.py plan select|create|…`，**不是** IDE 自带的 Plan 聊天模式；不得用切换 IDE Plan 代替 `plan create` 冻结合同。
 - 验收以真实功能为中心：能运行聚焦测试、接口、页面、应用、构建或安装流程时运行最小充分流程；交付物要被别人照步骤安装或使用时，复制到干净目录、照自己写的步骤跑一遍；改动产生运行态行为（页面、接口、应用、命令或安装流程）的任务完成后，agent 必须自己走一遍详细的运行态验证（模拟器/本地联调，可用 mock 数据），确认功能流程正常、视觉与交互对用户友好，发现不友好之处直接重新优化并复验，不把功能、视觉或交互体验的验证推给用户；纯文档、只读或不改变行为的任务只做与改动对应的验证，非运行态交付物按接收方的用法验证：方案沿执行路径推演一遍，找第一个卡住的步骤及其代价；核对换一条独立路径重算，看是否收敛到同一答案；文档以零基础读者身份从头读一遍，找出用到但没给的前提；仅真实硬件、系统权限等本地确实无法运行的层准备最低成本环境交用户最短确认。
 - 高风险动作使用原生授权与沙箱，不建立第二套 Harness Gate 或授权协议。
 - Plan/Knowledge/Acceptance/ADR 的输入 JSON 形状、必填字段与 --dry-run 预检见 python3 scripts/harness.py <cmd> --help；校验失败的报错直接附期望形状；一次性输入 JSON 写入 `.docs-harness/inputs/`（不入库、升级不清理）。
@@ -95,7 +95,9 @@
 
 - plans 文档卫生（状态横幅、索引符号、归档死链、符号存活与时效）由 `plan check` 把关，pre-commit 与 CI 的 assets-check 已包含；起草期间不跑，提交前或 plan settle 时跑一次，报错即改。判定纪律：代码里找不到符号只能证明概念已死，不能证明方案过期（合法待实施方案同样没有代码）；证据不足标"存疑"，交用户裁决；符号全命中但仍在推进的部分交付方案按 WARN 提示登记核对日，不得为消除 WARN 而 settle。
 - WARN 消费：收尾时 assets-check 输出与本任务领域相关的 WARN，必须在收尾报告中转达，不得静默略过。
-- Plan：复杂任务先 `plan select` 再 `plan create --output docs/plans/<name>.json` 冻结执行合同（自动生成同名 Markdown 并维护 docs/INDEX.md）；实施完成运行 `plan settle --status implemented`，被取代或废弃用 `--status deprecated`；无伴随 JSON 的手写方案同样直接 settle，不得手工补造冻结 JSON。不手工复制平行方案。Full Plan 声明验收与知识影响，settle 时校验；收尾按 Knowledge → Acceptance → Plan 顺序结算，声明需要验收的先完成 Acceptance 结项。
+- **目标与验收语义不变 → `plan amend` / `adr amend`（必填 `--reason`）；目标、范围主张或验收语义改变 → `plan settle --status deprecated --replacement` 或新建 ADR 并 settle 旧 ADR。**
+- Harness Plan：复杂任务先 `plan select` 再 `plan create --output docs/plans/<name>.json` 冻结执行合同（自动生成同名 Markdown 并维护 docs/INDEX.md）；方向未变仅修正内容时用 `plan amend --plan <path> --content <JSON> --reason "<原因>"`（整包 content，不得改 acceptance_required/knowledge_impact）；已 settle 或归档不可 amend。实施完成运行 `plan settle --status implemented`，被取代或废弃用 `--status deprecated`；无伴随 JSON 的手写方案同样直接 settle，不得手工补造冻结 JSON。不手工复制平行方案。**Full** 级冻结 Markdown 必须含 `process_flowchart`（Mermaid 流程图）与 `ux_journey`（体验或操作者路径）；**brief** 级不要求这两项。Full Plan 声明验收与知识影响，settle 时校验；收尾按 Knowledge → Acceptance → Plan 顺序结算，声明需要验收的先完成 Acceptance 结项。
+- ADR：`adr create` 定稿后不得手改；内容修正用 `adr amend --adr <path> --input <JSON> --reason "<原因>"`（不得改 supersedes）；失效时 `adr settle --status deprecated|superseded`。
 - Knowledge：只记录有当前源码或项目文档证据支持的可复用事实：按需 `knowledge query`，沉淀 `create`，事实变化 `update`，被替代或废弃 `settle`，收尾 `check`。不得凭模型猜测自动写知识。
 - Acceptance：复杂任务在 Plan 后 `acceptance create` 建立目标，真实验证后逐条 `acceptance record`，证据文件必须位于随仓库提交的路径（如 docs/acceptance/evidence/<验收名>/）；失败修复后重新验收，最终 `acceptance settle` 并 `acceptance check`。简单任务直接验证，不强制创建资产。只有收到用户明确确认原话后才能记录 User Acceptance 通过；合同、测试、运行、安装和用户可见层不得相互替代。
 - 收尾统一运行 `assets-check`。提交时 pre-commit 钩子执行 `assets-check --fast`，GitHub CI 执行 `assets-check --strict`（新克隆机器先运行 `scripts/githooks/setup.sh` 激活钩子）。项目自定义提交检查写入 `scripts/githooks/pre-commit.local`，不得分叉修改受管 pre-commit。

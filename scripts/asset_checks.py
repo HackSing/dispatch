@@ -49,6 +49,24 @@ def _load_plan_path(target: Path, raw: str) -> tuple[Path, dict[str, Any]]:
         raise AssetError(f"Plan 引用无法读取：{raw}") from exc
 
 
+def _plan_stale_anchor(plan: dict[str, Any]) -> Any:
+    anchor = plan.get("frozen_at")
+    last_amended = plan.get("last_amended_at")
+    if isinstance(last_amended, str) and (
+        not isinstance(anchor, str) or last_amended > anchor
+    ):
+        return last_amended
+    return anchor
+
+
+def _plan_amend_log(plan: dict[str, Any], governance: Any) -> list[Any] | None:
+    if isinstance(governance, dict):
+        log = governance.get("amend_log")
+        if log:
+            return log
+    return plan.get("amend_log")
+
+
 def _is_stale(raw: Any, now: dt.datetime) -> bool:
     if not isinstance(raw, str):
         return False
@@ -108,11 +126,17 @@ def _check_plan_relations(
         relative_plan.parent.as_posix() != "docs/plans/archive"
         and isinstance(governance, dict)
         and not governance.get("governance_settled_at")
-        and _is_stale(plan.get("frozen_at"), now)
+        and _is_stale(_plan_stale_anchor(plan), now)
     ):
         warnings.append(
             f"WARN: {plan_ref}: 冻结超过 {ASSET_STALE_DAYS} 天仍未 settle"
             "（plan settle --status implemented|deprecated）"
+        )
+    amend_log = _plan_amend_log(plan, governance)
+    if isinstance(amend_log, list) and len(amend_log) >= 3:
+        warnings.append(
+            f"WARN: {plan_ref}: amend 已达 {len(amend_log)} 次，"
+            "请核对是否应 plan settle --status deprecated --replacement"
         )
     if not isinstance(governance, dict) or not governance.get("governance_settled_at"):
         return failures, warnings
