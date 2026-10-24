@@ -26,6 +26,8 @@ ADR_STATUS_ACTIVE = "有效（现行决策）"
 ADR_STATUS_DEPRECATED = "已废弃"
 ADR_STATUS_SUPERSEDED = "已废弃-被替代"
 ADR_SETTLE_STATUSES = ("deprecated", "superseded")
+ADR_CONSTRAINT_LIMIT = 3
+ADR_CONSTRAINT_MAX_CHARS = 300
 
 ADR_SPEC = AssetSpec(
     kind="adr",
@@ -36,6 +38,11 @@ ADR_SPEC = AssetSpec(
     marker="<!-- docs-harness:adr-document/v1 -->",
     schema=ADR_ASSET_SCHEMA,
     marker_scoped=True,
+    status_labels={
+        "active": ADR_STATUS_ACTIVE,
+        "deprecated": ADR_STATUS_DEPRECATED,
+        "superseded": ADR_STATUS_SUPERSEDED,
+    },
     readme="""# 架构决策记录（ADR）
 
 本目录保存已定稿的架构决策。每项决策由同名 JSON 保存可审计内容，Markdown 提供
@@ -251,6 +258,35 @@ def settle(target: Path, raw_asset: str, status: str, replacement: str | None, n
     rewritten = rewrite_links(target, ADR_SPEC, source.stem, markdown_files)
     followed = follow_archived_refs(target, ADR_SPEC.root, source.stem)
     return {"status": status, "adr_ref": archived_source.relative_to(target).as_posix(), "document_ref": archived_document.relative_to(target).as_posix(), "rewritten_links": rewritten, "rewritten_source_refs": followed}
+
+
+def active_constraints(target: Path) -> list[dict[str, str]]:
+    """把活跃 ADR 的决策投影成知识查询的 constraints，限制条数与单条长度。"""
+    root = target / ADR_SPEC.root
+    if not root.is_dir() or root.is_symlink():
+        return []
+    constraints: list[dict[str, str]] = []
+    for path in sorted(root.glob("*.json")):
+        try:
+            asset = load_asset(path, ADR_SPEC)
+            validate_asset(asset)
+        except AssetError:
+            continue
+        if asset.get("status") != "active":
+            continue
+        decision = asset.get("decision")
+        if not isinstance(decision, str) or not decision.strip():
+            continue
+        text = f"{asset['title']}：{decision.strip()}"
+        if len(text) > ADR_CONSTRAINT_MAX_CHARS:
+            text = text[: ADR_CONSTRAINT_MAX_CHARS - 1] + "…"
+        constraints.append({
+            "text": text,
+            "ref": path.relative_to(target).as_posix(),
+        })
+        if len(constraints) >= ADR_CONSTRAINT_LIMIT:
+            break
+    return constraints
 
 
 def check(target: Path) -> dict[str, Any]:

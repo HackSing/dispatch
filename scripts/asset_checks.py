@@ -21,6 +21,70 @@ from plan_governance import (
 AssetChecker = Callable[[Path], dict[str, Any]]
 PlanChecker = Callable[[Path, bool], dict[str, Any]]
 ASSET_STALE_DAYS = 90
+WARNING_PREVIEW_LIMIT = 5
+
+
+def _warning_group(warning: str) -> tuple[str, bool]:
+    """WARN 分组与可行动性；「代码很可能已交付」是可人工裁决的提示，不算可行动。"""
+    text = warning[6:] if warning.startswith("WARN: ") else warning
+    if "代码很可能已交付" in text:
+        return "plan.delivery_hint", False
+    if "docs/plans/" in text or "docs/INDEX.md" in text:
+        if "冻结超过" in text:
+            return "plan.stale", True
+        if "关联 Acceptance" in text or "Plan 仍未 settle" in text:
+            return "plan.settlement", True
+        if "零命中" in text or "索引已失活" in text:
+            return "plan.symbol", True
+        if "INDEX" in text:
+            return "plan.index", True
+        if "amend" in text:
+            return "plan.amend", True
+        return "plan.other", True
+    if "CODEMAP" in text:
+        return "structure.codemap", True
+    if "Structure:" in text or "结构" in text:
+        return "structure.size", True
+    if "ADR:" in text:
+        return "adr.projection", True
+    if "Knowledge:" in text:
+        return "knowledge.projection", True
+    if "Acceptance:" in text:
+        return "acceptance.projection", True
+    if "ScriptHygiene:" in text:
+        return "script_hygiene", True
+    return "other", True
+
+
+def summarize_warnings(warnings: list[str]) -> dict[str, Any]:
+    """把 WARN 按类别聚合，给默认输出一个短摘要，完整列表仍保留在 warnings。"""
+    groups: dict[str, dict[str, Any]] = {}
+    actionable = 0
+    for warning in warnings:
+        group, is_actionable = _warning_group(warning)
+        entry = groups.setdefault(
+            group,
+            {"group": group, "count": 0, "actionable": is_actionable},
+        )
+        entry["count"] += 1
+        actionable += 1 if is_actionable else 0
+    ordered = sorted(groups.values(), key=lambda item: (-item["actionable"], -item["count"], item["group"]))
+    unique = len(set(warnings))
+    return {
+        "total": len(warnings),
+        "unique": unique,
+        "duplicates": len(warnings) - unique,
+        "actionable": actionable,
+        "advisory": len(warnings) - actionable,
+        "groups": ordered,
+    }
+
+
+def preview_warnings(warnings: list[str], limit: int = WARNING_PREVIEW_LIMIT) -> list[str]:
+    """默认展示的 WARN 预览：可行动项优先，提示项靠后。"""
+    actionable = [item for item in warnings if _warning_group(item)[1]]
+    advisory = [item for item in warnings if not _warning_group(item)[1]]
+    return (actionable + advisory)[:limit]
 
 
 def _run_asset_checker(target: Path, label: str, checker: AssetChecker) -> dict[str, Any]:
@@ -65,6 +129,20 @@ def _plan_amend_log(plan: dict[str, Any], governance: Any) -> list[Any] | None:
         if log:
             return log
     return plan.get("amend_log")
+
+
+def _plan_amend_warning(
+    plan: dict[str, Any], governance: Any, plan_ref: str
+) -> str | None:
+    log = _plan_amend_log(plan, governance)
+    if not isinstance(log, list) or len(log) < 3:
+        return None
+    if isinstance(governance, dict) and governance.get("governance_settled_at"):
+        return None
+    return (
+        f"WARN: {plan_ref}: amend 已达 {len(log)} 次，"
+        "请核对是否应 plan settle --status implemented|deprecated"
+    )
 
 
 def _is_stale(raw: Any, now: dt.datetime) -> bool:
@@ -132,12 +210,9 @@ def _check_plan_relations(
             f"WARN: {plan_ref}: 冻结超过 {ASSET_STALE_DAYS} 天仍未 settle"
             "（plan settle --status implemented|deprecated）"
         )
-    amend_log = _plan_amend_log(plan, governance)
-    if isinstance(amend_log, list) and len(amend_log) >= 3:
-        warnings.append(
-            f"WARN: {plan_ref}: amend 已达 {len(amend_log)} 次，"
-            "请核对是否应 plan settle --status deprecated --replacement"
-        )
+    amend_warning = _plan_amend_warning(plan, governance, plan_ref)
+    if amend_warning:
+        warnings.append(amend_warning)
     if not isinstance(governance, dict) or not governance.get("governance_settled_at"):
         return failures, warnings
     if governance.get("knowledge_impact") != "updated":
@@ -263,6 +338,7 @@ def run_assets_check(
         },
         "failures": failures,
         "warnings": warnings,
+        "warning_summary": summarize_warnings(warnings),
         "summary": (
             f"assets-check {status}：Plan/Knowledge/Acceptance/ADR/ScriptHygiene/Structure 已检查，"
             f"违规 {len(failures)} 条、警告 {len(warnings)} 条"
