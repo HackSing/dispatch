@@ -27,6 +27,8 @@ if str(SCRIPT_MODULE_DIR) not in sys.path:
 from managed_assets import AssetError, AssetSpec, apply_structure, asset_pair, load_asset, structure_changes
 from asset_checks import preview_warnings, run_assets_check, summarize_warnings
 from report_check import check_report
+from runtime_check import RUNTIME_VERIFICATION_RELATIVE, check_packet
+from runtime_packet import RUNTIME_PACKET_EXAMPLE
 from script_hygiene import check_script_line_endings
 from structure_check import CODEMAP_SCAFFOLD, check_structure, structure_report
 from symbol_check import symbol_hits
@@ -126,7 +128,7 @@ from plan_selection import (
     validate_selection,
 )
 
-VERSION = "2.33.0"
+VERSION = "2.35.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -153,7 +155,10 @@ TASK_INPUTS_RELATIVE = ".docs-harness/inputs"
 TASKS_RELATIVE = ".docs-harness/tasks"
 REPORTS_RELATIVE = ".docs-harness/reports"
 # 不入库、升级不清理的本地约定目录；共用下方嵌套忽略与 local_only_dir_changes 一份判定。
-LOCAL_ONLY_DIRS = (TASK_INPUTS_RELATIVE, TASKS_RELATIVE, REPORTS_RELATIVE, VIEWS_RELATIVE)
+LOCAL_ONLY_DIRS = (
+    TASK_INPUTS_RELATIVE, TASKS_RELATIVE, REPORTS_RELATIVE, VIEWS_RELATIVE,
+    RUNTIME_VERIFICATION_RELATIVE,
+)
 # 与 usage_log._GITIGNORE_CONTENT 同口径的嵌套忽略（该写法的第 2 次出现，第 3 次再抽）。
 LOCAL_ONLY_GITIGNORE_CONTENT = "*\n"
 GIT_HOOKS_RELATIVE = "scripts/githooks"
@@ -172,6 +177,8 @@ MANAGED_MODULE_RELATIVE_FILES = (
     "usage_log.py",
     "usage_report.py",
     "report_check.py",
+    "runtime_check.py",
+    "runtime_packet.py",
     "symbol_check.py",
     "acceptance_diagnostics.py",
     "diagram_view.py",
@@ -476,6 +483,7 @@ def _managed_content() -> str:
         "{{TASK_INPUTS_RELATIVE}}": TASK_INPUTS_RELATIVE,
         "{{TASKS_RELATIVE}}": TASKS_RELATIVE,
         "{{REPORTS_RELATIVE}}": REPORTS_RELATIVE,
+        "{{RUNTIME_VERIFICATION_RELATIVE}}": RUNTIME_VERIFICATION_RELATIVE,
     }
     for placeholder, value in replacements.items():
         template = template.replace(placeholder, value)
@@ -3171,7 +3179,8 @@ def apply_local_only_dirs(target: Path) -> list[str]:
     LEGACY_RUNTIME_NAMES 内，project upgrade 必清，用它会反复丢文件。
     tasks/（2.19.0）：长任务的进度清单，上下文压缩后以文件为准。
     reports/（2.26.0）：收尾记录，回复只给路径，证据留给日后追查。
-    views/：view 命令写出的 Mermaid 页面（渲染产物；常量真源在 diagram_view）。四者都不在该元组内，升级不清理。
+    views/：view 命令写出的 Mermaid 页面（渲染产物；常量真源在 diagram_view）。
+    runtime/：普通小改动的运行态证据包与 evidence 文件（常量真源在 runtime_check）。五者都不在该元组内，升级不清理。
 
     嵌套 .gitignore 写法与 usage_log._GITIGNORE_CONTENT 同口径，这是它的第 2 次出现：
     新增目录只进 LOCAL_ONLY_DIRS，不另写一份；第 3 次出现时抽公共函数（编码质量规范第 2、10 条）。
@@ -4413,6 +4422,14 @@ def command_report(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         payload["next_action"] = "补齐 missing 字段后重跑 report check；字段名见 FIELD_LABELS"
     return (0 if payload["status"] == "passed" else 1), payload
 
+def command_runtime(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    """运行态证据包校验；检查器只读项目内证据，不启动应用。"""
+    target = safe_target(args.target)
+    raw = Path(args.packet)
+    packet = raw if raw.is_absolute() else target / raw
+    payload = check_packet(target, packet)
+    return (0 if payload["status"] == "passed" else 2), payload
+
 def command_structure(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     """structure check/report 的 CLI 投影；规则实现与阈值真源在 structure_check 模块。"""
     target = safe_target(args.target)
@@ -4698,6 +4715,17 @@ def add_acceptance_parser(commands: argparse._SubParsersAction) -> None:
         help="修订原因（仅 amend）：单行非空",
     )
 
+def add_runtime_parser(commands: argparse._SubParsersAction) -> None:
+    runtime = commands.add_parser(
+        "runtime",
+        help="运行态验证证据包硬校验（流程/状态/数据/视觉/交互/文案/缺陷复验）",
+        epilog=RUNTIME_PACKET_EXAMPLE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    runtime.add_argument("action", choices=("check",))
+    add_target(runtime)
+    runtime.add_argument("--packet", required=True, help="证据包路径，相对 target 解析")
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="harness",
@@ -4799,6 +4827,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("action", choices=("check",))
     add_target(report)
     report.add_argument("--path", required=True, help="收尾报告路径，相对 target 解析")
+
+    add_runtime_parser(commands)
 
     view = commands.add_parser(
         "view", help=f"把 Mermaid 源码渲染成 {VIEWS_RELATIVE}/ 下的独立 HTML 页面"
@@ -4971,6 +5001,8 @@ def dispatch_command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         return command_assets_check(args)
     if args.command == "report":
         return command_report(args)
+    if args.command == "runtime":
+        return command_runtime(args)
     if args.command == "structure":
         return command_structure(args)
     if args.command == "usage":
