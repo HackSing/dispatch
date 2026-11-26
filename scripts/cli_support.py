@@ -42,8 +42,8 @@ _ACTION_FLAGS: dict[tuple[str, str | None], frozenset[str]] = {
     ("adr", "show"): frozenset({"--adr"}),
     ("adr", "settle"): frozenset({"--adr", "--status", "--replacement"}),
     ("adr", "check"): frozenset(),
-    ("project", "init"): frozenset({"--apply", "--source"}),
-    ("project", "upgrade"): frozenset({"--apply", "--source"}),
+    ("project", "init"): frozenset({"--apply", "--source", "--host"}),
+    ("project", "upgrade"): frozenset({"--apply", "--source", "--host"}),
     ("project", "check"): frozenset({"--source"}),
     ("project", "diff"): frozenset({"--source"}),
     ("project", "uninstall"): frozenset({"--apply", "--purge-runtime"}),
@@ -53,6 +53,7 @@ _ACTION_FLAGS: dict[tuple[str, str | None], frozenset[str]] = {
     ("usage", "report"): frozenset({"--days"}),
     ("view", None): frozenset({"--open"}),
     ("report", "check"): frozenset({"--path"}),
+    ("checklist", "check"): frozenset({"--path"}),
     ("assets-check", None): frozenset({"--strict", "--fast", "--verbose"}),
     ("self-test", None): frozenset(),
 }

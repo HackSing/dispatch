@@ -2,7 +2,7 @@
   "schema_version": "docs-harness/plan-template/v3",
   "kind": "profile",
   "id": "bugfix",
-  "version": "2.35.0",
+  "version": "2.37.0",
   "fields": [
     {"id": "exact_reproduction", "label": "精确复现", "required": true},
     {"id": "event_timeline", "label": "完整事件时间线", "required": true},
@@ -15,12 +15,6 @@
       "label": "受影响模块",
       "required": true,
       "guidance": "列出由根因、调用链和改动面证明会受影响的模块；不得用整个仓库代替影响分析。"
-    },
-    {
-      "id": "verification_scope",
-      "label": "验证范围",
-      "required": true,
-      "guidance": "声明 mode=affected_modules|repository_full、实际命令和可复用的已通过证据；默认 affected_modules。"
     },
     {
       "id": "full_regression_trigger",

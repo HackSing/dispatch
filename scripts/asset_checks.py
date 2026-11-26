@@ -23,6 +23,8 @@ PlanChecker = Callable[[Path, bool], dict[str, Any]]
 ASSET_STALE_DAYS = 90
 PLAN_AMEND_GRACE_DAYS = 30
 WARNING_PREVIEW_LIMIT = 5
+AGENTS_FILE_MAX_BYTES = 24_000
+MANAGED_PROMPT_MAX_BYTES = 18_000
 
 
 def _warning_group(warning: str) -> tuple[str, bool]:
@@ -54,6 +56,8 @@ def _warning_group(warning: str) -> tuple[str, bool]:
         return "acceptance.projection", True
     if "ScriptHygiene:" in text:
         return "script_hygiene", True
+    if text.startswith("AGENTS.md:"):
+        return "entry.budget", True
     return "other", True
 
 
@@ -319,6 +323,23 @@ def check_cross_asset_relations(target: Path) -> dict[str, Any]:
     }
 
 
+def check_agents_file_budget(target: Path) -> list[str]:
+    """检查完整 AGENTS.md 字节数，防止超出 Antigravity 24 KB 单文件上限被截断。"""
+    path = target / "AGENTS.md"
+    if not path.is_file() or path.is_symlink():
+        return []
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    if size > AGENTS_FILE_MAX_BYTES:
+        return [
+            f"WARN: AGENTS.md: 文件大小 {size} 字节超过 {AGENTS_FILE_MAX_BYTES} 字节上限，"
+            "在 Antigravity 等宿主中尾部规则会被截断，请精简块外规则或拆到按需文档"
+        ]
+    return []
+
+
 def run_assets_check(
     target: Path,
     *,
@@ -351,6 +372,7 @@ def run_assets_check(
         warnings.extend(f"WARN: {label}: {item}" for item in payload.get("warnings", []))
     failures.extend(cross["failures"])
     warnings.extend(cross["warnings"])
+    warnings.extend(check_agents_file_budget(target))
     failed = bool(failures) or (strict and bool(warnings))
     status = "failed" if failed else "passed"
     return {

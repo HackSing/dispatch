@@ -57,6 +57,14 @@ FAILURE_ATTRIBUTION_CATEGORIES = {
     "environment",
     "flaky",
 }
+VERIFICATION_SCOPE_LAYERS = {
+    "focused_test",
+    "repository_full_test",
+    "local_runtime",
+    "package_or_install",
+    "real_device",
+}
+_VERIFICATION_SCOPE_KEYS = {"mode", "commands", "reused_passed_evidence", "layers"}
 FAILURE_ATTRIBUTION_SHAPE = json.dumps(
     {"categories": sorted(FAILURE_ATTRIBUTION_CATEGORIES),
      "separate_non_change_failures": True, "evidence_required": True},
@@ -72,90 +80,115 @@ def nonempty_string_list(value: Any) -> bool:
     )
 
 
-def collect_bugfix_plan_errors(
-    selection: dict[str, Any], content: dict[str, Any]
-) -> list[PlanGovernanceError]:
-    """收集 bugfix 校验合同的全部错误（--dry-run 用）；各字段独立判定，顺序与逐字段抛错一致。"""
-    profiles = {selection.get("plan_profile"), *selection.get("secondary_profiles", [])}
-    if selection.get("plan_level") != "full" or "bugfix" not in profiles:
-        return []
-    errors: list[PlanGovernanceError] = []
-    if not nonempty_string_list(content.get("affected_modules")):
-        errors.append(PlanGovernanceError(
-            'Bugfix 方案的 affected_modules 必须是非空字符串数组，如 ["service/session"]', "invalid_plan_content"))
-    scope = content.get("verification_scope")
-    scope_mode: str | None = None
+def _err(errors: list[PlanGovernanceError], message: str) -> None:
+    errors.append(PlanGovernanceError(message, "invalid_plan_content"))
+
+
+def _validate_verification_scope(
+    scope: Any, errors: list[PlanGovernanceError]
+) -> str | None:
     if not isinstance(scope, dict):
-        errors.append(PlanGovernanceError(
-            'Bugfix 方案的 verification_scope 必须是对象，期望形状 {"mode": "affected_modules|repository_full", '
-            '"commands": [实际命令字符串], "reused_passed_evidence": [可复用已通过证据，可空数组]}',
-            "invalid_plan_content",
-        ))
+        _err(errors, 'Full 方案的 verification_scope 必须是对象，期望形状 {"mode": '
+             '"affected_modules|repository_full", "commands": [实际命令字符串], '
+             '"reused_passed_evidence": [可复用已通过证据，可空数组]}')
+        return None
+    unknown = sorted(set(scope) - _VERIFICATION_SCOPE_KEYS)
+    if unknown:
+        _err(errors, "verification_scope 包含未注册字段：" + ", ".join(unknown))
+    scope_mode: str | None = None
+    mode = scope.get("mode")
+    if mode not in {"affected_modules", "repository_full"}:
+        _err(errors, "verification_scope.mode 必须是 affected_modules 或 repository_full")
     else:
-        mode = scope.get("mode")
-        if mode not in {"affected_modules", "repository_full"}:
-            errors.append(PlanGovernanceError(
-                "verification_scope.mode 必须是 affected_modules 或 repository_full", "invalid_plan_content"))
-        else:
-            scope_mode = mode
-        if not nonempty_string_list(scope.get("commands")):
-            errors.append(PlanGovernanceError(
-                "verification_scope.commands 必须是非空字符串数组", "invalid_plan_content"))
-        reused = scope.get("reused_passed_evidence")
-        if not isinstance(reused, list) or any(not isinstance(item, str) or not item.strip() for item in reused):
-            errors.append(PlanGovernanceError(
-                "verification_scope.reused_passed_evidence 必须是字符串数组（可空数组）", "invalid_plan_content"))
-    trigger = content.get("full_regression_trigger")
+        scope_mode = mode
+    if not nonempty_string_list(scope.get("commands")):
+        _err(errors, "verification_scope.commands 必须是非空字符串数组")
+    reused = scope.get("reused_passed_evidence")
+    if not isinstance(reused, list) or any(
+        not isinstance(item, str) or not item.strip() for item in reused
+    ):
+        _err(errors, "verification_scope.reused_passed_evidence 必须是字符串数组（可空数组）")
+    layers = scope.get("layers")
+    if layers is not None and (
+        not nonempty_string_list(layers)
+        or len(layers) != len(set(layers))
+        or not set(layers).issubset(VERIFICATION_SCOPE_LAYERS)
+    ):
+        _err(errors, "verification_scope.layers 仅接受去重后的："
+             + "、".join(sorted(VERIFICATION_SCOPE_LAYERS)))
+    return scope_mode
+
+
+def _validate_full_regression_trigger(
+    trigger: Any, scope_mode: str | None, errors: list[PlanGovernanceError]
+) -> None:
     trigger_required: bool | None = None
     trigger_codes: list[Any] | None = None
     if not isinstance(trigger, dict) or not isinstance(trigger.get("required"), bool):
-        errors.append(PlanGovernanceError(
-            'full_regression_trigger 必须是对象，期望形状 {"required": true|false, "reason_codes": [原因码，可空数组], "rationale": "依据"}',
-            "invalid_plan_content",
-        ))
+        _err(errors, 'full_regression_trigger 必须是对象，期望形状 {"required": '
+             'true|false, "reason_codes": [原因码，可空数组], "rationale": "依据"}')
     else:
         trigger_required = trigger["required"]
         reason_codes = trigger.get("reason_codes")
-        rationale = trigger.get("rationale")
         if not isinstance(reason_codes, list) or any(
-            not isinstance(item, str) or item not in FULL_REGRESSION_REASON_CODES for item in reason_codes
+            not isinstance(item, str) or item not in FULL_REGRESSION_REASON_CODES
+            for item in reason_codes
         ):
-            errors.append(PlanGovernanceError(
-                "full_regression_trigger.reason_codes 仅接受：" + "、".join(sorted(FULL_REGRESSION_REASON_CODES)),
-                "invalid_plan_content",
-            ))
+            _err(errors, "full_regression_trigger.reason_codes 仅接受："
+                 + "、".join(sorted(FULL_REGRESSION_REASON_CODES)))
         elif len(reason_codes) != len(set(reason_codes)):
-            errors.append(PlanGovernanceError("全量测试触发原因码不得重复", "invalid_plan_content"))
+            _err(errors, "全量测试触发原因码不得重复")
         else:
             trigger_codes = reason_codes
+        rationale = trigger.get("rationale")
         if not isinstance(rationale, str) or not rationale.strip():
-            errors.append(PlanGovernanceError("full_regression_trigger.rationale 不能为空", "invalid_plan_content"))
+            _err(errors, "full_regression_trigger.rationale 不能为空")
     if scope_mode is not None and trigger_required is not None and trigger_codes is not None:
         if scope_mode == "repository_full" and (trigger_required is not True or not trigger_codes):
-            errors.append(PlanGovernanceError(
-                "mode=repository_full 时 full_regression_trigger.required 必须为 true 且 reason_codes 非空", "invalid_plan_content"))
+            _err(errors, "mode=repository_full 时 full_regression_trigger.required "
+                 "必须为 true 且 reason_codes 非空")
         if scope_mode == "affected_modules" and (trigger_required is not False or trigger_codes):
-            errors.append(PlanGovernanceError(
-                "mode=affected_modules 时 full_regression_trigger.required 必须为 false 且 reason_codes 必须为空数组", "invalid_plan_content"))
-    attribution = content.get("failure_attribution")
+            _err(errors, "mode=affected_modules 时 full_regression_trigger.required "
+                 "必须为 false 且 reason_codes 必须为空数组")
+
+
+def _validate_failure_attribution(
+    attribution: Any, errors: list[PlanGovernanceError]
+) -> None:
     if not isinstance(attribution, dict):
-        errors.append(PlanGovernanceError(
-            "Bugfix 方案的 failure_attribution 必须是对象，期望形状 " + FAILURE_ATTRIBUTION_SHAPE, "invalid_plan_content"))
-    else:
-        categories = attribution.get("categories")
-        if (
-            not isinstance(categories, list)
-            or any(not isinstance(item, str) for item in categories)
-            or len(categories) != len(set(categories))
-            or set(categories) != FAILURE_ATTRIBUTION_CATEGORIES
-            or attribution.get("separate_non_change_failures") is not True
-            or attribution.get("evidence_required") is not True
-        ):
-            errors.append(PlanGovernanceError(
-                "failure_attribution.categories 必须恰好声明 " + "、".join(sorted(FAILURE_ATTRIBUTION_CATEGORIES))
-                + "，且 separate_non_change_failures 与 evidence_required 均为字面 true",
-                "invalid_plan_content",
-            ))
+        _err(errors, "Bugfix 方案的 failure_attribution 必须是对象，期望形状 "
+             + FAILURE_ATTRIBUTION_SHAPE)
+        return
+    categories = attribution.get("categories")
+    if (
+        not isinstance(categories, list)
+        or any(not isinstance(item, str) for item in categories)
+        or len(categories) != len(set(categories))
+        or set(categories) != FAILURE_ATTRIBUTION_CATEGORIES
+        or attribution.get("separate_non_change_failures") is not True
+        or attribution.get("evidence_required") is not True
+    ):
+        _err(errors, "failure_attribution.categories 必须恰好声明 "
+             + "、".join(sorted(FAILURE_ATTRIBUTION_CATEGORIES))
+             + "，且 separate_non_change_failures 与 evidence_required 均为字面 true")
+
+
+def collect_bugfix_plan_errors(
+    selection: dict[str, Any], content: dict[str, Any]
+) -> list[PlanGovernanceError]:
+    """收集 Full 方案结构化验证范围与 bugfix 校验合同错误（--dry-run 用）。"""
+    if selection.get("plan_level") != "full":
+        return []
+    profiles = {selection.get("plan_profile"), *selection.get("secondary_profiles", [])}
+    errors: list[PlanGovernanceError] = []
+    if "bugfix" not in profiles:
+        _validate_verification_scope(content.get("verification_scope"), errors)
+        return errors
+    if not nonempty_string_list(content.get("affected_modules")):
+        _err(errors, 'Bugfix 方案的 affected_modules 必须是非空字符串数组，如 ["service/session"]')
+    scope_mode = _validate_verification_scope(content.get("verification_scope"), errors)
+    _validate_full_regression_trigger(content.get("full_regression_trigger"), scope_mode, errors)
+    _validate_failure_attribution(content.get("failure_attribution"), errors)
     return errors
 
 

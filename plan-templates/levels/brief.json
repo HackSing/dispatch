@@ -2,13 +2,34 @@
   "schema_version": "docs-harness/plan-template/v3",
   "kind": "level",
   "id": "brief",
-  "version": "2.35.0",
+  "version": "2.37.0",
   "fields": [
     {"id": "title", "label": "方案标题", "required": true},
     {"id": "key_symbols", "label": "关键符号（2-4 个）", "required": true},
     {"id": "objective", "label": "目标", "required": true},
-    {"id": "scope", "label": "范围", "required": true},
-    {"id": "steps", "label": "关键步骤", "required": true},
-    {"id": "acceptance", "label": "验收方案", "required": true}
+    {
+      "id": "scope",
+      "label": "范围",
+      "required": true,
+      "guidance": "列全本次新增/修改的文件路径、目标函数或符号，以及受影响的下游调用方/消费链文件；不要只复述 2-4 个 key_symbols。"
+    },
+    {
+      "id": "steps",
+      "label": "关键步骤",
+      "required": true,
+      "guidance": "按执行顺序列出具体改法（改哪个文件的哪个符号、保持什么不变量）；超过 3 个文件时按批次标明依赖。"
+    },
+    {
+      "id": "constraints_and_pitfalls",
+      "label": "约束与已知陷阱",
+      "required": true,
+      "guidance": "写明不动边界、当前 git status 既有脏文件禁碰清单，以及前序排查发现的易错点与不变量；工作区干净或无特殊陷阱时显式写明。"
+    },
+    {
+      "id": "acceptance",
+      "label": "验收方案",
+      "required": true,
+      "guidance": "给出可直接执行的验证命令（如聚焦单测路径）与目标验证层级（focused_test / local_runtime / package_or_install 等，及是否需要 runtime check 证据包），不写笼统的“跑单测”。"
+    }
   ]
 }

@@ -26,7 +26,8 @@ if str(SCRIPT_MODULE_DIR) not in sys.path:
 
 from managed_assets import AssetError, AssetSpec, apply_structure, asset_pair, load_asset, structure_changes
 from asset_checks import preview_warnings, run_assets_check, summarize_warnings
-from report_check import check_report
+from report_check import add_report_parser, check_report
+from checklist_check import add_checklist_parser, run_checklist_check
 from runtime_check import RUNTIME_VERIFICATION_RELATIVE, check_packet
 from runtime_packet import RUNTIME_PACKET_EXAMPLE
 from script_hygiene import check_script_line_endings
@@ -95,6 +96,7 @@ from asset_query import (
     plan_show,
 )
 from cli_support import validate_action_flags
+from host_hooks import add_host_argument, reconcile_project_host_hook
 from plan_amend import collect_plan_content_errors
 from plan_check import (
     PLAN_CHECK_ARCHIVE_EXEMPTION,
@@ -128,7 +130,7 @@ from plan_selection import (
     validate_selection,
 )
 
-VERSION = "2.35.0"
+VERSION = "2.37.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -177,6 +179,7 @@ MANAGED_MODULE_RELATIVE_FILES = (
     "usage_log.py",
     "usage_report.py",
     "report_check.py",
+    "checklist_check.py",
     "runtime_check.py",
     "runtime_packet.py",
     "symbol_check.py",
@@ -189,6 +192,8 @@ MANAGED_MODULE_RELATIVE_FILES = (
     "acceptance_render.py",
     "asset_query.py",
     "cli_support.py",
+    "host_hooks.py",
+    "plan_root_cause_hook.py",
     "agent_prompt.md",
 )
 PLAN_DOCS_RELATIVE = "docs/plans"
@@ -1303,6 +1308,7 @@ PLAN_CONTENT_EXAMPLE = {
     "objective": "目标",
     "scope": "范围",
     "steps": "关键步骤",
+    "constraints_and_pitfalls": "不动边界、既有脏文件禁碰清单与已知陷阱",
     "acceptance": "验收方案",
 }
 PLAN_CONTENT_NOTES = (
@@ -3558,6 +3564,9 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
                 existing=existing,
                 usage_enabled=USAGE_LOG_DEFAULT_ENABLED,
             )
+            host_hook = reconcile_project_host_hook(
+                args, target, source_root, apply=False, interactive=False, error_type=HarnessError
+            )
             return 0, {
                 "action": args.action,
                 "mode": "preview",
@@ -3572,6 +3581,7 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
                 "apply_completion_possible": cleanup["cleanup_possible"],
                 "write_performed": False,
                 "knowledge": project_knowledge_summary(target),
+                "host_hook": host_hook,
                 **({"notices": notices} if notices else {}),
             }
         changed, cleanup_applied = apply_project_install(target, source_root)
@@ -3585,6 +3595,10 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             from_version=from_version,
             existing=existing,
             usage_enabled=project_config(target)["usage_log"]["enabled"],
+        )
+        host_hook = reconcile_project_host_hook(
+            args, target, source_root, apply=True,
+            interactive=bool(sys.stdin.isatty() and sys.stdout.isatty()), error_type=HarnessError,
         )
         status = (
             "failed"
@@ -3619,6 +3633,7 @@ def command_project(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             "legacy_document_cleanup": cleanup_applied,
             "preserved_existing_docs": True,
             "knowledge": project_knowledge_summary(target),
+            "host_hook": host_hook,
             **({"notices": notices} if notices else {}),
         }
     read_only = project_read_only_command(args, target, source_root)
@@ -4422,6 +4437,9 @@ def command_report(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         payload["next_action"] = "补齐 missing 字段后重跑 report check；字段名见 FIELD_LABELS"
     return (0 if payload["status"] == "passed" else 1), payload
 
+def command_checklist(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    return run_checklist_check(args, safe_target, HarnessError)
+
 def command_runtime(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     """运行态证据包校验；检查器只读项目内证据，不启动应用。"""
     target = safe_target(args.target)
@@ -4588,6 +4606,10 @@ _EPILOG_INTRO = "输入 JSON 形状与示例（示例常量在本文件对应校
 KNOWLEDGE_EPILOG = _EPILOG_INTRO + "\n\n" + _schema_example_block(
     f"knowledge create|update --input（{KNOWLEDGE_INPUT_SCHEMA}）：",
     KNOWLEDGE_INPUT_EXAMPLE,
+    (
+        "knowledge query 仅在缺少会改变目标、范围、方案或验收的项目事实时调用；当前源码与运行态优先，不得全量加载 docs/。",
+        "只记录有当前源码或项目文档证据支持的事实，不得凭猜测自动写入；废弃/替代用 settle --status deprecated|superseded，校验用 check。",
+    ),
 )
 
 PLAN_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
@@ -4600,14 +4622,17 @@ PLAN_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
         f"plan settle --governance-input（{PLAN_GOVERNANCE_INPUT_SCHEMA}）：",
         PLAN_GOVERNANCE_INPUT_EXAMPLE,
     ),
+    "Full 级冻结 Markdown 必须含 process_flowchart（Mermaid 流程图）与 ux_journey（体验或操作者路径）；"
+    "结算顺序为 Knowledge → Acceptance → Plan（声明需要验收的先完成 Acceptance 结项）。",
     "plan settle 也接受无伴随 JSON、无 Harness 文档标记的手写方案 Markdown：只改横幅（deprecated 另归档并改写链接），"
     "不做治理终验、不接受 --governance-input；受管方案区块外的 INDEX 条目不改写，按 warnings 手工同步。",
     "plan show --plan <path>：只读返回冻结 content 与完整 execution_projection；手写方案返回 markdown。",
-    "plan check [--fast] [--strict]：docs/plans 文档可发现性常驻检查（横幅、索引符号、归档死链、符号存活与时效）。",
+    "plan check [--fast] [--strict]：docs/plans 文档可发现性常驻检查（横幅、索引符号、归档死链、符号存活与时效）。"
+    "判定纪律：代码里找不到符号只证明概念已死，不证明待实施过期；证据不足标存疑交用户裁决。",
     f"部分交付仍在推进的方案横幅写「{PLAN_PARTIAL_DELIVERY_BANNER}（YYYY-MM-DD 核对）」，"
     f"核对日起 {PLAN_PARTIAL_DELIVERY_RECHECK_DAYS} 天内不报符号全命中告警，未来日期不豁免。",
     "plan amend --content：形状与 plan create --content 相同（整包 content 替换）；"
-    "不得改变 acceptance_required/knowledge_impact；已 settle 或归档方案拒绝。",
+    "可修改 acceptance_required/knowledge_impact，但会清空旧结算输入并在 settle 时重新要求；已 settle、已归档或手写方案拒绝。",
 ))
 
 ACCEPTANCE_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
@@ -4628,6 +4653,9 @@ ACCEPTANCE_EPILOG = _EPILOG_INTRO + "\n\n" + "\n\n".join((
     ),
     "acceptance amend --acceptance <path> --input <JSON> --reason <原因>：输入形状同 acceptance create；"
     "仅 pending 且尚无任何 records 的资产可改 criteria，plan_ref 不得改变。",
+    "证据文件必须位于随仓库提交的路径（如 docs/acceptance/evidence/<验收名>/）；带 criterion_id 必须带 --acceptance"
+    "（不带资产的独立记录只写本地 Runtime，返回 persisted_to=runtime, linked=false 并警告）。",
+    "只有收到用户明确确认原话后才能带 --user-confirmed 登记 User Acceptance 通过；合同/测试/运行/安装/用户可见五层不得相互替代。",
 ))
 
 ADR_EPILOG = _EPILOG_INTRO + "\n\n" + _schema_example_block(
@@ -4792,6 +4820,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--source",
         help="init/upgrade 的来源包目录（默认使用当前控制器所在源包）",
     )
+    add_host_argument(project)
 
     release = commands.add_parser("release", help="版本真源一致性检查")
     release.add_argument("action", choices=("sync",), nargs="?", default="sync")
@@ -4823,11 +4852,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--days", type=int, default=USAGE_REPORT_DEFAULT_DAYS, help="统计窗口天数（正整数，默认 %(default)s）"
     )
 
-    report = commands.add_parser("report", help="收尾记录字段校验（改动路径/命令/退出码/验证层级/未覆盖）")
-    report.add_argument("action", choices=("check",))
-    add_target(report)
-    report.add_argument("--path", required=True, help="收尾报告路径，相对 target 解析")
-
+    add_report_parser(commands)
+    add_checklist_parser(commands)
     add_runtime_parser(commands)
 
     view = commands.add_parser(
@@ -5001,6 +5027,8 @@ def dispatch_command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         return command_assets_check(args)
     if args.command == "report":
         return command_report(args)
+    if args.command == "checklist":
+        return command_checklist(args)
     if args.command == "runtime":
         return command_runtime(args)
     if args.command == "structure":

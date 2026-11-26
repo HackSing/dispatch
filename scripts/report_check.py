@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 from typing import Any
@@ -49,3 +50,23 @@ def check_report(path: Path) -> dict[str, Any]:
         "found": found,
         "missing": missing,
     }
+
+
+_REPORT_EPILOG = "\n".join((
+    "收尾记录约定路径：.docs-harness/reports/<YYYY-MM-DD>-<任务名>.md（同一任务多次收尾追加到同一文件）。",
+    "5 项必填字段：改动路径、验证命令与退出码、验证层级（focused_test / repository_full_test / local_runtime / package_or_install / real_device）、未覆盖项。",
+    "运行态任务另写证据包路径、runtime check 退出码与前台/后台验证说明（前台例外须注明显示内容与持续时长）。",
+))
+
+
+def add_report_parser(commands: argparse._SubParsersAction) -> None:
+    parser = commands.add_parser(
+        "report",
+        help="收尾记录字段校验（改动路径/命令/退出码/验证层级/未覆盖）",
+        epilog=_REPORT_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("action", choices=("check",))
+    parser.add_argument("--target", default=".")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--path", required=True, help="收尾报告路径，相对 target 解析")

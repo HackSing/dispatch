@@ -2,7 +2,7 @@
   "schema_version": "docs-harness/plan-template/v3",
   "kind": "level",
   "id": "full",
-  "version": "2.35.0",
+  "version": "2.37.0",
   "fields": [
     {
       "id": "title",
@@ -66,12 +66,18 @@
       "id": "module_interfaces",
       "label": "模块划分与接口骨架",
       "required": true,
-      "guidance": "列出新增/修改的模块：各自职责一句话、对外接口符号（函数/类/命令签名）、复用的现有代码路径。实施时骨架先行：先落文件与接口签名（空实现），再分批填充逻辑；全局结构在此冻结，实施不得绕开。"
+      "guidance": "列出新增/修改的模块：各自职责一句话、对外接口符号（函数/类/命令签名）、复用的现有代码路径，以及受影响的既有调用方/消费链文件清单。实施时骨架先行：先落文件与接口签名（空实现），再分批填充逻辑；全局结构在此冻结，实施不得绕开。"
     },
     {
       "id": "acceptance_plan",
       "label": "验收方案",
       "required": true
+    },
+    {
+      "id": "verification_scope",
+      "label": "验证范围与命令",
+      "required": true,
+      "guidance": "必填结构化对象：{\"mode\": \"affected_modules|repository_full\", \"commands\": [\"实际可执行验证命令\"], \"reused_passed_evidence\": [\"可复用的已通过证据，可空数组\"], \"layers\": [\"可选：focused_test|repository_full_test|local_runtime|package_or_install|real_device\"]}；默认 mode=affected_modules。"
     },
     {
       "id": "acceptance_required",
@@ -87,8 +93,9 @@
     },
     {
       "id": "constraints",
-      "label": "约束",
-      "required": false
+      "label": "约束与已知陷阱",
+      "required": true,
+      "guidance": "必填：不动边界、当前 git status 既有脏文件禁碰清单、前序排查发现的已知陷阱与不变量；工作区干净时显式写明。"
     },
     {
       "id": "risks_and_rollback",
