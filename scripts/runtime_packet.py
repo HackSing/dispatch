@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -364,3 +365,26 @@ def validate_acceptance_alignment(
         ctx.error("runtime_live_e2e_criteria_uncovered", "live_e2e 证据包漏测冻结 Acceptance 实机标准：" + "、".join(missing), "flows")
     rounds = live_e2e.get("max_fix_rounds", LIVE_E2E_DEFAULT_MAX_FIX_ROUNDS)
     _validate_live_e2e_iterations(ctx, iterations, has_defects, rounds if isinstance(rounds, int) else LIVE_E2E_DEFAULT_MAX_FIX_ROUNDS)
+
+
+def git_ignored_set(target: Path, paths: list[Path]) -> set[Path] | None:
+    inside = subprocess.run(
+        ["git", "-C", str(target), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True, text=True, check=False,
+    )
+    if inside.returncode != 0:
+        return None
+    rel_map = {p.relative_to(target).as_posix(): p for p in dict.fromkeys(paths) if p.is_relative_to(target)}
+    if not rel_map:
+        return set()
+    payload = ("\0".join(rel_map) + "\0").encode("utf-8")
+    result = subprocess.run(
+        ["git", "-C", str(target), "check-ignore", "--stdin", "-z"],
+        input=payload, capture_output=True, check=False,
+    )
+    if result.returncode == 1:
+        return set()
+    if result.returncode != 0:
+        return None
+    text = result.stdout.decode("utf-8", errors="replace")
+    return {rel_map[item] for item in text.split("\0") if item in rel_map}

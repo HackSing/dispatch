@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
@@ -266,7 +267,7 @@ def _check_plan_relations(
     return failures, warnings
 
 
-def check_cross_asset_relations(target: Path) -> dict[str, Any]:
+def check_cross_asset_relations(target: Path, *, fast: bool = False) -> dict[str, Any]:
     failures: list[str] = []
     warnings: list[str] = []
     plan_paths = sorted((target / "docs/plans").glob("*.json"))
@@ -318,7 +319,7 @@ def check_cross_asset_relations(target: Path) -> dict[str, Any]:
             warnings.append(
                 f"WARN: {relative}: pending 超过 {ASSET_STALE_DAYS} 天仍未结项"
             )
-    runtime_failures, runtime_warnings, runtime_checked = _check_committed_runtime_packets(target)
+    runtime_failures, runtime_warnings, runtime_checked = _check_committed_runtime_packets(target, fast=fast)
     failures.extend(runtime_failures)
     warnings.extend(runtime_warnings)
     return {
@@ -329,15 +330,59 @@ def check_cross_asset_relations(target: Path) -> dict[str, Any]:
     }
 
 
-def _check_committed_runtime_packets(target: Path) -> tuple[list[str], list[str], int]:
-    """校验随仓库提交的 docs/runtime-verification/*/packet.json 证据包。"""
+def _changed_runtime_tasks(target: Path) -> set[str] | None:
+    inside = subprocess.run(
+        ["git", "-C", str(target), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True, text=True, check=False,
+    )
+    if inside.returncode != 0:
+        return None
+    status = subprocess.run(
+        ["git", "-C", str(target), "status", "--porcelain", "-z", "--", RUNTIME_VERIFICATION_COMMITTED],
+        capture_output=True, check=False,
+    )
+    if status.returncode != 0:
+        return None
+    prefix = f"{RUNTIME_VERIFICATION_COMMITTED}/"
+    tasks: set[str] = set()
+    for entry in status.stdout.decode("utf-8", errors="replace").split("\0"):
+        if len(entry) < 4:
+            continue
+        rel = entry[3:].replace("\\", "/")
+        if rel.startswith(prefix):
+            rest = rel[len(prefix):].split("/", 1)[0]
+            if rest and rest != "README.md":
+                tasks.add(rest)
+    return tasks
+
+
+def _packet_has_acceptance_ref(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return isinstance(data, dict) and bool(data.get("acceptance_ref"))
+
+
+def _check_committed_runtime_packets(target: Path, *, fast: bool) -> tuple[list[str], list[str], int]:
+    """校验随仓库提交的 docs/runtime-verification/*/packet.json 证据包。
+
+    --fast 仅校验本次改动的或带 acceptance_ref 的提交态证据包（保持 pre-commit 秒级响应）；
+    全量检查校验全部提交态包，未改动的存量无关联历史坏包降级为 runtime.verification WARN。"""
     root = target / RUNTIME_VERIFICATION_COMMITTED
     if not root.is_dir():
         return [], [], 0
     packets = sorted(root.glob("*/packet.json"))
+    changed_tasks = _changed_runtime_tasks(target)
     failures: list[str] = []
     warnings: list[str] = []
+    checked = 0
     for path in packets:
+        has_acc_ref = _packet_has_acceptance_ref(path)
+        is_touched = changed_tasks is None or path.parent.name in changed_tasks
+        if fast and not is_touched and not has_acc_ref:
+            continue
+        checked += 1
         relative = path.relative_to(target).as_posix()
         result = check_packet(target, path)
         if result.get("status") != "passed":
@@ -345,10 +390,13 @@ def _check_committed_runtime_packets(target: Path) -> tuple[list[str], list[str]
                 str(item.get("message", item.get("code", "invalid")))
                 for item in result.get("errors", [])[:3]
             )
-            failures.append(f"FAIL: {relative}: 运行态证据包校验失败：{summary}")
+            if is_touched or has_acc_ref:
+                failures.append(f"FAIL: {relative}: 运行态证据包校验失败：{summary}")
+            else:
+                warnings.append(f"WARN: {relative}: 存量运行态证据包校验未通过：{summary}")
         for item in result.get("warnings", []):
             warnings.append(f"WARN: {relative}: {item.get('message', item.get('code', 'warning'))}")
-    return failures, warnings, len(packets)
+    return failures, warnings, checked
 
 
 def check_agents_file_budget(target: Path) -> list[str]:
@@ -386,7 +434,7 @@ def run_assets_check(
     adr = _run_asset_checker(target, "ADR", adr_checker)
     script_hygiene = _run_asset_checker(target, "ScriptHygiene", script_hygiene_checker)
     structure = _run_asset_checker(target, "Structure", structure_checker)
-    cross = check_cross_asset_relations(target)
+    cross = check_cross_asset_relations(target, fast=fast)
     failures = list(plans.get("failures", []))
     warnings = list(plans.get("warnings", []))
     for label, payload in (

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 <!-- docs-harness:managed-entry:start -->
-## Docs Harness 2.38.0：默认直跑，能力按需
+## Docs Harness 2.38.1：默认直跑，能力按需
 
 - 普通问答、只读检查、代码修改、构建和测试不经 Harness 流程直接执行，不建任务控制状态。"直接"指不走 Harness，不限制拆分或委派（见工作流第 5 条）。用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
 - 先查当前源码与符号；只有缺少的项目事实会改变目标、范围、方案或验收时才运行 knowledge query，不得全量加载 docs/。

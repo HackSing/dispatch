@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,8 +14,9 @@ from runtime_packet import (
     PROBE_FIELDS, PROBE_INTENTS, REQUIRED_DATA, REQUIRED_STATES, RISK_LEVELS,
     RUNTIME_PACKET_SCHEMA, SEVERITIES, STATE_FIELDS, SURFACES, TASK_PATTERN,
     TOP_LEVEL_FIELDS, UI_CHECK_KEYS, UI_FIELDS, UI_SURFACES, VIEWPORT_FIELDS, VIEWPORT_PATTERN,
-    expected_observed as _expected_observed, load_linked_acceptance as _load_acceptance,
-    object_field as _object, require_absent as _require_absent, required_fields as _required,
+    expected_observed as _expected_observed, git_ignored_set as _git_ignored_set,
+    load_linked_acceptance as _load_acceptance, object_field as _object,
+    require_absent as _require_absent, required_fields as _required,
     text as _text, text_list as _text_list, validate_acceptance_alignment as _validate_alignment,
 )
 
@@ -31,7 +31,6 @@ class _Context:
     packet_path: Path
     packet_dir: Path
     packet: dict[str, Any]
-    packet_ignored: bool | None
     errors: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[dict[str, Any]] = field(default_factory=list)
     stats: dict[str, int] = field(default_factory=lambda: {
@@ -40,6 +39,7 @@ class _Context:
     })
     evidence: dict[str, Path] = field(default_factory=dict)
     evidence_hashes: dict[str, str] = field(default_factory=dict)
+    evidence_refs: list[tuple[Path, str, str]] = field(default_factory=list)
     root_kind: str = "unknown"
     acceptance: dict[str, Any] | None = None
     flow_criteria: list[tuple[str, str]] = field(default_factory=list)
@@ -77,13 +77,7 @@ def check_packet(target: Path, packet_path: Path) -> dict[str, Any]:
         return _failure("runtime_packet_unreadable", f"证据包无法读取：{exc}", relative.as_posix())
     if not isinstance(packet, dict):
         return _failure("runtime_packet_not_object", "证据包根节点必须是 JSON 对象", relative.as_posix())
-    ctx = _Context(
-        target=target,
-        packet_path=path,
-        packet_dir=path.parent,
-        packet=packet,
-        packet_ignored=_git_ignored(target, path),
-    )
+    ctx = _Context(target=target, packet_path=path, packet_dir=path.parent, packet=packet)
     _validate_identity(ctx, relative)
     _validate_environment(ctx)
     _validate_flows(ctx)
@@ -94,6 +88,7 @@ def check_packet(target: Path, packet_path: Path) -> dict[str, Any]:
     _validate_defects_and_iterations(ctx)
     _validate_uncovered(ctx)
     _validate_alignment(ctx, ctx.acceptance, ctx.root_kind, ctx.flow_criteria, ctx.iteration_records, ctx.stats["defects"] > 0)
+    _validate_git_ignores(ctx, relative)
     payload = {
         "status": "passed" if not ctx.errors else "failed",
         "packet_ref": relative.as_posix(),
@@ -170,15 +165,11 @@ def _validate_packet_location(ctx: _Context, relative: Path, surface: Any, risk:
         ctx.root_kind = "committed"
         if risk != "complex":
             ctx.error("runtime_packet_location_invalid", "docs/runtime-verification/ 只接受 risk=complex 的证据包")
-        if ctx.packet_ignored:
-            ctx.error("runtime_packet_ignored", "提交路径下的证据包不能位于 git 忽略目录")
         expected_parts = len(committed_root) + 2
     elif parts[:len(local_root)] == local_root:
         ctx.root_kind = "local"
         if risk != "simple":
             ctx.error("runtime_packet_location_invalid", ".docs-harness/runtime/ 只接受 risk=simple 的证据包")
-        if ctx.packet_ignored is False:
-            ctx.warn("runtime_packet_not_ignored", "本地证据包未被 git 忽略，注意不要误提交", relative.as_posix())
         expected_parts = len(local_root) + 2
     else:
         expected_parts = 0
@@ -560,9 +551,7 @@ def _ref_path(ctx: _Context, ref: Any, label: str) -> Path | None:
         ctx.evidence[key] = path
         if _is_image(path):
             ctx.evidence_hashes[key] = _file_hash(path)
-    ignored = _git_ignored(ctx.target, path)
-    if ctx.root_kind == "committed" and ignored:
-        ctx.error("runtime_packet_evidence_ignored", f"提交路径下的证据不能位于 git 忽略目录：{ref}", label)
+    ctx.evidence_refs.append((path, ref, label))
     return path
 
 
@@ -578,19 +567,16 @@ def _file_hash(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _git_ignored(target: Path, path: Path) -> bool | None:
-    inside = subprocess.run(
-        ["git", "-C", str(target), "rev-parse", "--is-inside-work-tree"],
-        capture_output=True, text=True, check=False,
-    )
-    if inside.returncode != 0:
-        return None
-    result = subprocess.run(
-        ["git", "-C", str(target), "check-ignore", "-q", "--", str(path)],
-        capture_output=True, text=True, check=False,
-    )
-    if result.returncode == 0:
-        return True
-    if result.returncode == 1:
-        return False
-    return None
+def _validate_git_ignores(ctx: _Context, relative: Path) -> None:
+    targets = [ctx.packet_path, *ctx.evidence.values()]
+    ignored = _git_ignored_set(ctx.target, targets)
+    if ignored is None:
+        return
+    if ctx.root_kind == "committed" and ctx.packet_path in ignored:
+        ctx.error("runtime_packet_ignored", "提交路径下的证据包不能位于 git 忽略目录")
+    elif ctx.root_kind == "local" and ctx.packet_path not in ignored:
+        ctx.warn("runtime_packet_not_ignored", "本地证据包未被 git 忽略，注意不要误提交", relative.as_posix())
+    if ctx.root_kind == "committed":
+        for path, ref, label in ctx.evidence_refs:
+            if path in ignored:
+                ctx.error("runtime_packet_evidence_ignored", f"提交路径下的证据不能位于 git 忽略目录：{ref}", label)
