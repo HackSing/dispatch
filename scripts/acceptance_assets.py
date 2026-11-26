@@ -8,30 +8,18 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from managed_assets import (
-    AssetError,
-    AssetSpec,
-    archive_asset,
-    asset_pair,
-    check_assets,
-    load_asset,
-    output_pair,
-    rewrite_links,
-    seal_asset,
-    write_asset,
+    AssetError, AssetSpec, archive_asset, asset_pair, check_assets,
+    load_asset, output_pair, rewrite_links, seal_asset, write_asset,
 )
 from knowledge_assets import follow_archived_refs
 from acceptance_render import render_markdown
 from acceptance_diagnostics import (
-    criterion_not_pending_error,
-    find_criterion,
-    match_record_to_criterion,
-    settle_mismatch_error,
+    criterion_not_pending_error, find_criterion, match_record_to_criterion,
+    settle_mismatch_error, verify_record_runtime_evidence,
 )
-from plan_governance import (
-    PLAN_SCHEMAS,
-    PlanGovernanceError,
-    add_acceptance_ref,
-    remove_acceptance_ref,
+from plan_governance import PLAN_SCHEMAS, PlanGovernanceError, add_acceptance_ref, remove_acceptance_ref
+from runtime_packet import (
+    normalize_live_e2e_config, validate_criterion_expectations, validate_live_e2e_criteria,
 )
 
 
@@ -166,7 +154,7 @@ def _criterion(value: Any) -> dict[str, Any]:
         )
     if acceptance_type == "user_acceptance" and (layer != "L5" or evidence_layer is not None):
         raise AssetError("用户验收必须是 L5 且无 evidence_layer", "acceptance_target_invalid")
-    return {
+    item: dict[str, Any] = {
         "id": criterion_id,
         "title": _string(value.get("title"), "criterion title"),
         "acceptance_type": acceptance_type,
@@ -175,6 +163,13 @@ def _criterion(value: Any) -> dict[str, Any]:
         "status": "pending",
         "records": [],
     }
+    try:
+        passed, failed = validate_criterion_expectations(value.get("pass_criteria"), value.get("fail_criteria"))
+    except ValueError as exc:
+        raise AssetError(str(exc), "acceptance_target_invalid") from exc
+    if passed is not None and failed is not None:
+        item["pass_criteria"], item["fail_criteria"] = passed, failed
+    return item
 
 
 def _parse_input(target: Path, value: Any) -> tuple[list[AssetError], dict[str, Any] | None]:
@@ -186,7 +181,7 @@ def _parse_input(target: Path, value: Any) -> tuple[list[AssetError], dict[str, 
             "acceptance_target_invalid",
         ))
         return errors, None
-    allowed = {"schema_version", "title", "key_symbols", "objective", "plan_ref", "knowledge_refs", "criteria"}
+    allowed = {"schema_version", "title", "key_symbols", "objective", "plan_ref", "knowledge_refs", "criteria", "live_e2e"}
     unknown = sorted(set(value) - allowed)
     if unknown:
         errors.append(AssetError(
@@ -242,6 +237,14 @@ def _parse_input(target: Path, value: Any) -> tuple[list[AssetError], dict[str, 
         if len(ids) != len(set(ids)):
             errors.append(AssetError("criterion id 不得重复", "acceptance_target_invalid"))
     parsed["criteria"] = criteria
+    try:
+        live_e2e = normalize_live_e2e_config(value.get("live_e2e"))
+    except ValueError as exc:
+        errors.append(AssetError(str(exc), "acceptance_target_invalid"))
+        live_e2e = None
+    if live_e2e is not None:
+        parsed["live_e2e"] = live_e2e
+        errors.extend(AssetError(msg, "acceptance_target_invalid") for msg in validate_live_e2e_criteria(live_e2e, criteria))
     if errors:
         return errors, None
     return [], parsed
@@ -287,21 +290,25 @@ def validate_asset(value: dict[str, Any]) -> None:
             raise AssetError("Acceptance criterion 状态无效", "acceptance_asset_invalid")
         if not isinstance(criterion.get("records"), list):
             raise AssetError("Acceptance records 无效", "acceptance_asset_invalid")
+        try:
+            validate_criterion_expectations(criterion.get("pass_criteria"), criterion.get("fail_criteria"))
+        except ValueError as exc:
+            raise AssetError(str(exc), "acceptance_asset_invalid") from exc
         ids.append(criterion["id"])
     if len(ids) != len(set(ids)):
         raise AssetError("Acceptance criterion id 重复", "acceptance_asset_invalid")
+    try:
+        live_e2e = normalize_live_e2e_config(value.get("live_e2e"))
+    except ValueError as exc:
+        raise AssetError(str(exc), "acceptance_asset_invalid") from exc
+    live_errors = validate_live_e2e_criteria(live_e2e, value["criteria"])
+    if live_errors:
+        raise AssetError(live_errors[0], "acceptance_asset_invalid")
     if value["status"] not in ACCEPTANCE_ARCHIVED_STATUSES and value["status"] != _aggregate(value["criteria"]):
         raise AssetError("Acceptance 总体状态与 criteria 不一致", "acceptance_asset_invalid")
 
 
-def _change_plan_backref(
-    target: Path,
-    plan_ref: str,
-    acceptance_ref: str,
-    *,
-    add: bool,
-    allow_archived_plan: bool = False,
-) -> bool:
+def _change_plan_backref(target: Path, plan_ref: str, acceptance_ref: str, *, add: bool, allow_archived_plan: bool = False) -> bool:
     try:
         action = add_acceptance_ref if add else remove_acceptance_ref
         return action(target, plan_ref, acceptance_ref, allow_archived_plan=allow_archived_plan)
@@ -382,10 +389,7 @@ def _apply_record(criterion: dict[str, Any], record_value: dict[str, Any]) -> No
     criterion["status"] = "passed" if record_value["status"] == "passed" else "failed" if record_value["status"] == "failed" else "pending"
 
 
-def _apply_settle_records(
-    current: dict[str, Any],
-    records: Sequence[tuple[str, dict[str, Any]]],
-) -> tuple[list[str], list[str]]:
+def _apply_settle_records(target: Path, raw_asset: str, current: dict[str, Any], records: Sequence[tuple[str, dict[str, Any]]]) -> tuple[list[str], list[str]]:
     """settle --input 原子批量：先对当前资产状态全量预检，全部通过后再逐条应用。
 
     预检阶段只读不改；任一记录 criterion 缺失/非 pending/重复/三要素不符即报错，
@@ -400,6 +404,7 @@ def _apply_settle_records(
         if criterion["status"] != "pending":
             raise criterion_not_pending_error(current, criterion_id)
         match_record_to_criterion(criterion, record_value, ACCEPTANCE_EVIDENCE_LAYERS)
+        verify_record_runtime_evidence(target, current, raw_asset, criterion, record_value)
         prepared.append((criterion, record_value))
     recorded: list[str] = []
     record_ids: list[str] = []
@@ -410,15 +415,7 @@ def _apply_settle_records(
     return recorded, record_ids
 
 
-def record(
-    target: Path,
-    raw_asset: str,
-    criterion_id: str,
-    record_value: dict[str, Any],
-    now: str,
-    reaccept: bool,
-    dry_run: bool = False,
-) -> dict[str, Any]:
+def record(target: Path, raw_asset: str, criterion_id: str, record_value: dict[str, Any], now: str, reaccept: bool, dry_run: bool = False) -> dict[str, Any]:
     source, document, archived = asset_pair(target, raw_asset, ACCEPTANCE_SPEC)
     if archived:
         raise AssetError(
@@ -444,6 +441,7 @@ def record(
         )
     criterion = find_criterion(current, criterion_id)
     match_record_to_criterion(criterion, record_value, ACCEPTANCE_EVIDENCE_LAYERS)
+    verify_record_runtime_evidence(target, current, raw_asset, criterion, record_value)
     _apply_record(criterion, record_value)
     revision, history = _next_revision(current, now)
     current.update({"status": _aggregate(current["criteria"]), "revision": revision, "revision_history": history, "updated_at": now, "settled_at": None})
@@ -497,7 +495,7 @@ def settle(
         if objective is not None and current.get("objective") != objective:
             raise AssetError("settle 输入 objective 必须与资产 objective 一致", "invalid_acceptance_settle_input")
         # 原子：预检全部记录（criterion 存在/pending/不重复/三要素匹配），通过后才逐条落入内存并刷新聚合状态。
-        recorded, record_ids = _apply_settle_records(current, records)
+        recorded, record_ids = _apply_settle_records(target, raw_asset, current, records)
         current["status"] = _aggregate(current["criteria"])
     if status in {"passed", "failed"} and current["status"] != status:
         raise settle_mismatch_error(current, status)
@@ -576,6 +574,7 @@ def _validate_live_refs(target: Path, asset: dict[str, Any]) -> None:
         if record_value["status"] == "passed":
             for ref in record_value.get("evidence_refs", []):
                 _project_file(target, ref)
+            verify_record_runtime_evidence(target, asset, None, criterion, record_value)
 
 
 def check(target: Path) -> dict[str, Any]:

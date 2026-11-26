@@ -29,7 +29,7 @@ from asset_checks import preview_warnings, run_assets_check, summarize_warnings
 from report_check import add_report_parser, check_report
 from checklist_check import add_checklist_parser, run_checklist_check
 from runtime_check import RUNTIME_VERIFICATION_RELATIVE, check_packet
-from runtime_packet import RUNTIME_PACKET_EXAMPLE
+from runtime_packet import RUNTIME_PACKET_EXAMPLE, is_runtime_packet_ref
 from script_hygiene import check_script_line_endings
 from structure_check import CODEMAP_SCAFFOLD, check_structure, structure_report
 from symbol_check import symbol_hits
@@ -130,7 +130,7 @@ from plan_selection import (
     validate_selection,
 )
 
-VERSION = "2.37.0"
+VERSION = "2.38.0"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -1840,6 +1840,24 @@ def assert_evidence_usable(target: Path, refs: list[str], what: str) -> None:
             code="acceptance_evidence_ignored",
         )
 
+
+def assert_runtime_packets_valid(target: Path, refs: list[str]) -> None:
+    """验收记录引用运行态证据包时联动执行 runtime check，防止未过检包标 passed。"""
+    for ref in refs:
+        if not is_runtime_packet_ref(ref):
+            continue
+        result = check_packet(target, evidence_path(target, ref))
+        if result.get("status") != "passed":
+            raise HarnessError(
+                f"验收证据引用的运行态证据包未通过 runtime check：{ref}",
+                code="acceptance_runtime_packet_invalid",
+                extra_payload={
+                    "packet_ref": ref,
+                    "errors": result.get("errors", []),
+                    "next_action": f"修复证据包并通过 python3 scripts/harness.py runtime check --target . --packet {ref} --json 后重试",
+                },
+            )
+
 def normalize_failure_attributions(target: Path, raw: Any) -> list[dict[str, Any]]:
     if not isinstance(raw, list) or not raw:
         raise HarnessError(
@@ -2007,6 +2025,7 @@ def build_stored_acceptance_record(
             raise HarnessError("用户验收步骤必须保持最短，最多 5 步", code="invalid_acceptance_input")
     if status == "passed":
         assert_evidence_usable(target, refs, "验收证据")
+        assert_runtime_packets_valid(target, refs)
     failure_attributions: list[dict[str, Any]] = []
     if status == "failed":
         reason = value.get("reason")
@@ -2236,6 +2255,14 @@ ACCEPTANCE_TARGET_INPUT_EXAMPLE = {
     "objective": "…",
     "plan_ref": "docs/plans/x.json（可选）",
     "knowledge_refs": [],
+    "live_e2e": {
+        "real_dependencies": ["可选：真实云端模型 API、测试数据库等（禁 mock）"],
+        "environment": "可选：真实测试环境说明（>=10字）",
+        "isolation_and_cleanup": "可选：测试账号/数据隔离、费用上限与清理方式（>=10字）",
+        "deploy_command": "可选：修复后重部署/重启命令（>=6字）",
+        "max_fix_rounds": 3,
+        "confirm_before_run": True,
+    },
     "criteria": [
         {
             "id": "c1",
@@ -2243,6 +2270,8 @@ ACCEPTANCE_TARGET_INPUT_EXAMPLE = {
             "acceptance_type": "contract_check|behavior_acceptance|user_acceptance",
             "layer": "L1-L5",
             "evidence_layer": "仅 behavior_acceptance 填写，且映射必须等于 layer",
+            "pass_criteria": "可选（live_e2e 实机标准必填）：什么算通过（>=8字）",
+            "fail_criteria": "可选（与 pass_criteria 成对必填）：什么算失败（>=8字）",
         }
     ],
 }
@@ -2250,6 +2279,9 @@ ACCEPTANCE_TARGET_INPUT_NOTES = (
     "耦合：contract_check=L1 且无 evidence_layer；user_acceptance=L5 且无 evidence_layer；",
     "behavior_acceptance 的 evidence_layer 映射 focused_test/repository_full_test→L2、"
     "local_runtime→L3、package_or_install→L4、real_device→L5。",
+    "大任务全量实机闭环（live_e2e）：声明 live_e2e 时至少有 1 条 local_runtime/real_device 标准且全量填 pass_criteria/fail_criteria；"
+    "confirm_before_run 默认 true（先输出冻结清单与落地方案等用户确认再跑实机），max_fix_rounds 默认 3（1-10）；"
+    "登记 passed 须附带包含 acceptance_ref 且通过 runtime check 的 docs/runtime-verification/<task>/packet.json。",
     "正式创建前建议先跑 acceptance create --dry-run（同参数）：一次性返回全部字段错误，不写任何文件。",
 )
 

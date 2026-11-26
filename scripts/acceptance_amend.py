@@ -58,7 +58,7 @@ def amend(
             "acceptance_amend_plan_ref",
         )
     revision, history = _next_revision(current, now, reason=reason)
-    asset = seal_asset({
+    updated = {
         **current,
         "title": content["title"],
         "key_symbols": content["key_symbols"],
@@ -69,7 +69,12 @@ def amend(
         "revision_history": history,
         "last_amend_reason": reason,
         "updated_at": now,
-    })
+    }
+    if "live_e2e" in content:
+        updated["live_e2e"] = content["live_e2e"]
+    else:
+        updated.pop("live_e2e", None)
+    asset = seal_asset(updated)
     if dry_run:
         return _dry_run_amend_payload(raw_asset, revision, len(asset["criteria"]))
     write_asset(target, ACCEPTANCE_SPEC, source, document, asset, render_markdown(asset), STATUS_LABELS["pending"])

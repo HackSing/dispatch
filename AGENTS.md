@@ -1,13 +1,14 @@
 # AGENTS.md
 
 <!-- docs-harness:managed-entry:start -->
-## Docs Harness 2.37.0：默认直跑，能力按需
+## Docs Harness 2.38.0：默认直跑，能力按需
 
 - 普通问答、只读检查、代码修改、构建和测试不经 Harness 流程直接执行，不建任务控制状态。"直接"指不走 Harness，不限制拆分或委派（见工作流第 5 条）。用户明确说“不使用 Harness”时必须直接执行，不得暗中恢复旧流程。
 - 先查当前源码与符号；只有缺少的项目事实会改变目标、范围、方案或验收时才运行 knowledge query，不得全量加载 docs/。
 - 简单任务不建方案；复杂、跨模块、高风险或用户要求时才走 **Harness Plan**（`plan select|create|…`，**不是** IDE 自带的 Plan 聊天模式，不得以此替代 `plan create`）与 Acceptance 流程。
 - 验收以真实功能为中心：运行聚焦测试、接口、页面、构建或干净目录安装验证；改动产生运行态行为时，agent 必须在模拟器/本地联调走查功能、视觉与交互（可用 mock）并优化到对用户友好，不把体验验证推给用户。非运行态交付物按接收方用法验证：方案沿执行路径推演找首个卡点及代价；核对换独立路径重算；文档以零基础读者通读并在收尾回复写明结论（补齐前提或确认无缺口）。仅硬件、权限等本地确实无法运行的层交用户最短确认。
 - 运行态质量门：产生运行态行为时，收尾前建证据包并运行 `python3 scripts/harness.py runtime check --target . --packet <path> --json`（复杂/UI 放 `docs/runtime-verification/<任务>/packet.json` 入库；小改动放 `.docs-harness/runtime/<任务>/packet.json`，证据放同目录 `evidence/`；字段矩阵与拒绝规则见 `runtime --help`）。runtime check 不替代真实用户走查。
+- 大任务全量实机闭环：跨模块/发版级运行态任务须先用 `acceptance create` 的 `live_e2e` 契约与每条 `pass_criteria`/`fail_criteria` 冻结全量功能范围、预期清单与落地方案，默认停下等用户确认后再进真实测试环境（禁 mock、真调云端模型与数据库）；发现偏差当场修复、重部署并带新 `deploy_ref` 复测至全通，单缺陷超熔断轮次、触及架构/不可逆变更或外部环境故障即停报；收尾由 `runtime check` 对齐 `acceptance_ref` 100% 覆盖并出任务报告（字段见 `acceptance --help`、`runtime --help`）。
 - 验证默认后台：单测、构建、静态检查和接口验证放后台进程执行，输出重定向到日志只读摘要；Web/桌面 UI 用隐藏窗口、离屏渲染或截图接口；模拟器用 headless 启动，断言与截图走 CLI。不得弹出可见窗口、抢焦点、使用全屏/置顶遮罩、闪烁任务栏或播放声音，也不得自动打开资源管理器、图片查看器或文件夹；截图与日志直接写入证据目录。只有真实硬件、系统权限、原生弹窗等确实无法后台的验证才上前台：先用一条消息说明会出现什么窗口、持续多久、为什么必须前台，窗口保持最小且不抢焦点，结束后关闭全部验证窗口并恢复用户原前台窗口；用户正在工作或可合并时延后集中一次完成。收尾写明前台/后台、显示了什么、持续多久；未提前说明的前台验证视为未完成。
 - 高风险动作走原生授权与沙箱，不建第二套 Gate。不可逆动作（删除、清空、覆盖、数据库迁移）执行前必须取得用户明确同意，不得以数据为空、可重建或宿主已放行为理由跳过确认。
 - 一次性输入 JSON 放 `.docs-harness/inputs/`；预计跨多批、跨会话交接或防压缩的任务把进度清单写入 `.docs-harness/tasks/<任务名>.md`（`checklist check --path <清单>` 自检）；有改动的任务把证据写入收尾记录 `.docs-harness/reports/<YYYY-MM-DD>-<任务名>.md`（`report check --path <报告>` 自检；运行态任务另写证据包路径、runtime check 退出码与前台/后台验证说明），回复只给路径。各命令契约、必填字段与示例见 `python3 scripts/harness.py <cmd> --help`。

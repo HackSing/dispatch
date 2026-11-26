@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from managed_assets import AssetError
+from runtime_check import check_packet
+from runtime_packet import is_live_e2e_criterion, is_runtime_packet_ref
 
 
 def criteria_state(current: dict[str, Any]) -> list[dict[str, Any]]:
@@ -127,3 +131,43 @@ def settle_mismatch_error(current: dict[str, Any], status: str) -> AssetError:
         },
         next_action=pending_hint(current, status),
     )
+
+
+def verify_record_runtime_evidence(
+    target: Path,
+    asset: dict[str, Any],
+    raw_asset: str | None,
+    criterion: dict[str, Any],
+    record_value: dict[str, Any],
+) -> None:
+    """校验 passed 验收记录引用的运行态证据包，并对 live_e2e 实机标准强制绑定提交态证据包。"""
+    if record_value.get("status") != "passed":
+        return
+    refs = [ref for ref in record_value.get("evidence_refs", []) if isinstance(ref, str) and is_runtime_packet_ref(ref)]
+    needs_live = bool(asset.get("live_e2e")) and is_live_e2e_criterion(criterion)
+    expected_ref = raw_asset.replace("\\", "/") if raw_asset else None
+    matched_live = False
+    for ref in refs:
+        result = check_packet(target, target / ref)
+        if result.get("status") != "passed":
+            raise AssetError(
+                f"引用的运行态证据包未通过 runtime check：{ref}",
+                "acceptance_runtime_packet_invalid",
+                details={"packet_ref": ref, "errors": result.get("errors", [])},
+                next_action=f"修复证据包并通过 python3 scripts/harness.py runtime check --target . --packet {ref} --json 后重试",
+            )
+        if not needs_live or result.get("root_kind") != "committed":
+            continue
+        packet = json.loads((target / ref).read_text(encoding="utf-8-sig"))
+        packet_acc = str(packet.get("acceptance_ref") or "").replace("\\", "/")
+        flows = packet.get("flows", [])
+        covers = any(isinstance(item, dict) and item.get("criterion_id") == criterion["id"] for item in flows)
+        if covers and (expected_ref is None or packet_acc == expected_ref):
+            matched_live = True
+    if needs_live and not matched_live:
+        raise AssetError(
+            f"live_e2e 实机标准 {criterion['id']} 必须附带关联本验收且通过 runtime check 的提交态证据包",
+            "acceptance_live_e2e_packet_required",
+            details={"criterion_id": criterion["id"], "acceptance_ref": expected_ref},
+            next_action="在 evidence_refs 中提供包含 acceptance_ref 与该 criterion_id 的 docs/runtime-verification/<task>/packet.json",
+        )

@@ -16,6 +16,7 @@ from plan_governance import (
     PlanGovernanceError,
     validate_plan,
 )
+from runtime_check import RUNTIME_VERIFICATION_COMMITTED, check_packet
 
 
 AssetChecker = Callable[[Path], dict[str, Any]]
@@ -58,6 +59,8 @@ def _warning_group(warning: str) -> tuple[str, bool]:
         return "script_hygiene", True
     if text.startswith("AGENTS.md:"):
         return "entry.budget", True
+    if text.startswith(f"{RUNTIME_VERIFICATION_COMMITTED}/"):
+        return "runtime.verification", True
     return "other", True
 
 
@@ -315,12 +318,37 @@ def check_cross_asset_relations(target: Path) -> dict[str, Any]:
             warnings.append(
                 f"WARN: {relative}: pending 超过 {ASSET_STALE_DAYS} 天仍未结项"
             )
+    runtime_failures, runtime_warnings, runtime_checked = _check_committed_runtime_packets(target)
+    failures.extend(runtime_failures)
+    warnings.extend(runtime_warnings)
     return {
         "status": "failed" if failures else "passed",
         "failures": failures,
         "warnings": warnings,
-        "checked": len(plan_paths) + len(acceptance_paths),
+        "checked": len(plan_paths) + len(acceptance_paths) + runtime_checked,
     }
+
+
+def _check_committed_runtime_packets(target: Path) -> tuple[list[str], list[str], int]:
+    """校验随仓库提交的 docs/runtime-verification/*/packet.json 证据包。"""
+    root = target / RUNTIME_VERIFICATION_COMMITTED
+    if not root.is_dir():
+        return [], [], 0
+    packets = sorted(root.glob("*/packet.json"))
+    failures: list[str] = []
+    warnings: list[str] = []
+    for path in packets:
+        relative = path.relative_to(target).as_posix()
+        result = check_packet(target, path)
+        if result.get("status") != "passed":
+            summary = "；".join(
+                str(item.get("message", item.get("code", "invalid")))
+                for item in result.get("errors", [])[:3]
+            )
+            failures.append(f"FAIL: {relative}: 运行态证据包校验失败：{summary}")
+        for item in result.get("warnings", []):
+            warnings.append(f"WARN: {relative}: {item.get('message', item.get('code', 'warning'))}")
+    return failures, warnings, len(packets)
 
 
 def check_agents_file_budget(target: Path) -> list[str]:

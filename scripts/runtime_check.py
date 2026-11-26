@@ -10,19 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from runtime_packet import (
+    ALLOWED_FLOW_FIELDS, ALLOWED_ITERATION_FIELDS, ALLOWED_TOP_LEVEL_FIELDS,
     DATA_FIELDS, DEFECT_FIELDS, ENVIRONMENT_FIELDS, FLOW_FIELDS, ITERATION_FIELDS,
     PROBE_FIELDS, PROBE_INTENTS, REQUIRED_DATA, REQUIRED_STATES, RISK_LEVELS,
     RUNTIME_PACKET_SCHEMA, SEVERITIES, STATE_FIELDS, SURFACES, TASK_PATTERN,
-    TOP_LEVEL_FIELDS, UI_CHECK_KEYS, UI_FIELDS, UI_SURFACES, VIEWPORT_FIELDS,
-    VIEWPORT_PATTERN,
-)
-from runtime_packet import (
-    expected_observed as _expected_observed,
-    object_field as _object,
-    require_absent as _require_absent,
-    required_fields as _required,
-    text as _text,
-    text_list as _text_list,
+    TOP_LEVEL_FIELDS, UI_CHECK_KEYS, UI_FIELDS, UI_SURFACES, VIEWPORT_FIELDS, VIEWPORT_PATTERN,
+    expected_observed as _expected_observed, load_linked_acceptance as _load_acceptance,
+    object_field as _object, require_absent as _require_absent, required_fields as _required,
+    text as _text, text_list as _text_list, validate_acceptance_alignment as _validate_alignment,
 )
 
 RUNTIME_VERIFICATION_RELATIVE = ".docs-harness/runtime"
@@ -46,6 +41,9 @@ class _Context:
     evidence: dict[str, Path] = field(default_factory=dict)
     evidence_hashes: dict[str, str] = field(default_factory=dict)
     root_kind: str = "unknown"
+    acceptance: dict[str, Any] | None = None
+    flow_criteria: list[tuple[str, str]] = field(default_factory=list)
+    iteration_records: list[dict[str, Any]] = field(default_factory=list)
 
     def error(self, code: str, message: str, path: str | None = None) -> None:
         item = {"code": code, "message": message}
@@ -95,6 +93,7 @@ def check_packet(target: Path, packet_path: Path) -> dict[str, Any]:
     _validate_probes(ctx)
     _validate_defects_and_iterations(ctx)
     _validate_uncovered(ctx)
+    _validate_alignment(ctx, ctx.acceptance, ctx.root_kind, ctx.flow_criteria, ctx.iteration_records, ctx.stats["defects"] > 0)
     payload = {
         "status": "passed" if not ctx.errors else "failed",
         "packet_ref": relative.as_posix(),
@@ -129,10 +128,11 @@ def _relative_to(path: Path, target: Path) -> Path | None:
 
 def _validate_identity(ctx: _Context, relative: Path) -> None:
     packet = ctx.packet
-    unknown = sorted(set(packet) - set(TOP_LEVEL_FIELDS))
+    unknown = sorted(set(packet) - set(ALLOWED_TOP_LEVEL_FIELDS))
     if unknown:
         ctx.error("runtime_packet_unknown_field", "证据包包含未注册字段：" + ", ".join(unknown))
     _required(ctx, packet, TOP_LEVEL_FIELDS, "证据包")
+    ctx.acceptance = _load_acceptance(ctx, ctx.target, packet.get("acceptance_ref"))
     if packet.get("schema_version") != RUNTIME_PACKET_SCHEMA:
         ctx.error("runtime_packet_schema_invalid", f"schema_version 必须为 {RUNTIME_PACKET_SCHEMA}")
     surface = packet.get("surface")
@@ -226,10 +226,16 @@ def _validate_flows(ctx: _Context) -> None:
     names: set[str] = set()
     for index, raw in enumerate(flows):
         label = f"flows[{index}]"
-        flow = _object(ctx, raw, label, FLOW_FIELDS)
+        flow = _object(ctx, raw, label, ALLOWED_FLOW_FIELDS)
         if flow is None or not _required(ctx, flow, FLOW_FIELDS, label):
             continue
         _text(ctx, flow.get("name"), f"{label}.name", min_len=4)
+        if flow.get("criterion_id") is not None:
+            cid = flow.get("criterion_id")
+            if isinstance(cid, str) and len(cid.strip()) >= 2:
+                ctx.flow_criteria.append((label, cid.strip()))
+            else:
+                ctx.error("runtime_flow_criterion_invalid", f"{label}.criterion_id 必须是非空标准 ID", label)
         name = flow.get("name")
         if isinstance(name, str):
             if name in names:
@@ -285,11 +291,7 @@ def _validate_states(ctx: _Context) -> None:
     _validate_state_groups(ctx, by_name, required_groups)
 
 
-def _validate_state_groups(
-    ctx: _Context,
-    by_name: dict[str, dict[str, Any]],
-    required_groups: tuple[tuple[str, ...], ...],
-) -> None:
+def _validate_state_groups(ctx: _Context, by_name: dict[str, dict[str, Any]], required_groups: tuple[tuple[str, ...], ...]) -> None:
     for group in required_groups:
         present = [by_name[name] for name in group if name in by_name]
         if not present:
@@ -451,7 +453,7 @@ def _validate_defects_and_iterations(ctx: _Context) -> None:
     statuses: list[str] = []
     for index, raw in enumerate(iterations):
         label = f"iterations[{index}]"
-        iteration = _object(ctx, raw, label, ITERATION_FIELDS)
+        iteration = _object(ctx, raw, label, ALLOWED_ITERATION_FIELDS)
         if iteration is None or not _required(ctx, iteration, ITERATION_FIELDS, label):
             continue
         number = iteration.get("pass")
@@ -466,6 +468,13 @@ def _validate_defects_and_iterations(ctx: _Context) -> None:
             statuses.append(status)
         _text(ctx, iteration.get("summary"), f"{label}.summary", min_len=12)
         _refs(ctx, iteration.get("evidence_refs"), f"{label}.evidence_refs")
+        deploy_ref = iteration.get("deploy_ref")
+        if deploy_ref is not None:
+            _text(ctx, deploy_ref, f"{label}.deploy_ref", min_len=4)
+        rechecked = iteration.get("rechecked_criteria")
+        if rechecked is not None:
+            rechecked = _text_list(ctx, rechecked, f"{label}.rechecked_criteria", min_items=1)
+        ctx.iteration_records.append({"label": label, "status": status, "deploy_ref": deploy_ref, "rechecked_criteria": rechecked})
         ctx.stats["iterations"] += 1
     if passes != list(range(1, len(passes) + 1)):
         ctx.error("runtime_iteration_invalid", "iterations.pass 必须从 1 开始连续编号")
@@ -509,13 +518,7 @@ def _validate_uncovered(ctx: _Context) -> None:
             ctx.error("runtime_uncovered_invalid", f"uncovered[{index}] 至少写 8 个字，说明具体遗留风险")
 
 
-def _refs(
-    ctx: _Context,
-    value: Any,
-    label: str,
-    *,
-    require_image: bool = False,
-) -> list[Path]:
+def _refs(ctx: _Context, value: Any, label: str, *, require_image: bool = False) -> list[Path]:
     if not isinstance(value, list) or not value:
         ctx.error("runtime_packet_evidence_missing", f"{label} 至少需要 1 个证据文件", label)
         return []
