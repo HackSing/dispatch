@@ -32,9 +32,13 @@ RUNTIME_PACKET_EXAMPLE = """运行态证据包形状（docs-harness/runtime-veri
   "conclusion": "<运行态结论>"
 }
 路径：复杂/UI 或 live_e2e 放 docs/runtime-verification/<task>/packet.json（risk=complex）；普通小改动放 .docs-harness/runtime/<task>/packet.json（risk=simple）。
-UI 任务还需 ui.viewports（至少两个不同尺寸，含截图）、visual_checks、interaction_checks、copy_checks、accessibility_checks 与 ui.evidence_refs。
+UI 任务还需 ui.viewports（至少两个不同尺寸，含截图）、visual_checks、interaction_checks、copy_checks、accessibility_checks 与 ui.evidence_refs，
+并支持 ui.visual_review（产品视觉总监子智能体审查记录：{reviewer: "product_visual_director_subagent|fallback_self",
+verdict: "approved|changes_requested", reviewed_screenshots: ["evidence/<双视口真图>"],
+findings: ["六维评审具体发现或肯定依据"], fallback_reason: "仅 fallback_self 必填"}；
+关联 acceptance_ref 的 UI 包必填且终态须为 approved，打回修复最多 2–3 轮）。
 关联带 live_e2e 的 Acceptance 时额外硬校验：environment.mock=false、冻结实机 criterion_id 100% 覆盖、每轮 deploy_ref、缺陷修复后终轮变更 deploy_ref 并填 rechecked_criteria。
-检查器拒绝空泛观察、缺失证据、必需状态/数据场景缺失、UI 单视口或重复截图、无对抗探测、缺陷未闭环、未声明的 mock 限制。"""
+检查器拒绝空泛观察、缺失证据、必需状态/数据场景缺失、UI 单视口或重复截图、未通过或未读真图的视觉总监审查、无对抗探测、缺陷未闭环、未声明的 mock 限制。"""
 SURFACES = ("web_ui", "desktop_ui", "api", "cli", "install", "other")
 RISK_LEVELS = ("simple", "complex")
 SEVERITIES = ("blocker", "major", "minor")
@@ -67,6 +71,13 @@ UI_FIELDS = (
     "applicable", "reason", "viewports", "visual_checks", "interaction_checks",
     "copy_checks", "accessibility_checks", "evidence_refs",
 )
+UI_OPTIONAL_FIELDS = ("visual_review",)
+ALLOWED_UI_FIELDS = UI_FIELDS + UI_OPTIONAL_FIELDS
+VISUAL_REVIEW_FIELDS = ("reviewer", "verdict", "reviewed_screenshots", "findings", "fallback_reason")
+VISUAL_REVIEW_REQUIRED_FIELDS = ("reviewer", "verdict", "reviewed_screenshots", "findings")
+VISUAL_REVIEWERS = ("product_visual_director_subagent", "fallback_self")
+VISUAL_REVIEW_VERDICTS = ("approved", "changes_requested")
+VISUAL_REVIEW_MAX_ROUNDS = 3
 VIEWPORT_FIELDS = ("name", "size", "evidence_refs")
 PROBE_FIELDS = ("name", "intent", "result", "evidence_refs")
 DEFECT_FIELDS = ("summary", "severity", "fix", "recheck", "evidence_refs")
@@ -388,3 +399,49 @@ def git_ignored_set(target: Path, paths: list[Path]) -> set[Path] | None:
         return None
     text = result.stdout.decode("utf-8", errors="replace")
     return {rel_map[item] for item in text.split("\0") if item in rel_map}
+
+
+def validate_ui_visual_review(
+    ctx: PacketContext,
+    ui: dict[str, Any],
+    viewport_size_by_ref: dict[str, str],
+    *,
+    require_review: bool,
+) -> None:
+    review = ui.get("visual_review")
+    if review is None:
+        if require_review:
+            ctx.error(
+                "runtime_ui_visual_review_missing",
+                "关联 acceptance_ref 的 UI 运行态证据必须包含 ui.visual_review（产品视觉总监子智能体审查记录）",
+                "ui.visual_review",
+            )
+        return
+    obj = object_field(ctx, review, "ui.visual_review", VISUAL_REVIEW_FIELDS)
+    if obj is None or not required_fields(ctx, obj, VISUAL_REVIEW_REQUIRED_FIELDS, "ui.visual_review"):
+        return
+    reviewer = obj.get("reviewer")
+    if reviewer not in VISUAL_REVIEWERS:
+        ctx.error("runtime_ui_visual_review_invalid", "ui.visual_review.reviewer 仅接受 " + "/".join(VISUAL_REVIEWERS), "ui.visual_review.reviewer")
+    fallback_reason = obj.get("fallback_reason")
+    if reviewer == "fallback_self":
+        text(ctx, fallback_reason, "ui.visual_review.fallback_reason", min_len=12)
+    elif reviewer == "product_visual_director_subagent" and fallback_reason not in (None, ""):
+        ctx.error("runtime_ui_visual_review_invalid", "由产品视觉总监子智能体审查时不要填写 fallback_reason", "ui.visual_review.fallback_reason")
+    verdict = obj.get("verdict")
+    if verdict not in VISUAL_REVIEW_VERDICTS:
+        ctx.error("runtime_ui_visual_review_invalid", "ui.visual_review.verdict 仅接受 " + "/".join(VISUAL_REVIEW_VERDICTS), "ui.visual_review.verdict")
+    elif verdict != "approved":
+        ctx.error("runtime_ui_visual_review_unapproved", "ui.visual_review.verdict 必须为 approved；仍为 changes_requested 时须修复重截并复审通过", "ui.visual_review.verdict")
+    reviewed = text_list(ctx, obj.get("reviewed_screenshots"), "ui.visual_review.reviewed_screenshots", min_items=2)
+    if reviewed:
+        if len(reviewed) != len(set(reviewed)):
+            ctx.error("runtime_ui_visual_review_screenshots_invalid", "ui.visual_review.reviewed_screenshots 不能重复引用同一截图", "ui.visual_review.reviewed_screenshots")
+        unknown_refs = [ref for ref in reviewed if ref not in viewport_size_by_ref]
+        if unknown_refs:
+            ctx.error("runtime_ui_visual_review_screenshots_invalid", "ui.visual_review.reviewed_screenshots 必须是 ui.viewports 中的真实截图：" + "、".join(unknown_refs), "ui.visual_review.reviewed_screenshots")
+        elif len({viewport_size_by_ref[ref] for ref in reviewed}) < 2:
+            ctx.error("runtime_ui_visual_review_screenshots_invalid", "ui.visual_review.reviewed_screenshots 至少需覆盖 2 个不同尺寸视口的真实截图", "ui.visual_review.reviewed_screenshots")
+    findings = text_list(ctx, obj.get("findings"), "ui.visual_review.findings", min_items=1)
+    for idx, item in enumerate(findings):
+        text(ctx, item, f"ui.visual_review.findings[{idx}]", min_len=12)

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime_packet import (
-    ALLOWED_FLOW_FIELDS, ALLOWED_ITERATION_FIELDS, ALLOWED_TOP_LEVEL_FIELDS,
+    ALLOWED_FLOW_FIELDS, ALLOWED_ITERATION_FIELDS, ALLOWED_TOP_LEVEL_FIELDS, ALLOWED_UI_FIELDS,
     DATA_FIELDS, DEFECT_FIELDS, ENVIRONMENT_FIELDS, FLOW_FIELDS, ITERATION_FIELDS,
     PROBE_FIELDS, PROBE_INTENTS, REQUIRED_DATA, REQUIRED_STATES, RISK_LEVELS,
     RUNTIME_PACKET_SCHEMA, SEVERITIES, STATE_FIELDS, SURFACES, TASK_PATTERN,
@@ -18,6 +18,7 @@ from runtime_packet import (
     load_linked_acceptance as _load_acceptance, object_field as _object,
     require_absent as _require_absent, required_fields as _required,
     text as _text, text_list as _text_list, validate_acceptance_alignment as _validate_alignment,
+    validate_ui_visual_review as _validate_ui_visual_review,
 )
 
 RUNTIME_VERIFICATION_RELATIVE = ".docs-harness/runtime"
@@ -327,7 +328,7 @@ def _validate_data(ctx: _Context) -> None:
 
 
 def _validate_ui(ctx: _Context) -> None:
-    ui = _object(ctx, ctx.packet.get("ui"), "ui", UI_FIELDS)
+    ui = _object(ctx, ctx.packet.get("ui"), "ui", ALLOWED_UI_FIELDS)
     if ui is None or not _required(ctx, ui, ("applicable",), "ui"):
         return
     applicable = ui.get("applicable")
@@ -350,6 +351,8 @@ def _validate_ui(ctx: _Context) -> None:
             ctx.error("runtime_ui_unexpected", "非 UI 任务不要填写 viewports")
         if ui.get("evidence_refs") not in (None, []):
             ctx.error("runtime_ui_unexpected", "非 UI 任务不要填写 ui.evidence_refs")
+        if ui.get("visual_review") not in (None, {}):
+            ctx.error("runtime_ui_unexpected", "非 UI 任务不要填写 ui.visual_review")
         for key in UI_CHECK_KEYS:
             if ui.get(key) not in (None, {}):
                 ctx.error("runtime_ui_unexpected", f"非 UI 任务不要填写 {key}")
@@ -364,6 +367,7 @@ def _validate_ui_details(ctx: _Context, ui: dict[str, Any]) -> None:
         viewports = viewports if isinstance(viewports, list) else []
     sizes: set[str] = set()
     image_hashes: list[tuple[str, str]] = []
+    viewport_size_by_ref: dict[str, str] = {}
     for index, raw in enumerate(viewports):
         label = f"ui.viewports[{index}]"
         viewport = _object(ctx, raw, label, VIEWPORT_FIELDS)
@@ -377,10 +381,15 @@ def _validate_ui_details(ctx: _Context, ui: dict[str, Any]) -> None:
             ctx.error("runtime_ui_viewport_duplicate", f"视口尺寸 {size} 重复，不能用同一尺寸冒充多视口")
         else:
             sizes.add(size)
+        raw_refs = viewport.get("evidence_refs") if isinstance(viewport.get("evidence_refs"), list) else []
         refs = _refs(ctx, viewport.get("evidence_refs"), f"{label}.evidence_refs", require_image=True)
         for ref in refs:
             if _is_image(ref):
                 image_hashes.append((ref.name, _file_hash(ref)))
+                if isinstance(size, str) and VIEWPORT_PATTERN.fullmatch(size):
+                    for raw_ref in raw_refs:
+                        if isinstance(raw_ref, str) and (ctx.packet_dir / raw_ref).resolve() == ref:
+                            viewport_size_by_ref[raw_ref] = size
         ctx.stats["viewports"] += 1
     if len(image_hashes) >= 2 and len({digest for _, digest in image_hashes}) == 1:
         ctx.error("runtime_ui_viewports_duplicate", "不同视口使用了完全相同的截图，必须提供真实的多视口证据")
@@ -391,6 +400,7 @@ def _validate_ui_details(ctx: _Context, ui: dict[str, Any]) -> None:
         for check_key in required_keys:
             _text(ctx, checks.get(check_key), f"ui.{key}.{check_key}", min_len=12)
     _refs(ctx, ui.get("evidence_refs"), "ui.evidence_refs", require_image=True)
+    _validate_ui_visual_review(ctx, ui, viewport_size_by_ref, require_review=bool(ctx.packet.get("acceptance_ref")))
 
 
 def _validate_probes(ctx: _Context) -> None:

@@ -24,14 +24,26 @@ MAX_MANUAL_CHALLENGE_CHARS = 40
 LOOP_GUARD_TTL_SECONDS = 600
 LOOP_GUARD_MAX_ENTRIES = 64
 
-CHALLENGE_REASON = (
+_CHALLENGE_CHECKS = (
     "这是最小的治本方案吗？请只做 1 轮核查："
     "① 方案里凡因“底层/框架/三方库/旧注释说做不到”而退到上层或绕行的前提，"
     "直接读一手源码（含锁定依赖源码）证伪；"
     "② 核对同状态所有者/同根因下有无遗漏入口；"
     "③ 删掉多余补丁或上层假状态。"
+)
+
+CHALLENGE_REASON = (
+    f"{_CHALLENGE_CHECKS}"
     "若原方案确实已最小治本，用 1–2 句给出依据直接确认；"
     "若发现更底层根因，直接给出修正后的最小治本方案。"
+)
+
+ANTIGRAVITY_CHALLENGE_REASON = (
+    f"{_CHALLENGE_CHECKS}"
+    "注意：Antigravity 会把本次续跑之前的所有回复自动折叠进 Worked for 轨迹，用户默认只能看到你本轮最后一条回复。"
+    "因此无论原方案是否需要修改，你的最终回复都必须自包含完整的核心结论/方案与下一步选项（不可只输出 1–2 句“确认成立”而省略前文正文）："
+    "若原方案确实已最小治本，保留完整正文并在末尾附 1–2 句源码核查依据；"
+    "若发现更底层根因，直接输出修正后的完整最小治本方案。"
 )
 
 READ_OR_SEARCH_TOOLS = frozenset({
@@ -89,6 +101,14 @@ NON_CODE_DRAFT_PATH_RE = re.compile(
     r"(^|[\\/])\.docs-harness[\\/](inputs|tasks|reports)[\\/]",
     re.IGNORECASE,
 )
+NON_PLAN_ARTIFACT_NAME_RE = re.compile(
+    r"(mockup|wireframe|prototype|visual[_-]?preview|ui[_-]?preview|walkthrough|screenshot)",
+    re.IGNORECASE,
+)
+NON_PLAN_ARTIFACT_SUMMARY_RE = re.compile(
+    r"(模拟图|效果图|设计图|原型图|视觉.{0,4}预览|交互原型|生图|mockup|wireframe|visual\s+preview)",
+    re.IGNORECASE,
+)
 HARNESS_PLAN_CREATE_RE = re.compile(r"harness\.py\s+plan\s+create\b", re.IGNORECASE)
 USER_REQUEST_BLOCK_RE = re.compile(
     r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>",
@@ -123,13 +143,26 @@ def _is_non_code_draft_path(path_str: str) -> bool:
     return bool(path_str and NON_CODE_DRAFT_PATH_RE.search(path_str))
 
 
+def _is_non_plan_feedback_artifact(path_str: str, meta: dict[str, Any]) -> bool:
+    basename = re.split(r"[\\/]", path_str)[-1] if path_str else ""
+    summary = str(meta.get("Summary", "") or "")
+    return bool(
+        (basename and NON_PLAN_ARTIFACT_NAME_RE.search(basename))
+        or (summary and NON_PLAN_ARTIFACT_SUMMARY_RE.search(summary))
+    )
+
+
 def _classify_edit_tool(name: str, args: dict[str, Any]) -> tuple[bool, bool]:
     if name in ("write_file", "edit_file", "Write", "Edit", "MultiEdit", "NotebookEdit"):
         raw_path = args.get("Path", args.get("path", args.get("file_path", "")))
         path_val = str(_unquote_arg(raw_path) or "")
         meta = _unquote_arg(args.get("ArtifactMetadata"))
         req_fb = isinstance(meta, dict) and bool(meta.get("RequestFeedback"))
-        if _is_plan_path(path_val) or req_fb:
+        if _is_plan_path(path_val):
+            return (True, False)
+        if req_fb:
+            if _is_non_plan_feedback_artifact(path_val, meta):
+                return (False, False)
             return (True, False)
         if _is_non_code_draft_path(path_val):
             return (False, False)
@@ -227,7 +260,7 @@ def _is_human_turn_entry(entry: dict[str, Any]) -> tuple[bool, str]:
     ):
         return (False, "")
     text = _extract_user_text(_extract_content_text(content))
-    if CHALLENGE_REASON in text:
+    if _CHALLENGE_CHECKS in text:
         return (False, "")
     return (bool(text), text)
 
@@ -237,7 +270,7 @@ def _entry_contains_challenge(entry: dict[str, Any]) -> bool:
         entry.get("content"),
         entry["message"].get("content") if isinstance(entry.get("message"), dict) else None,
     ):
-        if CHALLENGE_REASON in _extract_content_text(candidate):
+        if _CHALLENGE_CHECKS in _extract_content_text(candidate):
             return True
     return False
 
@@ -321,8 +354,9 @@ def _detect_dialect(payload: dict[str, Any]) -> str:
 
 
 def _decision_payload(dialect: str) -> dict[str, str]:
-    decision = "continue" if dialect == "antigravity" else "block"
-    return {"decision": decision, "reason": CHALLENGE_REASON}
+    if dialect == "antigravity":
+        return {"decision": "continue", "reason": ANTIGRAVITY_CHALLENGE_REASON}
+    return {"decision": "block", "reason": CHALLENGE_REASON}
 
 
 def _loop_guard_digest(

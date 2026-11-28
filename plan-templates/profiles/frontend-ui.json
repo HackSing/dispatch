@@ -2,16 +2,17 @@
   "schema_version": "docs-harness/plan-template/v3",
   "kind": "profile",
   "id": "frontend_ui",
-  "version": "2.38.1",
+  "version": "2.39.0",
   "fields": [
     {"id": "user_scenario", "label": "用户与场景", "required": true},
     {"id": "user_flow", "label": "入口与用户流程", "required": true},
+    {"id": "interactive_prototype", "label": "可点击交互原型（确认门）", "required": true, "guidance": "新增页面、核心弹窗、大改布局/交互流或视觉改版时，必须先输出可点击单文件 HTML 原型到 .docs-harness/views/<task>-prototype.html（内置正常/空/加载/错误状态切换与桌面/移动视口预览），默认停下等用户审查观感与交互体验并确认后再推进后续方案与正式编码；正式代码须复用既有设计系统与 token，禁止复制原型散落内联样式。仅局部文案、微小样式修正或纯逻辑修复时写明豁免理由。"},
     {"id": "state_matrix", "label": "完整状态矩阵", "required": true, "guidance": "逐项列出成功、空、加载、错误、禁用/权限/离线等状态；每项写触发条件、预期和证据，不适用的状态写原因。"},
     {"id": "components_interactions", "label": "组件与交互", "required": true, "guidance": "交互方案以 Dribbble、Behance 等顶尖设计平台的一流作品为质量基线：层级清晰、反馈即时、动效有目的；不接受「能用就行」的默认样式堆砌。"},
     {"id": "visual_responsive", "label": "视觉与响应式", "required": true, "guidance": "视觉质量对齐 Dribbble 等顶尖设计平台水准：明确的视觉层级、一致的间距与排版体系、克制的配色；至少覆盖两个视口，记录视觉层级、间距、对比度与响应式断点；截图放入运行态证据包。"},
     {"id": "accessibility", "label": "可访问性", "required": true, "guidance": "键盘焦点、表单标签、对比度、屏幕阅读器可用性都要写验证方式；不能只写「支持无障碍」。"},
     {"id": "design_system_reuse", "label": "设计系统复用", "required": true, "guidance": "视觉与交互代码同样适用「先复用后新写、重复即抽象」：颜色、间距、字号、圆角、阴影必须收敛为设计 token 单一来源，禁止散落硬编码；相同或相近的组件、样式与交互模式第 3 次出现时必须抽为共享组件或样式模块（两次保持原样），不得复制粘贴后微调；优先复用项目已有设计系统与组件库，搜过什么、为何不能复用要在本字段说明。"},
     {"id": "consumer_copy", "label": "界面文案与受众", "required": true, "guidance": "所有用户可见文案面向普通消费者而非开发者：禁止技术术语、错误码、变量名和内部概念；用用户的语言说明能做什么、下一步做什么；错误提示要说明发生了什么和下一步，不要只写“操作失败”。"},
-    {"id": "runtime_acceptance", "label": "真实页面或桌面运行态验收", "required": true, "guidance": "所有任务完成后由 agent 自己执行，不得交由用户：启动模拟器或本地联调环境（可用 mock 数据），按真实用户流程逐项走查功能是否正常、视觉与交互是否对用户友好；发现不友好之处直接重新优化并复验。必须建立运行态证据包并运行 runtime check，包内写状态矩阵、数据场景、至少两个视口的截图、视觉/交互/文案/可访问性观察和缺陷复验；证据包路径与检查结果写入收尾记录，通过后才允许收尾。"}
+    {"id": "runtime_acceptance", "label": "真实页面或桌面运行态验收", "required": true, "guidance": "所有任务完成后由 agent 自己执行，不得交由用户：启动模拟器或本地联调环境（可用 mock 数据；大任务走 live_e2e 禁 mock），按真实用户流程逐项走查功能是否正常、视觉与交互是否对用户友好。视觉审查须委派独立只读子智能体以「产品视觉总监」身份实际读取 evidence/ 下至少两个不同视口截图，按首屏层级、间距对齐、配色对比度、交互反馈、消费者文案、响应式溢出六维输出 P0/P1/P2 分级意见与 approved/changes_requested 裁决（打回修复重截最多 2–3 轮，仍有纯主观审美分歧交用户拍板；不支持子智能体或读图的宿主须诚实声明 fallback_self 与 fallback_reason），并将结果写入运行态证据包的 ui.visual_review 通过 runtime check 后收尾。"}
   ]
 }
