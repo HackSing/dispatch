@@ -1,7 +1,7 @@
 """宿主级防治标 Stop Hook 探测、交互选择与用户级配置写入。
 
 支持六个宿主环境（均写入用户级全局配置，配一次全项目生效）：
-- antigravity（~/.gemini/config/hooks.json）
+- antigravity（~/.gemini/config/hooks.json 与 ~/.gemini/config/rules/docs-harness-*.md）
 - claude-code（~/.claude/settings.json）
 - codex（~/.codex/hooks.json）
 - qoder（~/.qoder-cn/settings.json 或 ~/.qoder/settings.json）
@@ -18,6 +18,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from host_rules import install_host_rules, planned_host_rule_paths
 from managed_assets import atomic_write_json, atomic_write_text
 
 HOOK_ENTRY_ID = "plan-root-cause-challenge"
@@ -359,6 +360,11 @@ def _host_notes(host: str, home: Path) -> list[str]:
             "DeepSeek Harness 通过 @deepseek-ai/dsh-hooks-claude-code 加载 ~/.dsh/hooks.json，"
             "请确认所用 profile 已安装该桥接插件并重启会话生效。"
         )
+    elif host == "antigravity":
+        notes.append(
+            "已同步 Antigravity 全局规则到 ~/.gemini/config/rules/（仅 Windows 写入桌面启动避坑规则），"
+            "新开会话后与 Stop Hook 一并生效；单条消息带「不用反证」可临时跳过钩子。"
+        )
     else:
         notes.append("新开会话后生效；单条消息带「不用反证」可临时跳过。")
     return notes
@@ -370,8 +376,9 @@ def install_host_hook(
     *,
     home_dir: Path | None = None,
     environ: Mapping[str, str] | None = None,
+    is_windows: bool | None = None,
 ) -> dict[str, Any]:
-    """为用户级宿主环境写入统一的防治标 Stop Hook 脚本与配置（幂等）。"""
+    """为用户级宿主环境写入统一的防治标 Stop Hook 脚本、配置与宿主规则（幂等）。"""
     if host not in HOST_IDS:
         raise HostHookError(
             f"不支持的宿主环境：{host}（可选：{', '.join(HOST_CHOICES)}）",
@@ -379,7 +386,7 @@ def install_host_hook(
         )
     home = resolve_home_dir(home_dir, environ)
     script_path, script_changed = _ensure_hook_script(source_root, home)
-    cmd = _hook_command_string(script_path)
+    cmd = _hook_command_string(script_path, is_windows=is_windows)
     if host == "antigravity":
         cfg_paths, cfg_changed = _write_antigravity_config(home, cmd)
     elif host == "claude-code":
@@ -393,7 +400,8 @@ def install_host_hook(
     else:
         cfg_paths, cfg_changed = _write_dsh_config(home, cmd)
 
-    changed = ([str(script_path)] if script_changed else []) + cfg_changed
+    rule_paths, rules_changed = install_host_rules(host, home, is_windows=is_windows)
+    changed = ([str(script_path)] if script_changed else []) + cfg_changed + rules_changed
     return {
         "status": "configured",
         "scope": "user",
@@ -401,6 +409,7 @@ def install_host_hook(
         "label": HOST_LABELS[host],
         "script_path": str(script_path),
         "config_paths": cfg_paths,
+        "rule_paths": rule_paths,
         "changed": changed,
         "notes": _host_notes(host, home),
     }
@@ -411,6 +420,7 @@ def inspect_host_hooks(
     home_dir: Path | None = None,
     environ: Mapping[str, str] | None = None,
     selected_host: str | None = None,
+    is_windows: bool | None = None,
 ) -> dict[str, Any]:
     """只读探测当前机器已检测到的宿主与防治标 Stop Hook 安装状态。"""
     home = resolve_home_dir(home_dir, environ)
@@ -431,6 +441,7 @@ def inspect_host_hooks(
         result["planned_files"] = [
             str(canonical_hook_script_path(home)),
             *(str(p) for p in _host_config_paths(selected_host, home)),
+            *(str(p) for p in planned_host_rule_paths(selected_host, home, is_windows=is_windows)),
         ]
     return result
 
@@ -506,6 +517,32 @@ def reconcile_project_host_hook(
         raise error_type(str(exc), code=exc.code) from exc
 
 
+def _install_and_refresh(
+    host: str, source_root: Path, *,
+    home_dir: Path | None, environ: Mapping[str, str] | None, is_windows: bool | None,
+) -> dict[str, Any]:
+    installed = install_host_hook(
+        host, source_root, home_dir=home_dir, environ=environ, is_windows=is_windows
+    )
+    refreshed = inspect_host_hooks(
+        home_dir=home_dir, environ=environ, selected_host=host, is_windows=is_windows
+    )
+    return {**refreshed, **installed}
+
+
+def _refresh_configured_hosts(
+    source_root: Path, home: Path, configured_hosts: list[str], *, is_windows: bool | None,
+) -> tuple[bool, list[str]]:
+    script_updated = False
+    if canonical_hook_script_path(home).is_file():
+        _, script_updated = _ensure_hook_script(source_root, home)
+    rules_updated: list[str] = []
+    for configured_host in configured_hosts:
+        _, changed_rules = install_host_rules(configured_host, home, is_windows=is_windows)
+        rules_updated.extend(changed_rules)
+    return (script_updated, rules_updated)
+
+
 def reconcile_host_hook(
     *,
     action: str,
@@ -517,27 +554,27 @@ def reconcile_host_hook(
     interactive: bool,
     home_dir: Path | None = None,
     environ: Mapping[str, str] | None = None,
+    is_windows: bool | None = None,
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], Any] = print,
 ) -> dict[str, Any]:
-    """协调 project init/upgrade 中的宿主 Stop Hook 探测、选择与配置。"""
-    info = inspect_host_hooks(home_dir=home_dir, environ=environ, selected_host=selected_host)
+    """协调 project init/upgrade 中的宿主 Stop Hook 与受管全局规则同步。"""
+    info = inspect_host_hooks(
+        home_dir=home_dir, environ=environ, selected_host=selected_host, is_windows=is_windows
+    )
     if not apply:
         return info
     if selected_host == "skip":
         return {**info, "status": "skipped", "selected_host": "skip"}
     if selected_host is not None:
-        installed = install_host_hook(selected_host, source_root, home_dir=home_dir, environ=environ)
-        refreshed = inspect_host_hooks(home_dir=home_dir, environ=environ, selected_host=selected_host)
-        return {**refreshed, **installed}
-
-    home = resolve_home_dir(home_dir, environ)
+        return _install_and_refresh(
+            selected_host, source_root, home_dir=home_dir, environ=environ, is_windows=is_windows
+        )
     if info["status"] == "already_configured":
-        script_updated = False
-        if canonical_hook_script_path(home).is_file():
-            _, script_updated = _ensure_hook_script(source_root, home)
-        return {**info, "script_updated": script_updated}
-
+        script_updated, rules_updated = _refresh_configured_hosts(
+            source_root, resolve_home_dir(home_dir, environ), info["configured_hosts"], is_windows=is_windows
+        )
+        return {**info, "script_updated": script_updated, "rules_updated": rules_updated}
     if interactive and not as_json:
         chosen = prompt_host_selection(
             info["detected_hosts"], info["active_host_hint"],
@@ -545,10 +582,9 @@ def reconcile_host_hook(
         )
         if chosen == "skip":
             return {**info, "status": "skipped", "selected_host": "skip"}
-        installed = install_host_hook(chosen, source_root, home_dir=home_dir, environ=environ)
-        refreshed = inspect_host_hooks(home_dir=home_dir, environ=environ, selected_host=chosen)
-        return {**refreshed, **installed}
-
+        return _install_and_refresh(
+            chosen, source_root, home_dir=home_dir, environ=environ, is_windows=is_windows
+        )
     choices_str = "|".join(HOST_CHOICES)
     return {
         **info,

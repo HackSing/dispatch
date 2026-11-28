@@ -130,7 +130,7 @@ from plan_selection import (
     validate_selection,
 )
 
-VERSION = "2.39.0"
+VERSION = "2.39.1"
 CONFIG_SCHEMA = "docs-harness/project-config/v13"
 KNOWN_LEGACY_CONFIG_SCHEMAS = {
     f"docs-harness/project-config/v{version}" for version in range(1, 13)
@@ -193,6 +193,7 @@ MANAGED_MODULE_RELATIVE_FILES = (
     "asset_query.py",
     "cli_support.py",
     "host_hooks.py",
+    "host_rules.py",
     "plan_root_cause_hook.py",
     "agent_prompt.md",
 )
